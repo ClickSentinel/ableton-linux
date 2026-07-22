@@ -391,6 +391,7 @@ else
         done
     done
     vc_bad=0
+    vc_native_names=""
     for f in "$vc_tmp"/*/*.dll_amd64 "$vc_tmp"/*/*.dll_x86; do
         [ -e "$f" ] || continue
         case "$f" in
@@ -407,9 +408,23 @@ else
         if [ -s "$builtin" ] && cmp -s "$dest" "$builtin"; then
             echo "!! $wdir/$name is still wine's builtin stub" >&2; vc_bad=1
         fi
+        case " $vc_native_names " in *" ${name%.dll} "*) ;; *) vc_native_names="$vc_native_names ${name%.dll}" ;; esac
     done
     rm -rf "$vc_tmp"
     [ "$vc_bad" -eq 0 ] || { echo "!! native VC++ runtime gate FAILED" >&2; exit 1; }
+    # Restoring the native files is pointless if Wine's own DLL load order
+    # still prefers its builtin reimplementation over them: Wine decides
+    # native-vs-builtin per DLL name from WINEDLLOVERRIDES (env var or this
+    # registry key), not from whichever file happens to be newer or bigger
+    # on disk. Without an explicit override here, Wine's default preference
+    # for several of these (confirmed: msvcp140) is builtin regardless of
+    # what's installed, and Wine's builtin msvcp140 is missing real C++
+    # stdlib exports real plugins call (e.g. std::basic_istream's move
+    # assignment) - "unimplemented function ... aborting" crashes report as
+    # a Wine bug but are actually this override never being set.
+    for name in $vc_native_names; do
+        wine reg add 'HKCU\Software\Wine\DllOverrides' /v "$name" /t REG_SZ /d native /f >/dev/null
+    done
 fi
 
 echo "== [3/5] DPI policy ($dpi_mode -> $dpi_block) =="
