@@ -129,7 +129,23 @@ ableton_live_theme_file() {
     for d in "$prefix"/drive_c/users/*/Documents/Ableton/"User Library"/Themes; do
         [ -d "$d" ] && dirs+=("$d")
     done
-    prefs="$(ls -d "$prefix"/drive_c/users/*/AppData/Roaming/Ableton/"Live ${major:-}"*/Preferences 2>/dev/null | sort -V | tail -n 1)"
+    # Not sort -V | tail -1: version-sorting the *path* has a real gotcha -
+    # "Live 12.4/Preferences" sorts AFTER "Live 12.4.3/Preferences" because
+    # the strings diverge right after "12.4" into "/" (0x2F) vs "." (0x2E),
+    # and strverscmp falls back to a plain byte compare there, where '/' >
+    # '.'. That silently read a stale, long-dead "Live 12.4" prefs dir
+    # instead of the live "Live 12.4.3" one every time - always resolving
+    # whatever theme was active back when that older dir was last written,
+    # never the actual current selection. mtime of the real prefs file is
+    # both simpler and semantically correct: whichever was written most
+    # recently is the one Live actually renders with (see also
+    # theme_watch_prefs_cfg in scripts/ableton-live, same bug).
+    local d2 t newest_t=0
+    for d2 in "$prefix"/drive_c/users/*/AppData/Roaming/Ableton/"Live ${major:-}"*/Preferences; do
+        [ -f "$d2/Preferences.cfg" ] || continue
+        t="$(stat -c %Y "$d2/Preferences.cfg" 2>/dev/null)" || continue
+        if [ "$t" -gt "$newest_t" ]; then newest_t="$t"; prefs="$d2"; fi
+    done
     if [ -n "$prefs" ] && [ -r "$prefs/Preferences.cfg" ] && command -v strings >/dev/null 2>&1; then
         while IFS= read -r line; do
             case "$line" in
