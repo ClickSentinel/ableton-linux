@@ -19,8 +19,10 @@ SDK=./webview2-sdk
 if [ ! -f "$SDK/WebView2.h" ]; then
     mkdir -p "$SDK"
     V=1.0.2903.40
+    SHA256=ef128016dd1e51c59178c827ed5b8aa3322c57afa8675d930f8109505542ad74
     curl -sL -o "$SDK/wv2.nupkg" \
       "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/$V/microsoft.web.webview2.$V.nupkg"
+    echo "$SHA256  $SDK/wv2.nupkg" | sha256sum -c -
     python3 -c "import zipfile; z=zipfile.ZipFile('$SDK/wv2.nupkg'); \
 open('$SDK/WebView2.h','wb').write(z.read('build/native/include/WebView2.h'))"
     rm "$SDK/wv2.nupkg"
