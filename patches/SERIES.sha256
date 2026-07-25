@@ -37,7 +37,7 @@ c2826c5068b5f8407e7dedb65c6f43cb0f7a83b2d831a6451103750bd90defe4  0030-dxgi-don-
 7f895e19d9403b6571afca938683e9bf1bbc24fd6baa7393a675d9c3b2d6c18b  0038-winex11-don-t-cancel-menu-tracking-while-the-focus-s.patch
 db3f6619ab99d208c8b0759a10795f682cb29009c11f1d69c28504da84a30cc6  0039-winex11-never-flip-a-mapped-window-to-managed.patch
 aa03b731a6785ee258d2fa75b29a526da33cc369f324c576d91f5b0ba884e669  0040-win32u-scale-the-menu-bar-band-with-the-menu-dpi.patch
-cadf6a5d7790cdd1ccb1ccb92d4a9397e9b4f1013443991759097039a46de5fc  0041-dxgi-make-dcomp-presents-visible-on-webview2-s-unat.patch
+22dbbde275acfbf944f5b3097ceb2e5ee4a9300e7ca59354cf12ab6111531033  0041-dxgi-make-dcomp-presents-visible-on-webview2-s-unat.patch
 e8d4f355f0df63dac1187365418e82cf93236e25f85ff94805f8cf8778a1d38f  0042-winex11-alias-sub-scale-WM-config-rounding-instead-o.patch
 b8daff7e64239577a0563db6321826f47557503bbc458006a277191d2350c796  0043-shell32-reveal-explorer-select-targets-through-the-X.patch
 13317f863d0243d23800cbaa06088c86be0bc739fa5e477fe287531b221b2fc4  0045-ole32-reject-RevokeDragDrop-for-windows-owned-by-oth.patch

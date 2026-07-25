@@ -1,5 +1,8 @@
-Subject: dxgi: make dcomp presents visible on WebView2's
- unattributed layered targets
+From 9d34f87fddf84b07993fec96b41df7761a89deb9 Mon Sep 17 00:00:00 2001
+From: dist <build@localhost>
+Date: Tue, 21 Jul 2026 07:01:07 +0200
+Subject: [PATCH] dxgi: make dcomp presents visible on WebView2's unattributed
+ layered targets
 
 Three interlocked fixes for the Learn View display path
 (notes/ABLETON-WINE-LEARNVIEW-FLICKER.md):
@@ -321,3 +324,6 @@ index 0454a2d0..b4ed824f 100644
                  if (orig)
                      SetWindowLongPtrW(t, GWLP_WNDPROC, (LONG_PTR)orig);
                  RemovePropW(t, L"__wine_dcomp_orig_wndproc");
+-- 
+2.55.0
+
