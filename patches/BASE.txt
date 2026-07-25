@@ -3,18 +3,6 @@ Branch:    d2d1-dcomp-11.13  (wine-11.13, at upstream commit 5c23dd1cf6:
            "winex11: use NORMAL not UTILITY for non-DComp ownerless
            TOOLWINDOW popups (issue 84)")
 
-Bumped 2026-07-21 from d2d1-dcomp-11.11 (7ea0c8b7dd) to close the Wine
-point-version gap with upstream's actively-maintained branch and with ENCORE
-(github.com/wowitsjack/ENCORE), which runs plain Wine 11.13. Full rebase
-narrative — the 5-conflict rebase itself, three build breaks the clean
-rebase didn't catch, and a build.sh/pipefail tooling gotcha — is in
-notes/ABLETON-WINE-11.13-BASE-BUMP.md. Patch numbering is otherwise
-unchanged from the 7ea0c8b7dd series: 0027 stays reserved (see below — its
-patch file was removed 2026-07-14, the gap is not closed by this bump).
-Patches 0043, 0044 and 0045 were new at the time of this bump (later
-renumbered to 0046-0048 when this branch merged upstream/main's own new
-0043 and 0045 — see the 0046-0048 entries below).
-
 Apply the 00*.patch series in order on top of that branch tip with `git am`
 (rebuild-wine.sh does this). Patches 0001-0030 were regenerated 2026-07-09 with
 `git format-patch 7ea0c8b7..HEAD -- ':!build-wow64'` from the working tree at
@@ -38,6 +26,15 @@ fixes/close-button branch (MWM_FUNC_CLOSE); both branches merged together
 on 2026-07-19, closing the gap.
 Patch 0039 was exported 2026-07-19 the same way, from a disposable worktree
 on base 182ae79b (commit dd25887c there).
+Base bumped 2026-07-21 from d2d1-dcomp-11.11 (7ea0c8b7dd) to d2d1-dcomp-11.13
+(5c23dd1cf6), closing the Wine point-version gap with upstream's
+actively-maintained branch and with ENCORE (github.com/wowitsjack/ENCORE),
+which runs plain Wine 11.13; full rebase narrative (5 merge conflicts,
+three build breaks the clean rebase didn't catch, a build.sh/pipefail
+tooling gotcha) is in notes/ABLETON-WINE-11.13-BASE-BUMP.md. Patches 0043,
+0044 and 0045 were new at the time of this bump (later renumbered to
+0046-0048 when this branch merged upstream/main's own new 0043 and 0045 —
+see the 0046-0048 entries below); 0027 stays reserved as noted above.
 
 The previous 6-patch series (state of 2026-07-03, commit b826f21e) is in
 archive-2026-07-03/ for reference only.
