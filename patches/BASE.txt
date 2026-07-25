@@ -31,7 +31,7 @@ Base bumped 2026-07-21 from d2d1-dcomp-11.11 (7ea0c8b7dd) to d2d1-dcomp-11.13
 actively-maintained branch and with ENCORE (github.com/wowitsjack/ENCORE),
 which runs plain Wine 11.13; full rebase narrative (5 merge conflicts,
 three build breaks the clean rebase didn't catch, a build.sh/pipefail
-tooling gotcha) is in notes/ABLETON-WINE-11.13-BASE-BUMP.md. Patches 0043,
+tooling gotcha) is in notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md. Patches 0043,
 0044 and 0045 were new at the time of this bump (later renumbered to
 0046-0048 when this branch merged upstream/main's own new 0043 and 0045 —
 see the 0046-0048 entries below); 0027 stays reserved as noted above.
