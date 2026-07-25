@@ -274,22 +274,61 @@ Provenance:
               The installed runtime's winex11.so was built from that
               worktree; dist artifacts come from the container rebuild
               as usual.
-  0043      = dxgi: fix build against 11.13's frame-latency-as-semaphore
+  0043      = shell32: route Live's Show in Explorer (explorer.exe
+              /select) to the host file browser through the 0031 portal
+              unix library, via a new comdlg32 export
+              __wine_portal_show_item and
+              org.freedesktop.portal.OpenURI.OpenDirectory (issue 41);
+              Wine's own explorer stays the fallback whenever the portal
+              or the FileDialogPortal policy refuses. Exported 2026-07-21
+              from a worktree at ~/Projects/Code/ableton/wt-0043:
+              branched from the wt-0042 tip (a014d2aa, base 182ae79b plus
+              the 0031-0042 series as commits), then the 0043 commit
+              (996524ab there). See ABLETON-WINE-SHOW-IN-EXPLORER.md.
+              Landed on main via upstream/main directly (not part of
+              this branch's own rebase work); merged in unchanged.
+  0044      = reserved on main for the issue 57 parked-pane reblit gate;
+              not yet landed as of this merge. Left as a documented gap
+              here rather than reused, so it stays available whenever
+              that patch actually lands.
+  0045      = ole32: reject RevokeDragDrop for windows owned by other
+              processes (issue 52, fixes PR #59). RegisterDragDrop stores
+              the drop target in the OleDropTargetInterface window
+              property as a raw pointer only valid in the registering
+              process; window properties are visible system-wide, so a
+              cross-process RevokeDragDrop fetched the foreign pointer
+              and crashed releasing it. The WebView2 helper process
+              registers a drop target on its own Chrome_WidgetWin_1
+              child window parented into Live's window tree; on editor
+              close, Live's own teardown (JUCE's HWNDComponentPeer)
+              revokes drag-drop on every enumerated child, including
+              that foreign one. RegisterDragDrop already rejected
+              windows owned by other processes; RevokeDragDrop now does
+              too (DRAGDROP_E_INVALIDHWND). Ported from giang17/wine
+              commit fafb443f85e0 (Giang Nguyen, 2026-07-23). Landed on
+              main via upstream/main directly (not part of this branch's
+              own rebase work); merged in unchanged. See
+              notes/ABLETON-WINE-WEBVIEW2-PLUGIN-CLOSE-CRASH.md.
+  0046      = dxgi: fix build against 11.13's frame-latency-as-semaphore
               refactor (2026-07-21). `struct d3d11_swapchain` no longer
               carries its own `frame_latency_event` HANDLE upstream;
               fetches the waitable object via
               `wined3d_swapchain_get_frame_latency_waitable_object()`,
               releases it as a semaphore, and closes the duplicated
               handle each tick. See the rebase-method section above.
-  0044      = win32u: fix build against 11.13's fractional-DPI `struct
+              Renumbered from 0043 to 0046 when this branch merged
+              upstream/main, which had independently landed its own
+              0043 (shell32) and 0045 (ole32) in the meantime.
+  0047      = win32u: fix build against 11.13's fractional-DPI `struct
               ratio` refactor (2026-07-21). 0029 (this stack's menu-bar
               +4px fix, carried through 0040's revised band law)
               computed its overshoot from a raw `UINT` DPI value that
               `get_dpi_for_window()` no longer returns upstream; wraps
               with `round_dpi()`, matching the convention the refactor
               established everywhere else. See the rebase-method section
-              above.
-  0045      = configure: fix libusb-1.0 detection against 11.13's
+              above. Renumbered from 0044 to 0047 alongside 0046/0048,
+              same merge.
+  0048      = configure: fix libusb-1.0 detection against 11.13's
               `AC_CHECK_FUNC` switch (2026-07-21). 0032's Push2 bridge
               build gate checked a cache variable only `AC_CHECK_LIB` set;
               upstream's switch to `AC_CHECK_FUNC` between 11.11 and
@@ -298,3 +337,5 @@ Provenance:
               `configure` script and `configure.ac` (container-build.sh
               runs the pre-generated script directly, never
               `autoreconf`). See the rebase-method section above.
+              Renumbered from 0045 to 0048 alongside 0046/0047, same
+              merge.

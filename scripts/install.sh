@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # End-user step 1: install the Wine runtime, launcher, and desktop entries (reverse with uninstall.sh).
-# Does not touch the Wine prefix — that is setup-prefix.sh.
+# Does not touch the Wine prefix: that is setup-prefix.sh.
 set -euo pipefail
 # readelf and sha256sum output is parsed below; localised output breaks the
-# checks (issue #36).
-export LC_ALL=C
+# checks (issue #36). C.UTF-8, never plain C: wine cannot create non-ASCII
+# filenames under a non-UTF-8 locale (issues #51, #55).
+export LC_ALL=C.UTF-8
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 
@@ -45,18 +46,18 @@ trap cleanup EXIT
 # tarball: prefer dist/ (freshly built), else a release tarball dropped in root
 tarball="$(ls "$root"/dist/${NAME}-*.tar.zst 2>/dev/null | sort -V | tail -1 || true)"
 [ -z "$tarball" ] && tarball="$(ls "$root"/${NAME}-*.tar.zst 2>/dev/null | sort -V | tail -1 || true)"
-[ -n "$tarball" ] || { echo "!! no ${NAME}-*.tar.zst found — run ./build.sh first, or drop a release tarball in $root/dist/"; exit 1; }
+[ -n "$tarball" ] || { echo "!! no ${NAME}-*.tar.zst found: run ./build.sh first, or drop a release tarball in $root/dist/"; exit 1; }
 
 echo "== verify checksum =="
 if [ -f "$tarball.sha256" ]; then
     ( cd "$(dirname "$tarball")" && sha256sum -c "$(basename "$tarball").sha256" )
 else
-    echo "   (no .sha256 next to tarball — skipping)"
+    echo "   (no .sha256 next to tarball: skipping)"
 fi
 
 if pgrep -af '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1 || \
    pgrep -af "$OPT/$NAME" >/dev/null 2>&1; then
-    echo "!! the installed Ableton Wine is still running — close Live, wait a few seconds, and rerun" >&2
+    echo "!! the installed Ableton Wine is still running: close Live, wait a few seconds, and rerun" >&2
     exit 1
 fi
 
@@ -77,6 +78,19 @@ for required in \
     lib/wine/x86_64-unix/pipeasio.dll.so; do
     [ -s "$candidate/$required" ] || { echo "!! package is missing $required" >&2; exit 1; }
 done
+# ableton-linkd (native Ableton Link session anchor) is not part of the runtime
+# tree: the kit carries it in bin/, a repo checkout carries the pack-time build
+# in dist/. Its user unit ships next to the install scripts.
+linkd=""
+for f in "$here/../bin/ableton-linkd" "$root/dist/ableton-linkd"; do
+    if [ -f "$f" ]; then linkd="$f"; break; fi
+done
+[ -n "$linkd" ] || { echo "!! package is missing bin/ableton-linkd" >&2; exit 1; }
+linkd_unit=""
+for f in "$here/ableton-linkd.service" "$root/scripts/ableton-linkd.service"; do
+    if [ -f "$f" ]; then linkd_unit="$f"; break; fi
+done
+[ -n "$linkd_unit" ] || { echo "!! package is missing scripts/ableton-linkd.service" >&2; exit 1; }
 if [ -e "$candidate/lib/wine/i386-windows/libusb-1.0.dll" ] || \
    [ -e "$candidate/lib/wine/i386-unix/libusb-1.0.so" ]; then
     echo "!! package unexpectedly contains a 32-bit Push 2 bridge" >&2
@@ -98,9 +112,25 @@ if command -v readelf >/dev/null && command -v strings >/dev/null; then
             echo "!! PipeASIO is not linked to host libpipewire-0.3.so.0" >&2
             exit 1
         }
+    # ableton-linkd must resolve against host C-runtime sonames only:
+    # -static-libstdc++ -static-libgcc keep libstdc++/libgcc_s out of
+    # DT_NEEDED (same loader-cleanliness rule as PipeASIO). Anything else,
+    # above all a shared libstdc++, means the pack-time flags were lost.
+    linkd_needed="$(readelf -d "$linkd" | sed -n 's/.*Shared library: \[\(.*\)\]/\1/p')"
+    for so in $linkd_needed; do
+        case "$so" in
+            linux-vdso.so*|libm.so*|libc.so*|libpthread.so*|libatomic.so*|ld-linux*.so*) ;;
+            *) echo "!! ableton-linkd links an unexpected library: $so" >&2
+               exit 1 ;;
+        esac
+    done
+    if printf '%s\n' "$linkd_needed" | grep -q libstdc++; then
+        echo "!! ableton-linkd links a shared libstdc++ (needs -static-libstdc++)" >&2
+        exit 1
+    fi
 else
     # binutils absent (e.g. stock SteamOS); the checksum above already covers content integrity.
-    echo "   (binutils not found — skipping deep binary checks)"
+    echo "   (binutils not found: skipping deep binary checks)"
 fi
 
 echo "== promote runtime with dated rollback =="
@@ -144,6 +174,16 @@ for f in "$here/learnheal.exe" "$root/tools/learnheal.exe"; do
         break
     fi
 done
+# ableton-linkd anchors the Ableton Link session natively so tempo and
+# timeline survive a Live restart (notes/ABLETON-WINE-LINK-FIRSTCLASS.md).
+# The launcher auto-starts it; setup-link.sh enables the user unit staged
+# next to it (never auto-enabled here: Link networking is opt-in).
+install -m755 "$linkd" "$HOME/.local/share/ableton-wine/ableton-linkd"
+install -m644 "$linkd_unit" "$HOME/.local/share/ableton-wine/ableton-linkd.service"
+# setup-link.sh is opt-in (sudo: multicast route, firewall, user unit) and runs
+# post-install from the share dir per README; it sits next to install.sh both
+# in the kit (scripts/) and in a repo checkout (scripts/).
+install -m755 "$here/setup-link.sh" "$HOME/.local/share/ableton-wine/setup-link.sh"
 
 # Record the kit version so a later installer can tell what it is updating
 # (the kit and the repo both carry VERSION at the root).
@@ -184,7 +224,7 @@ else
         "$root/desktop/ableton-live.desktop.in" > "$APPS/ableton-live.desktop"
     echo "   installed $APPS/ableton-live.desktop ($live_name)"
 fi
-# The authorization handlers (ableton: URLs, .auz response files). They take
+# The authorisation handlers (ableton: URLs, .auz response files). They take
 # winemenubuilder's canonical names on purpose: a prefix where winemenubuilder
 # still runs (a Live beta in a scratch prefix, say) exports its own handler
 # over ours, pointing at stock wine and the wrong prefix. An entry that does
@@ -212,8 +252,8 @@ install -m644 "$root"/desktop/icons/scalable/mimetypes/*.svg "$ICONS/scalable/mi
 install -m644 "$root"/desktop/icons/symbolic/apps/*.svg "$ICONS/symbolic/apps/"
 gtk-update-icon-cache -q "$ICONS" 2>/dev/null || true
 
-echo "== register the authorization MIME types =="
-# .auz is the response file ableton.com serves for offline authorization. The
+echo "== register the authorisation MIME types =="
+# .auz is the response file ableton.com serves for offline authorisation. The
 # prefix side is registered by Live's installer; the host side is ours, since
 # winemenubuilder (which would export it) is disabled by setup-prefix.sh.
 mkdir -p "$HOME/.local/share/mime/packages"
@@ -230,9 +270,48 @@ if command -v xdg-mime >/dev/null 2>&1; then
         application/x-ableton-live-clip application/x-ableton-live-pack 2>/dev/null || true
 fi
 
+# Standalone Max 9 in the same prefix, only when present; rerun the
+# installer after adding Max. Removes the winemenubuilder exports a
+# stray default-prefix run leaves behind: they run stock wine against
+# the patched-runtime prefix and their MIME claims shadow ours.
+max_unix="$live_prefix/drive_c/Program Files/Cycling '74/Max 9/Max.exe"
+if [ -f "$max_unix" ]; then
+    echo "== install the Max 9 launcher =="
+    install -m755 "$here/max9" "$BIN/max9"
+    if [ -e "$APPS/max9.desktop" ] && ! grep -qF "$BIN/max9" "$APPS/max9.desktop"; then
+        echo "   preserving existing $APPS/max9.desktop (it does not route through the launcher)"
+    else
+        sed "s#@HOME@#$HOME#g" "$root/desktop/max9.desktop.in" > "$APPS/max9.desktop"
+    fi
+    sed "s#@HOME@#$HOME#g" "$root/desktop/wine-protocol-c74max.desktop.in" > "$APPS/wine-protocol-c74max.desktop"
+    # Stable icon name from the winemenubuilder-extracted set, when present
+    # (the hex prefix varies per install).
+    for d in 16x16 24x24 32x32 48x48 128x128 256x256; do
+        for f in "$ICONS/$d/apps/"*_Max.0.png; do
+            [ -e "$f" ] || continue
+            cp -f "$f" "$ICONS/$d/apps/max9.png"
+            break
+        done
+    done
+    rm -f "$APPS/wine/Programs/Cycling '74/Max 9/Max 9.desktop"
+    rmdir -p "$APPS/wine/Programs/Cycling '74/Max 9" 2>/dev/null || true
+    for e in maxpat maxproj maxhelp maxzip amxd mxf; do
+        f="$APPS/wine-extension-$e.desktop"
+        if [ -e "$f" ] && ! grep -qF "$BIN/" "$f"; then rm -f "$f"; fi
+        rm -f "$HOME/.local/share/mime/packages/x-wine-extension-$e.xml"
+    done
+    update-mime-database "$HOME/.local/share/mime" >/dev/null 2>&1 || true
+    update-desktop-database "$APPS" 2>/dev/null || true
+    if command -v xdg-mime >/dev/null 2>&1; then
+        xdg-mime default max9.desktop application/x-ableton-live-max-device 2>/dev/null || true
+        xdg-mime default wine-protocol-c74max.desktop x-scheme-handler/c74max 2>/dev/null || true
+    fi
+    echo "   installed max9 launcher and desktop entry"
+fi
+
 case ":$PATH:" in
     *":$BIN:"*) ;;
-    *) echo "!! note: $BIN is not on your PATH — add it or call ~/.local/bin/ableton-live directly" ;;
+    *) echo "!! note: $BIN is not on your PATH: add it or call ~/.local/bin/ableton-live directly" ;;
 esac
 
 promoted=0

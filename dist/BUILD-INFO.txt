@@ -1,18 +1,18 @@
-dist-version: 2026.07.21.2
+dist-version: PLACEHOLDER-regenerate-via-build.sh
 wine:         wine-11.13
 base:         giang17/wine d2d1-dcomp-11.13 @ 5c23dd1c
 prefix:       /opt/wine-d2d1-nspa-11.13 (configure-time only; tarball is relocatable, see relocation gate)
-patches:      46
-wine-patches: 44
+patches:      48
+wine-patches: 46
 pipeasio-patches: 2
-patch-head:   f2b7c18da6f3c918d5864b3af98b4d2623da54e8
-patch-stack:  277c5cfdb5760c21aaa5912057bbb9e8c963dda16b702eac511e3fce16d61da7
+patch-head:   PLACEHOLDER-regenerate-via-build.sh
+patch-stack:  PLACEHOLDER-regenerate-via-build.sh
 pipeasio:     1.2.2
 pipewire-floor: 0.3.56 (pw_context_get_data_loop, pw_data_loop_set_thread_utils)
 ntsync:       yes (vendored linux/ntsync.h 006437ee52a3e04f921df77081eb5c21c44c71f598b10ac534c6ef9e78296262)
-libusb-pe:    7c528d0a55cad7820191b9d5ae3232d9dd7289d9c4898b42a6883eb9e3112574
-libusb-unix:  5c18dc48b25ce6dc14b38c40eec3e640378bd80490a8ec63ac0aaf6f227b842e
-portal-unix:  497ae6169bfefb925021ece061c1d0a51ed91f561a8f933834569795b7a3aad5
+libusb-pe:    PLACEHOLDER-regenerate-via-build.sh
+libusb-unix:  PLACEHOLDER-regenerate-via-build.sh
+portal-unix:  PLACEHOLDER-regenerate-via-build.sh
 pipeasio-pe:  9143f186c90faedd9220752d57c201871e3b864cf4bbd0097e3ad6f8e1ac6794
 pipeasio-unix: 3956368891abb048314316c6530c6a592874513bdf46163055441343469d3f93
 built-on:     Ubuntu 22.04 (glibc 2.35)

@@ -56,7 +56,7 @@ on every ConfigureNotify with an even height H, requests H+1. Under
 xwayland-native-scaling at 2x it will grow monotonically; on a 1x
 session it converges after one round.
 
-Expected behavior: some fixed point for clients whose requests the
+Expected behaviour: some fixed point for clients whose requests the
 compositor cannot represent exactly. Options: grant unrepresentable
 sizes verbatim on the X11 side (letting the surface viewport handle the
 fraction), or clamp the granted size to never exceed the request, so a
@@ -74,7 +74,7 @@ winex11 feeds window-manager configure grants that differ from the
 request by sub-scale rounding straight back to the Win32 window state,
 where per-monitor-aware applications with snapped layout re-round and
 re-request endlessly (see the mutter issue above for the compositor
-half). Suggested behavior: treat a grant within one scale unit of the
+half). Suggested behaviour: treat a grant within one scale unit of the
 request as acknowledging the request. Reference implementation: this
 project's patch 0042.
 

@@ -6,11 +6,11 @@ Write, compose, experiment and perform with Ableton Live 12 (and, experimentally
 
 ![screenshot.png](screenshot.png)
 
-Follow me on [Mastodon](https://post.lurk.org/@shibacomputer) or [Bluesky](https://bsky.app/profile/shibco.newdesigncongress.org) to keep track of development.
-
 DOWNLOAD HERE: https://github.com/shibco/ableton-linux/releases/latest/download/install-ableton-latest.run
 
-Place this installer + an Ableton Live zip file downloaded from Ableton.com in the same directory, and run.
+Place this installer + an Ableton Live zip file downloaded from Ableton.com in the same directory, and run. For more details, see [Getting Started](#getting-started).
+
+**Credits:** maintained by [Cade 'shibco' Diehm](https://shiba.computer/about), with support from [ClickSentinel](https://github.com/ClickSentinel) and the Ableton Linux Discord community including [jackson-57](https://github.com/jackson-57), [jttdev](https://github.com/jttdev), [astrazds](https://github.com/astrazds), [Version33](https://github.com/Version33) and [0tanh](https://github.com/0tanh). Application and MIME type icons by [yioannides](https://github.com/yioannides). Shout out to [wowitsjack](https://github.com/wowitsjack)/Antlers! on the Ableton Linux Discord server for [ENCORE](https://github.com/wowitsjack/ENCORE).
 
 ## Features
 
@@ -21,6 +21,7 @@ Place this installer + an Ableton Live zip file downloaded from Ableton.com in t
 - Device recovery: audio and MIDI devices (Push included) survive in-session disconnect and reconnect.
 - Experimental Max/MSP and Max for Live support.
 - Open/save dialogs use your system's native file picker.
+- Show in Explorer opens your system's file manager with the file selected.
 - Dark/light theme mode that follows your system's settings.
 - Unified top bar: Live's menu bar and menus take the colors of your Ableton theme and render in Ableton's own typeface, like the official Push standalone. Theme changes apply to the running Live when the settings dialog closes.
 - System font support: display Ableton's UI with your desktop interface fonts.
@@ -122,20 +123,33 @@ Like all other MIDI and Audio devices, Push will survive in-session disconnects.
 
 ## Ableton Link
 
-Link syncs tempo, beat and phase between apps and devices on your local network (UDP port 20808). Support is new and experimental. Two complementary setups, both applied by `./scripts/setup-link.sh` from a checkout of this repository (optional, safe to re-run, uses sudo for the network and firewall changes):
+Ableton Link syncs tempo, beat and phase between apps and devices on your local network (UDP port 20808). Support is built in: the installer ships a small native helper, `ableton-linkd`, which joins the Link session on your machine and anchors it. The shared tempo survives Live restarts, and native Linux apps such as Bitwig, Ardour and SuperCollider can sync with Live. The anchor is passive: it never sets Live's tempo. Live joins the session as its own peer.
 
-- Option A: Live joins directly. The script finds your network interface (refusing VPNs; Link does not work over one), adds the network route Link's traffic needs, and opens UDP port 20808 in your firewall. Then enable the Link toggle in Live (Preferences → Link, Tempo & MIDI → "Show Link Toggle").
-- Option B: native bridge (recommended). [jack_link](https://github.com/rncbc/jack_link) is a small helper that joins the Link session natively on your machine, so the session survives Live restarts and native Linux apps can sync too. Build jack_link and create the `jack-link.service` user unit per [notes/ABLETON-WINE-LINK.md](notes/ABLETON-WINE-LINK.md), then re-run the script to enable it. The launcher also starts the bridge when it is installed but not already running.
+One-time setup (optional, safe to re-run, uses sudo for the network and firewall changes):
 
-Your router must forward multicast, and Link never crosses VPNs. Option A is unverified under Wine: if Live's peer count stays at zero, the bridge still joins and syncs the session.
+```
+sudo ~/.local/share/ableton-wine/setup-link.sh
+```
+
+(from a checkout of this repository: `sudo ./scripts/setup-link.sh`). The script finds your network interface, and refuses VPNs because Link does not work over them. It adds the network route Link's traffic needs, with a hook so the route survives reboots. It opens UDP port 20808 in your firewall, and enables the `ableton-linkd.service` user unit so the anchor runs from login. The launcher also starts the anchor on every Live start.
+
+Then enable Link in Live: Preferences → Link, Tempo & MIDI → "Show Link Toggle", and click the control-bar indicator so it shows Enabled. Your router must forward multicast, and Link never crosses VPNs.
+
+To verify, with Link Enabled somewhere (Live, or any Link app on the network):
+
+```
+~/.local/share/ableton-wine/ableton-linkd --probe 10
+```
+
+It prints `peers: N` and `tempo: T.T`, and exits 0 when at least one peer is in the session. Details and triage: [notes/ABLETON-WINE-LINK.md](notes/ABLETON-WINE-LINK.md).
 
 Not working? Check these, in order:
 
 - [ ] `ip route show 224.0.0.0/4` lists a route via the physical LAN interface, not a VPN device
 - [ ] Firewall: `sudo ufw status | grep 20808` or `firewall-cmd --list-ports` shows `20808/udp`
-- [ ] `sudo tcpdump -i <iface> -n udp port 20808` shows datagrams to `224.76.78.75.20808` once any peer is active
-- [ ] `pgrep -a jack_link` shows the bridge running, and `~/.log/jack_link/` records session activity
-- [ ] Live's Control-Bar Link indicator is enabled and reports a peer count ≥ 1
+- [ ] `pgrep -a ableton-linkd` shows the anchor running, and `~/.log/ableton-linkd/` records session activity
+- [ ] `~/.local/share/ableton-wine/ableton-linkd --probe 10` prints `peers: 1` or more and exits 0
+- [ ] Live's Control-Bar Link indicator shows Enabled and reports a peer count ≥ 1
 - [ ] A tempo change on any peer propagates to all others
 
 ## Lower latency (optional)
@@ -196,7 +210,7 @@ Mostly unnecessary. But in case you need them:
 - `ABLETON_LIVE_EXE` full path to a Live exe inside the prefix; picks one exact install when several editions coexist (the launcher refuses to guess)
 - `ABLETON_DPI_MODE` `auto` | `preserve` | `100` | `fractional` | `dpi<N>` (force `LogPixels` N with no per-monitor flag, e.g. `dpi144` for 150% on a non-GNOME desktop)
 - `ABLETON_THEME_MODE` `auto` | `dark` | `light` | `preserve`: the launcher syncs Live's light/dark theme key to the desktop scheme on every start; this overrides it
-- `ABLETON_TOPBAR_MODE` `live` | `system` | `preserve` | `'#RRGGBB #RRGGBB'`: the launcher colors Live's menu bar and menus like your Ableton theme (`live`, the default) or like your desktop titlebar (`system`: KDE color scheme, or the stock GNOME header colors). `preserve` keeps the plain scheme colors, a hex pair forces bar and text colors
+- `ABLETON_TOPBAR_MODE` `live` | `system` | `preserve` | `'#RRGGBB #RRGGBB'`: the launcher colours Live's menu bar and menus like your Ableton theme (`live`, the default) or like your desktop titlebar (`system`: KDE colour scheme, or the stock GNOME header colours). `preserve` keeps the plain scheme colours, a hex pair forces bar and text colours
 - `ABLETON_UI_FONT` `auto` | `preserve` | `off` | a font family name: the launcher renders Live's menu bar and dialogs with the Ableton Sans typeface shipped inside your Live install. `off` restores Tahoma, a family name uses that instead
 - `ABLETON_DCOMP` `on` (default) | `off`: disables DirectComposition for that launch; an A/B check if the Learn View misrenders
 - `ABLETON_RT` `on` (default) | `off`: runs Live without realtime scheduling even when the system permits it (see [Lower latency](#lower-latency-optional))

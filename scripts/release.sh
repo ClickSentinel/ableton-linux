@@ -31,14 +31,14 @@ gh_api() { curl -fsS -H "Authorization: Bearer $token" -H "Accept: application/v
 
 echo "== [0/4] verify the $VERSION artifacts =="
 for f in "$run" "$run.sha256" "$tarball" "$tarball.sha256" "$info"; do
-    [ -f "$f" ] || { echo "!! missing $f — run ./build.sh and ./scripts/make-installer.sh first" >&2; exit 1; }
+    [ -f "$f" ] || { echo "!! missing $f: run ./build.sh and ./scripts/make-installer.sh first" >&2; exit 1; }
 done
 ( cd dist && sha256sum -c "$(basename "$run").sha256" "$(basename "$tarball").sha256" )
 sh "$run" --help >/dev/null
 git ls-files --error-unmatch "$info" >/dev/null 2>&1 \
-    || { echo "!! $info is not committed — the release workflow needs it at the tag" >&2; exit 1; }
+    || { echo "!! $info is not committed: the release workflow needs it at the tag" >&2; exit 1; }
 git diff --quiet HEAD -- VERSION "$info" \
-    || { echo "!! VERSION or $info has uncommitted changes — commit them first" >&2; exit 1; }
+    || { echo "!! VERSION or $info has uncommitted changes: commit them first" >&2; exit 1; }
 
 echo "== [1/4] push tag $TAG =="
 git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || git tag -a "$TAG" -m "$VERSION"
@@ -52,7 +52,7 @@ for _ in $(seq 1 30); do
     [ -n "$rid" ] && break
     sleep 5
 done
-[ -n "$rid" ] || { echo "!! no release for $TAG after 150s — check the repo's Actions tab, then rerun" >&2; exit 1; }
+[ -n "$rid" ] || { echo "!! no release for $TAG after 150s: check the repo's Actions tab, then rerun" >&2; exit 1; }
 
 echo "== [3/4] upload assets =="
 stage="$(mktemp -d)"

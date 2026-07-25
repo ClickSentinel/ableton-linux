@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ableton Live 12 Beta launcher — isolated prefix, existing patched Wine stack.
+# Ableton Live 12 Beta launcher: isolated prefix, existing patched Wine stack.
 set -u
 
 WINE_ROOT="${ABLETON_WINE_ROOT:-$HOME/.local/opt/wine-d2d1-nspa-11.13}"
@@ -31,6 +31,14 @@ EXE='C:\ProgramData\Ableton\Live 12 Beta\Program\Ableton Live 12 Beta.exe'
 run=(wine)
 if command -v chrt >/dev/null 2>&1 && chrt -r 10 true >/dev/null 2>&1; then
     run=(chrt -r 10 wine)
+fi
+
+# Ableton Link session anchor (optional): same auto-start as the main launcher.
+# Start ableton-linkd if installed but not running, so the Link session is
+# anchored before Live launches. ABLETON_LINKD overrides the binary path.
+LINKD="${ABLETON_LINKD:-$HOME/.local/share/ableton-wine/ableton-linkd}"
+if [ -x "$LINKD" ] && ! pgrep -x ableton-linkd >/dev/null 2>&1; then
+    "$LINKD" --daemon || echo "ableton-live-beta: ableton-linkd failed to start" >&2
 fi
 
 if [ -n "${ABLETON_VDESK:-}" ]; then

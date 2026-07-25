@@ -2,9 +2,9 @@
 # End-user step 2: create or refresh the Ableton Wine prefix. Idempotent.
 # Does not install Ableton Live itself and carries no license.
 # --refresh: maintenance pass on an EXISTING prefix (used by the .run's update
-# mode) — re-applies registry policy and heals runtime DLLs, but skips the slow
+# mode): re-applies registry policy and heals runtime DLLs, but skips the slow
 # winetricks pass; the fonts/runtimes it installs are already in the prefix.
-# --post-first-run: standalone fixup to run after Live's first launch — moves
+# --post-first-run: standalone fixup to run after Live's first launch: moves
 # Max for Live 8's preferences aside (never deletes) so its second start stops
 # crashing. Needs no wine and skips every other step.
 # ABLETON_LIVE_VERSION=11|12 selects the winetricks recipe (default 12).
@@ -31,7 +31,7 @@ kit_root() {
 kit_root_or_die() {
     kit_root && return 0
     echo "!! cannot locate vendor/winetricks (looked in $here/.. and $here)" >&2
-    echo "!! prefix maintenance must run from the installer kit — either:" >&2
+    echo "!! prefix maintenance must run from the installer kit: either:" >&2
     echo "!!     sh install-ableton-latest.run --update" >&2
     echo "!!   or extract the kit and run it from there:" >&2
     echo "!!     sh install-ableton-latest.run --extract /tmp/ableton-kit" >&2
@@ -61,11 +61,11 @@ export WINEDEBUG=-all
 export WINESERVER="$WINE_ROOT/bin/wineserver"
 
 # --post-first-run: Max for Live 8 (ships with Live 11) crashes on its SECOND start
-# with a stale preferences file. Move it aside — never delete — so Max regenerates
+# with a stale preferences file. Move it aside: never delete: so Max regenerates
 # it; idempotent, and a missing file only means Max has not run yet. Needs no wine,
 # so it runs before the runtime checks above matter.
 if [ "$post_first_run" -eq 1 ]; then
-    [ -f "$WINEPREFIX/system.reg" ] || { echo "!! no prefix at $WINEPREFIX — nothing to run --post-first-run against" >&2; exit 2; }
+    [ -f "$WINEPREFIX/system.reg" ] || { echo "!! no prefix at $WINEPREFIX: nothing to run --post-first-run against" >&2; exit 2; }
     moved=0
     for maxpref in "$WINEPREFIX"/drive_c/users/*/"AppData/Roaming/Cycling '74/Max 8/Settings/maxpreferences.maxpref"; do
         [ -f "$maxpref" ] || continue
@@ -75,14 +75,14 @@ if [ "$post_first_run" -eq 1 ]; then
         moved=1
     done
     if [ "$moved" -eq 1 ]; then
-        echo "OK: Max preferences moved aside — Max regenerates them on next start"
+        echo "OK: Max preferences moved aside; Max regenerates them on next start"
     else
-        echo "OK: no maxpreferences.maxpref under $WINEPREFIX — nothing to do (Max not run yet?)"
+        echo "OK: no maxpreferences.maxpref under $WINEPREFIX: nothing to do (Max not run yet?)"
     fi
     exit 0
 fi
 
-[ -x "$WINE_ROOT/bin/wine" ] || { echo "!! patched wine not at $WINE_ROOT — run ./scripts/install.sh first"; exit 1; }
+[ -x "$WINE_ROOT/bin/wine" ] || { echo "!! patched wine not at $WINE_ROOT: run ./scripts/install.sh first"; exit 1; }
 for required in \
     lib/wine/x86_64-unix/comdlg32.so \
     lib/wine/x86_64-windows/libusb-1.0.dll \
@@ -96,7 +96,7 @@ done
 
 # Host tools winetricks needs to unpack the redistributables.
 for t in cabextract; do
-    command -v "$t" >/dev/null || echo "!! missing host tool '$t' (needed by winetricks) — install it (e.g. 'pacman -S cabextract' / 'apt install cabextract')"
+    command -v "$t" >/dev/null || echo "!! missing host tool '$t' (needed by winetricks): install it (e.g. 'pacman -S cabextract' / 'apt install cabextract')"
 done
 
 # DPI blocks: a detected scale maps to a calibrated set by compositor family (see
@@ -105,7 +105,7 @@ done
 # LogPixels = round(96 x scale) with no IFEO. auto applies the detected block on a
 # fresh prefix, preserves an existing one, refuses scales outside 100-250%.
 # The dpiAwareness IFEO is keyed on the exe name, so it is applied per installed Live (any edition);
-# on a fresh prefix Live isn't installed yet — the launcher applies it on every start.
+# on a fresh prefix Live isn't installed yet: the launcher applies it on every start.
 ifeo_root='HKLM\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options'
 live_exe_names() {   # basenames of every Live exe installed in this prefix
     ls "$WINEPREFIX"/drive_c/ProgramData/Ableton/*/Program/"Ableton Live"*.exe 2>/dev/null \
@@ -179,7 +179,7 @@ check_mutter_knob() {  # warn when mutter's xwayland-native-scaling disagrees wi
 # 2026.07.18.1 seeded -DontCombineAPCs into Options.txt to cut a 30-40% idle CPU
 # thread. Under playback the uncoalesced APCs flood the wineserver and starve the
 # PipeASIO callback: choppy, slowed-down audio (issue #29). Strip the line from
-# every prefs copy — including hand-added ones, since the old changelog entry
+# every prefs copy: including hand-added ones, since the old changelog entry
 # advertised it. The idle CPU cost is back until the Wine-side fix lands; see
 # notes/ABLETON-WINE-APC-COALESCING.md.
 strip_options_txt() {
@@ -198,7 +198,7 @@ strip_options_txt() {
             rm -f "$tmp"
             echo "   removed $line from $f"
         else
-            # The seed's touch created the file; nothing else in it — undo fully.
+            # The seed's touch created the file; nothing else in it: undo fully.
             rm -f "$tmp" "$f"
             echo "   removed $f (held only $line)"
         fi
@@ -209,7 +209,7 @@ strip_options_txt() {
 fresh_prefix=0
 [ -f "$WINEPREFIX/system.reg" ] || fresh_prefix=1
 if [ "$refresh" -eq 1 ] && [ "$fresh_prefix" -eq 1 ]; then
-    echo "!! --refresh needs an existing prefix at $WINEPREFIX — run without it to create one" >&2
+    echo "!! --refresh needs an existing prefix at $WINEPREFIX: run without it to create one" >&2
     exit 2
 fi
 
@@ -245,7 +245,7 @@ case "$dpi_mode" in
                     echo "   display scale $scale detected; existing prefix already holds the '$block' block"
                 else
                     echo "!! display scale $scale wants the '$block' DPI block, but this existing prefix holds '$have'"
-                    echo "!! preserving it — rerun with ABLETON_DPI_MODE=$block to recalibrate deliberately"
+                    echo "!! preserving it: rerun with ABLETON_DPI_MODE=$block to recalibrate deliberately"
                 fi
             fi
         elif [ "$fresh_prefix" -eq 1 ]; then
@@ -253,7 +253,7 @@ case "$dpi_mode" in
             echo "!! rerun with an explicit ABLETON_DPI_MODE=100 or =dpi<N> (LogPixels N in 72..384)" >&2
             exit 2
         else
-            echo "!! display scale $scale is outside the calibrated 100-250% range — preserving existing prefix values"
+            echo "!! display scale $scale is outside the calibrated 100-250% range: preserving existing prefix values"
         fi
     elif [ "$fresh_prefix" -eq 1 ]; then
         echo "!! cannot detect the display scale (non-GNOME desktop or headless session?)" >&2
@@ -269,7 +269,7 @@ case "$dpi_mode" in
     ;;
 esac
 
-echo "== [1/5] initialize prefix at $WINEPREFIX =="
+echo "== [1/5] initialise prefix at $WINEPREFIX =="
 wineboot -u
 "$WINESERVER" -w
 
@@ -278,7 +278,7 @@ if [ "$refresh" -eq 1 ]; then
 else
     # Verb set per Live major: Live 12 needs vcrun2022 + mfc42; Live 11 needs
     # vcrun2019 + gdiplus (the Ableton forum Live-on-Linux guide). vcrun2019/gdiplus
-    # payloads are not vendored yet — Live 11 setup downloads them on first run.
+    # payloads are not vendored yet: Live 11 setup downloads them on first run.
     live_major="${ABLETON_LIVE_VERSION:-12}"
     case "$live_major" in
         11) verbs="corefonts vcrun2019 gdiplus" ;;
@@ -289,7 +289,8 @@ else
     kit_root_or_die
     export W_CACHE_OVERRIDE=""            # unused
     export WINETRICKS_LATEST_VERSION_CHECK=disabled
-    export WINETRICKS_SUPER_QUIET=1
+    # Never set WINETRICKS_SUPER_QUIET: it silences w_die, so a fatal
+    # winetricks error exits with no message at all (issue #28).
     # Use the bundled payload cache if present (mfc42 downloads if not vendored).
     tmpc=""
     if [ -d "$root/vendor/winetricks-cache" ]; then
@@ -311,7 +312,7 @@ else
 fi
 
 # Live bundles the exact VC++ redistributable it was built against in its own
-# Redist folder (<Live folder>/Redist, next to Program/) — present only after
+# Redist folder (<Live folder>/Redist, next to Program/): present only after
 # Live's installer has run, so fresh prefixes never match here.
 find_live_redist() {  # -> path of the VC++ redist installer bundled with an installed Live
     local d name
@@ -357,7 +358,7 @@ install_live_redist() {
 # Live aborts on. Prefer the redist bundled in Live's own Redist folder; the vendored payload
 # stays as the fallback and as the final gate (it also covers syswow64, which vc_redist.x64
 # doesn't touch). The redist comes from the same source winetricks used: vcrun2022 (Live 12)
-# or vcrun2019 (Live 11) — both ship the vc_redist.x64/x86.exe pair with the same cab layout.
+# or vcrun2019 (Live 11): both ship the vc_redist.x64/x86.exe pair with the same cab layout.
 redist_verb=vcrun2022
 [ "${ABLETON_LIVE_VERSION:-12}" = 11 ] && redist_verb=vcrun2019
 echo "== [2b/5] force native VC++ runtime over wine's builtin stubs ($redist_verb) =="
@@ -377,9 +378,9 @@ for d in "$root/vendor/winetricks-cache/$redist_verb" \
 done
 if [ -z "$redist_dir" ]; then
     if vc_runtime_ready; then
-        echo "   no vendored vc_redist.x64.exe — relying on the runtime verified above"
+        echo "   no vendored vc_redist.x64.exe: relying on the runtime verified above"
     else
-        echo "!! vc_redist.x64.exe not found (vendor or winetricks cache) — cannot assert a native VC runtime" >&2; exit 1
+        echo "!! vc_redist.x64.exe not found (vendor or winetricks cache): cannot assert a native VC runtime" >&2; exit 1
     fi
 else
     vc_tmp="$(mktemp -d)"
@@ -437,7 +438,7 @@ case "$dpi_block" in
         fi
     done < <(live_exe_names)
     if [ "$ifeo_set" -eq 0 ] && [ "$dpi_ifeo" = 2 ]; then
-        echo "   (Live not installed yet — the launcher sets its per-app DPI flag on first start)"
+        echo "   (Live not installed yet: the launcher sets its per-app DPI flag on first start)"
     fi
     check_mutter_knob "$dpi_block" "$dpi_family"
     ;;
@@ -453,7 +454,7 @@ if host_scheme="$(ableton_detect_theme)"; then
     echo "   host scheme: $host_scheme"
     wine reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v AppsUseLightTheme /t REG_DWORD /d "$light_val" /f
 else
-    echo "   host scheme not detectable — leaving the theme key as-is (the launcher retries on every start)"
+    echo "   host scheme not detectable: leaving the theme key as-is (the launcher retries on every start)"
 fi
 wine reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' /v EnableTransparency /t REG_DWORD /d 0 /f
 "$WINESERVER" -w
@@ -488,7 +489,7 @@ EOF
 fi
 
 echo "== [5/5] set portal policy and scope Push 2 bridge to its helper =="
-# Default only — a policy the user set with set-file-portal-policy survives re-runs.
+# Default only: a policy the user set with set-file-portal-policy survives re-runs.
 if ! wine reg query 'HKCU\Software\Wine\X11 Driver' /v FileDialogPortal >/dev/null 2>&1; then
   wine reg add 'HKCU\Software\Wine\X11 Driver' \
     /v FileDialogPortal /t REG_SZ /d auto /f
@@ -535,6 +536,6 @@ Remaining steps (you supply Ableton + your own license):
   4. In Live: Options > uncheck "Auto-Scale Plugin Window"
      (prevents a plugin-window resize loop with DPI-unaware plugin UIs).
   5. Audio: Preferences > Audio > Driver Type: ASIO > Device: PipeASIO.
-     PipeASIO is a native PipeWire client — no JACK layer involved.
+     PipeASIO is a native PipeWire client: no JACK layer involved.
 ────────────────────────────────────────────────────────────────────────
 EOF

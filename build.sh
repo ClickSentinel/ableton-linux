@@ -20,7 +20,7 @@ INSTALL_PREFIX="${INSTALL_PREFIX:-/opt/wine-d2d1-nspa-11.13}"
 command -v "$ENGINE" >/dev/null || { echo "!! '$ENGINE' not found (set ENGINE=docker?)"; exit 1; }
 
 echo "== [0/3] verify vendored inputs against pinned checksums =="
-( cd vendor && sha256sum -c wine-base.sha256 pipeasio.sha256 pipewire-sdk.sha256 ntsync-uapi.sha256 )
+( cd vendor && sha256sum -c wine-base.sha256 pipeasio.sha256 pipewire-sdk.sha256 ntsync-uapi.sha256 link.sha256 )
 
 echo "== [1/3] build container image ($IMAGE) =="
 $ENGINE build -t "$IMAGE" -f Containerfile .

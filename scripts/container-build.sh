@@ -86,10 +86,10 @@ fi
 readelf -d "$bridge_unix" | grep -F 'Shared library: [libusb-1.0.so.0]' >/dev/null
 strings "$portal_unix" | grep -F 'org.freedesktop.portal.FileChooser' >/dev/null
 
-# configure silently drops winealsa (ALSA MIDI) when libasound2-dev is absent — fail, don't ship without it.
+# configure silently drops winealsa (ALSA MIDI) when libasound2-dev is absent: fail, don't ship without it.
 winealsa_unix="$PREFIX_ROOT/lib/wine/x86_64-unix/winealsa.so"
 if [ ! -s "$winealsa_unix" ]; then
-    echo "!! winealsa.so missing — libasound2-dev not present at configure time; no ALSA MIDI" >&2
+    echo "!! winealsa.so missing: libasound2-dev not present at configure time; no ALSA MIDI" >&2
     exit 1
 fi
 
@@ -163,7 +163,7 @@ fi
 install -m644 build64/pipeasio64.dll    "$PREFIX_ROOT/lib/wine/x86_64-windows/pipeasio64.dll"
 install -m644 build64/pipeasio64.dll.so "$PREFIX_ROOT/lib/wine/x86_64-unix/pipeasio64.dll.so"
 # Wine resolves pipeasio64.dll to builtin name "pipeasio.dll" (from its spec file) and looks for the
-# unix half under that name — install both names or LoadLibrary fails with STATUS_DLL_NOT_FOUND.
+# unix half under that name: install both names or LoadLibrary fails with STATUS_DLL_NOT_FOUND.
 install -m644 build64/pipeasio64.dll    "$PREFIX_ROOT/lib/wine/x86_64-windows/pipeasio.dll"
 install -m644 build64/pipeasio64.dll.so "$PREFIX_ROOT/lib/wine/x86_64-unix/pipeasio.dll.so"
 
@@ -224,7 +224,7 @@ build_info="$PREFIX_ROOT/ABLETON-WINE-BUILD-INFO.txt"
 cp "$build_info" "$OUT/BUILD-INFO-${VERSION}.txt"
 cp "$build_info" "$OUT/BUILD-INFO.txt"
 tarball="$OUT/${NAME}-${VERSION}.tar.zst"
-# --long=27 (128 MiB window, zstd's default decode limit — no flags needed to unpack)
+# --long=27 (128 MiB window, zstd's default decode limit: no flags needed to unpack)
 # lets the i386/x86_64 builtin pairs dedup against each other.
 tar -C "$(dirname "$PREFIX_ROOT")" -c "$NAME" | zstd -T0 -19 --long=27 -q -f -o "$tarball"
 ( cd "$OUT" && sha256sum "$(basename "$tarball")" > "$(basename "$tarball").sha256" )

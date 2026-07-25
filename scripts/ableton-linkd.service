@@ -1,0 +1,11 @@
+[Unit]
+Description=Ableton Link session anchor (ableton-linkd)
+After=default.target
+
+[Service]
+ExecStart=%h/.local/share/ableton-wine/ableton-linkd
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

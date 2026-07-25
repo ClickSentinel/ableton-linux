@@ -39,8 +39,10 @@ db3f6619ab99d208c8b0759a10795f682cb29009c11f1d69c28504da84a30cc6  0039-winex11-n
 b66c19bccd7d759ecf2a879215d395f6d42515a4ad69c42518c7e9ed701f3ac9  0040-win32u-scale-the-menu-bar-band-with-the-menu-DPI-min.patch
 cadf6a5d7790cdd1ccb1ccb92d4a9397e9b4f1013443991759097039a46de5fc  0041-dxgi-make-dcomp-presents-visible-on-WebView2-s-unatt.patch
 2da0c359b8dcbc0c2113c2ceea1a7c0b6d9d901e626560c72d985eea2e885ddd  0042-winex11-alias-sub-scale-WM-config-rounding-instead-o.patch
-64260beb1fc8df57fac23c1c5b0baa0c21cd433950fb20f383df52823935c876  0043-dxgi-fix-build-against-11.13-s-frame-latency-as-sema.patch
-40e82d10d8fc50fdfe789b8a9dcf4c1d53377843cc3c11e541de23118fea2bee  0044-win32u-fix-build-against-11.13-s-fractional-DPI-stru.patch
-fdb57974b7816f69cb98e10b99da4448d90b83b02907f148daa06fb344cb6a1a  0045-configure-fix-libusb-1.0-detection-check-against-11..patch
+b8daff7e64239577a0563db6321826f47557503bbc458006a277191d2350c796  0043-shell32-reveal-explorer-select-targets-through-the-X.patch
+13317f863d0243d23800cbaa06088c86be0bc739fa5e477fe287531b221b2fc4  0045-ole32-reject-RevokeDragDrop-for-windows-owned-by-oth.patch
+64260beb1fc8df57fac23c1c5b0baa0c21cd433950fb20f383df52823935c876  0046-dxgi-fix-build-against-11.13-s-frame-latency-as-sema.patch
+40e82d10d8fc50fdfe789b8a9dcf4c1d53377843cc3c11e541de23118fea2bee  0047-win32u-fix-build-against-11.13-s-fractional-DPI-stru.patch
+fdb57974b7816f69cb98e10b99da4448d90b83b02907f148daa06fb344cb6a1a  0048-configure-fix-libusb-1.0-detection-check-against-11..patch
 b2d30d77078263b8141199195ea16b0e6df7eac04b939b9e56cd53552cfb9175  pipeasio/0001-asio-keep-graph-sample-rate-instead-of-ASE_NoClock.patch
 f25d5b4c3ee71b7e9491f91c462e2b7ddaca377b8b94c7bd95df7734f0a4b563  pipeasio/0002-asio-report-timeGetTime-in-ASIO-systemTime.patch

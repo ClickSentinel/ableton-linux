@@ -16,8 +16,11 @@
 [ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"
 set -euo pipefail
 # Tool output is parsed below (sha256sum, readelf, ldd); localised output
-# breaks the checks (issue #36).
-export LC_ALL=C
+# breaks the checks (issue #36). C.UTF-8, never plain C: wine inherits this
+# environment, and under a non-UTF-8 locale it cannot create the non-ASCII
+# filenames Live's Max content ships, which kills the Ableton installer
+# (issues #51, #55). glibc 2.35+, the floor checked below, always has C.UTF-8.
+export LC_ALL=C.UTF-8
 
 VERSION="@VERSION@"
 PAYLOAD_SHA="@PAYLOAD_SHA@"
@@ -51,7 +54,7 @@ say "== Ableton-on-Wine installer $VERSION =="
 # Rerunning the full install always worked (dated rollbacks throughout), but it
 # demands an Ableton download and walks every prompt again; update mode brings
 # runtime, launcher, and prefix policy to this kit's version and touches
-# nothing else — not Live, not settings, not the license.
+# nothing else: not Live, not settings, not the license.
 if [ "$mode" = install ] && [ -x "$HOME/.local/opt/$RUNTIME_NAME/bin/wine" ] \
    && [ -f "${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}/system.reg" ]; then
     installed_ver="$(cat "$HOME/.local/share/ableton-wine/VERSION" 2>/dev/null || true)"
@@ -61,7 +64,7 @@ if [ "$mode" = install ] && [ -x "$HOME/.local/opt/$RUNTIME_NAME/bin/wine" ] \
         printf 'Update it to %s? Ableton Live, your settings, and the license are kept. [Y/n] ' "$VERSION"
         read -r ans || ans=""
         case "$ans" in
-            [Nn]*) say "-- full install it is — the existing runtime gets a dated rollback" ;;
+            [Nn]*) say "-- full install it is; the existing runtime gets a dated rollback" ;;
             *)     mode=update ;;
         esac
     else
@@ -124,8 +127,8 @@ if [ "$mode" = install ] && [ "$do_launch" -eq 1 ]; then
     if [ -z "$live_exe$live_zip" ] && [ -t 0 ]; then
         say ""
         say "No Ableton installer found next to this file"
-        say "(looked for an ableton_live*.zip — any edition — or an Ableton .exe in $stick_dir)."
-        say "Put it here and press Enter. Or press Enter without it — the"
+        say "(looked for an ableton_live*.zip of any edition, or an Ableton .exe, in $stick_dir)."
+        say "Put it here and press Enter. Or press Enter without it, and the"
         say "manual install commands are printed at the end."
         printf '> '
         read -r _ || true
@@ -143,17 +146,17 @@ workdir="$(mktemp -d "${TMPDIR:-/tmp}/ableton-setup.XXXXXX")"
 cleanup() {
     rc=$?
     if [ "$rc" -eq 0 ]; then rm -rf "$workdir"
-    else say "(kept $workdir for inspection — the failure details are above)"; fi
+    else say "(kept $workdir for inspection; the failure details are above)"; fi
     exit "$rc"
 }
 trap cleanup EXIT
 
 offset="$(awk '/^__PAYLOAD_BELOW__$/{print NR+1; exit}' "$self")"
-[ -n "$offset" ] || fail "this installer file is incomplete — copy or download the .run file again"
+[ -n "$offset" ] || fail "this installer file is incomplete: copy or download the .run file again"
 say "-- checking the installer's own files and unpacking them"
 tail -n +"$offset" "$self" > "$workdir/payload.tar"
 actual="$(sha256sum "$workdir/payload.tar" | awk '{print $1}')"
-[ "$actual" = "$PAYLOAD_SHA" ] || fail "this installer file failed its integrity check (it was probably damaged while copying) — copy the .run file again and retry"
+[ "$actual" = "$PAYLOAD_SHA" ] || fail "this installer file failed its integrity check (it was probably damaged while copying); copy the .run file again and retry"
 kit="$workdir/kit"
 mkdir -p "$kit"
 tar -xf "$workdir/payload.tar" -C "$kit"
@@ -173,8 +176,8 @@ fi
 # --- host checks -------------------------------------------------------------
 say "-- checking this machine"
 [ "$(uname -m)" = x86_64 ] || fail "this installer needs a 64-bit Intel/AMD machine (x86_64); this machine is $(uname -m)"
-command -v tar  >/dev/null || fail "the 'tar' program is missing — install it with your package manager, then rerun"
-command -v zstd >/dev/null || fail "the 'zstd' program is missing (package name: zstd) — install it, then rerun; it unpacks the Wine files"
+command -v tar  >/dev/null || fail "the 'tar' program is missing: install it with your package manager, then rerun"
+command -v zstd >/dev/null || fail "the 'zstd' program is missing (package name: zstd): install it, then rerun; it unpacks the Wine files"
 glibc="$(ldd --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+$' || true)"
 if [ -n "$glibc" ]; then
     case "$glibc" in
@@ -191,7 +194,7 @@ if ! ldconfig -p 2>/dev/null | grep 'libpipewire-0\.3\.so\.0' >/dev/null; then
 fi
 # Bundled static cabextract covers machines that lack the host package.
 if ! command -v cabextract >/dev/null; then
-    say "   this machine has no 'cabextract' — using the copy bundled in this installer"
+    say "   this machine has no 'cabextract'; using the copy bundled in this installer"
 fi
 export PATH="$kit/bin:$PATH"
 
@@ -203,7 +206,7 @@ if [ "$mode" = update ]; then
     bash "$kit/scripts/setup-prefix.sh" --refresh
     say ""
     say "================================================================"
-    say "Done — updated to $VERSION. Ableton Live itself was not touched."
+    say "Done: updated to $VERSION. Ableton Live itself was not touched."
     say "Launch Live:   ~/.local/bin/ableton-live"
     say "================================================================"
     exit 0
@@ -235,7 +238,7 @@ if [ -z "${ABLETON_DPI_MODE:-}" ]; then
         say "   (the launcher re-checks your display on every start, so this corrects itself)"
     fi
 fi
-say "-- creating the Wine prefix — Live's private 'C: drive' at ~/.wine-ableton"
+say "-- creating the Wine prefix, Live's private 'C: drive' at ~/.wine-ableton"
 say "   (fonts and runtime pieces install now; this takes a few minutes)"
 bash "$kit/scripts/setup-prefix.sh"
 
@@ -249,15 +252,15 @@ if [ "$manual_install" -eq 0 ]; then
         if command -v unzip >/dev/null;   then unzip -q "$live_zip" -d "$unpack_dir"
         elif command -v bsdtar >/dev/null; then bsdtar -xf "$live_zip" -C "$unpack_dir"
         elif command -v python3 >/dev/null; then python3 -m zipfile -e "$live_zip" "$unpack_dir"
-        else say "!! no program available to unpack the zip (looked for unzip, bsdtar, python3) — manual steps will be printed at the end"; manual_install=1
+        else say "!! no program available to unpack the zip (looked for unzip, bsdtar, python3); manual steps will be printed at the end"; manual_install=1
         fi
         if [ "$manual_install" -eq 0 ]; then
             live_exe="$(find "$unpack_dir" -iname '*.exe' | head -1)"
-            [ -n "$live_exe" ] || { say "!! that zip holds no installer (.exe) — is it the right download from ableton.com?"; manual_install=1; }
+            [ -n "$live_exe" ] || { say "!! that zip holds no installer (.exe); is it the right download from ableton.com?"; manual_install=1; }
         fi
     fi
     if [ -n "$live_exe" ]; then
-        say "-- starting the Ableton installer — from here just click through its window"
+        say "-- starting the Ableton installer; from here just click through its window"
         # run from the installer's own directory so its relative payload lookups resolve
         if ( cd "$(dirname -- "$live_exe")" && \
                  WINEPREFIX="$HOME/.wine-ableton" \
@@ -265,7 +268,7 @@ if [ "$manual_install" -eq 0 ]; then
                  "./$(basename -- "$live_exe")" ); then
             live_installed=1
         else
-            say "!! the Ableton installer exited with an error — instructions below"
+            say "!! the Ableton installer exited with an error; instructions below"
             manual_install=1
         fi
         WINEPREFIX="$HOME/.wine-ableton" \
@@ -277,7 +280,7 @@ fi
 say ""
 say "================================================================"
 if [ "$live_installed" -eq 1 ]; then
-    say "Done — Ableton Live is installed."
+    say "Done: Ableton Live is installed."
 else
     say "Done, except Ableton Live itself. To install it manually:"
     say "  1) unpack your Ableton zip (any edition):"
