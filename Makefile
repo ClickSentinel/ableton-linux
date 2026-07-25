@@ -3,7 +3,7 @@
 
 all: build
 
-build:                        ## build Wine + PipeASIO in a container -> dist/
+build:                        ## build runtime and Link helper with Podman -> dist/
 	./build.sh
 
 install:                      ## install the built Wine tree + launcher (end user)

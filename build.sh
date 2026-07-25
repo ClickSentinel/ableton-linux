@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 #
-#   ./build.sh                # build the relocatable tarball with podman
-#   ENGINE=docker ./build.sh  # or docker
+#   ./build.sh                # build the runtime and Link helper with Podman
 #   JOBS=8 ./build.sh         # limit parallelism
 #   INSTALL_PREFIX=/target/path/wine-d2d1-nspa-11.11 ./build.sh
-#                             # strict path-identity build; normally unnecessary —
+#                             # strict path-identity build; normally unnecessary
 #                             # the tarball self-locates (relocation gate proves it)
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -17,15 +16,18 @@ JOBS="${JOBS:-$(nproc)}"
 # One tarball can serve any user and any $HOME. 
 INSTALL_PREFIX="${INSTALL_PREFIX:-/opt/wine-d2d1-nspa-11.11}"
 
-command -v "$ENGINE" >/dev/null || { echo "!! '$ENGINE' not found (set ENGINE=docker?)"; exit 1; }
+command -v "$ENGINE" >/dev/null || {
+    echo "!! Podman command '$ENGINE' not found; install Podman or set ENGINE" >&2
+    exit 1
+}
 
-echo "== [0/3] verify vendored inputs against pinned checksums =="
+echo "== [0/4] verify vendored inputs against pinned checksums =="
 ( cd vendor && sha256sum -c wine-base.sha256 pipeasio.sha256 pipewire-sdk.sha256 ntsync-uapi.sha256 link.sha256 )
 
-echo "== [1/3] build container image ($IMAGE) =="
+echo "== [1/4] build container image ($IMAGE) =="
 $ENGINE build -t "$IMAGE" -f Containerfile .
 
-echo "== [2/3] build Wine + PipeASIO in the container (JOBS=$JOBS) =="
+echo "== [2/4] build Wine + PipeASIO in the container (JOBS=$JOBS) =="
 mkdir -p dist
 relabel=""
 if [ -f /sys/fs/selinux/enforce ]; then relabel=",Z"; fi
@@ -37,7 +39,10 @@ $ENGINE run --rm \
     "$IMAGE" \
     /src/scripts/container-build.sh
 
-echo "== [3/3] done — artifacts in dist/ =="
+echo "== [3/4] build ableton-linkd with the configured Podman image =="
+ENGINE="$ENGINE" IMAGE="$IMAGE" ./scripts/build-ableton-linkd.sh
+
+echo "== [4/4] done: artifacts in dist/ =="
 ls -lh dist/
 echo
 echo "Next:  ./scripts/install.sh   then   ./scripts/setup-prefix.sh"
