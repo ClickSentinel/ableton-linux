@@ -1,33 +1,40 @@
-# README
+# Ableton Wine beta test kit
 
-(note: in progress work)
-
-Use this test kit to check Ableton Live 12 with Ableton Wine on Linux.
-
+This work-in-progress kit tests Ableton Live 12 with Ableton Wine on Linux.
 
 ## Getting started
 
-Use a physical x64 Linux machine. VMs are not supported.
+Use a physical x86-64 Linux machine. The kit does not support virtual machines.
 
 From the root of this repository:
 
 ```bash
-./tester-kit/run-session
+./beta/tester-kit/run-session
 ```
 
-The command records your system, downloads and checks the Wine installer, prepares `~/.wine-ableton`, runs the tests and writes:
+The command collects a redacted system report, downloads and verifies the
+configured Wine installer, prepares `~/.wine-ableton`, runs the probes, and
+writes:
 
 ```text
 session-YYYY-MM-DD-HHMMSS.txt
 ```
 
-The collector omits unique hardware identifiers, account paths, MAC addresses, credential-like values and captured window titles. A report containing excluded data is a collector failure: keep it local and report the failure instead of cleaning and sharing it manually. The environment-profiler scope is documented in [scripts/README.md](scripts/README.md).
+The collector removes unique hardware identifiers. It redacts account paths,
+MAC addresses, credential lines, and captured window titles. If excluded data
+appears, keep the report local and report the collector failure. Do not share
+that report, even after removing the data. See
+[Environment profilers](scripts/README.md) for the full scope.
 
-After installing Live in `~/.wine-ableton`, start Live and run the checks. They inspect its open windows without clicking or typing in Live.
+After installing Live in `~/.wine-ableton`, start it and run the Live checks:
 
 ```bash
-./tester-kit/run-session --live-only \
+./beta/tester-kit/run-session --live-only \
   --wine "$HOME/.local/opt/wine-d2d1-nspa-11.11/bin/wine"
 ```
 
-For every option and test, read [tester-kit/README.md](tester-kit/README.md).
+The command asks you to open Learn View and one representative Direct2D or
+JUCE plugin editor. L01-L05 inspect those windows without injecting input.
+L10-L12 ask you to check window stability, input, and Learn View rendering.
+See the [tester kit reference](tester-kit/README.md) for all options and
+probes.

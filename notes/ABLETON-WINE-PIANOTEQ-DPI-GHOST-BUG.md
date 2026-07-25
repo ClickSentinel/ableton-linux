@@ -1,52 +1,37 @@
-# Pianoteq half-size ghost flicker + unclosable JUCE modal
+# Pianoteq editor resize loop
 
-## Symptoms
+Disable **Auto-Scale Plugin Window** in Live, then reopen Pianoteq. This stops
+the half-size ghost image and restores modal input. No Wine patch is required.
 
-Pianoteq's VST3 editor in Live flickers with a half-size copy of its
-interface inside the same window; JUCE modals painted in the plugin window
-can't be closed. Standalone Pianoteq is unaffected.
+## Cause
 
-## Research
+With auto-scale enabled, Live creates the `Vst3PlugWindow` at 96 DPI while its
+main window runs at 192 DPI. Wine scales the plugin surface by 2x. The resize
+negotiation between JUCE and Live then mixes physical frame metrics with
+logical coordinates and never settles.
 
-A window resize feedback loop. The editor window animates between ~724x707
-and ~1183x1211 (logical), several steps per second. The "ghost" is the fresh
-render at the current (smaller) size blitted top-left inside stale pixels
-from the larger size; both copies show live content because both are recent
-frames at different loop phases. The unclosable modal is clicks landing on
-stale pixels.
+The editor alternates between about 724x707 and 1183x1211 logical pixels. A
+new frame at the smaller size appears over pixels from the previous larger
+frame. Clicks on those stale pixels miss JUCE modals.
 
-Under "Auto-Scale Plugin Window", Live creates the `Vst3PlugWindow` toplevel
-DPI-unaware (ctx `0x6010`, dpi 96; the main window is per-monitor @192). Wine
-DPI-virtualizes the unaware toplevel (scaled surface ×2), and the VST3 size
-negotiation (JUCE resizeView ⇄ Live SetWindowPos) never reaches a fixpoint:
-physical frame metrics leak into logical space (the JUCE child sits at
-y-offset 58 logical where the real frame is 33, a 56px physical WM titlebar
-applied as logical), so every round-trip misses by the frame error, ~3
-iterations/sec, triggered by editor open, zoom change, or manual resize.
-Standalone Pianoteq runs fully DPI-aware; no loop.
+Standalone Pianoteq is unaffected because it runs in one DPI space.
 
-Method: rate-limited present/resize probes show a marching buffer size with a
-constant thread DPI context (kills the "DPI context flip" theory); a
-`trace+win` volley shows the toplevel resized first, so the loop is
-host-driven; [../tools/dpispy.c](../tools/dpispy.c) exposes the unaware
-`Vst3PlugWindow` in one shot.
+## Evidence
 
-## Mitigations
+Rate-limited present and resize traces showed changing buffer sizes while the
+thread DPI context stayed constant. A `trace+win` capture showed that the host
+resized the top-level window first. This ruled out a DPI-context flip inside
+Pianoteq.
 
-- Right-click the device header, uncheck "Auto-Scale Plugin Window", reopen
-  the editor. Live then hosts it per-monitor-aware. This is the fix; no Wine
-  change needed.
-- [../patches/0023-wined3d-dxgi-query-present-resize-client-rects-in-th.patch](../patches/0023-wined3d-dxgi-query-present-resize-client-rects-in-th.patch):
-  present dst rect and `ResizeBuffers(0,0)` auto-size are queried in the
-  window's DPI context, not the calling thread's (presents address physical
-  pixels). Correctness hardening for mixed-DPI callers; not this bug's
-  cause.
-- [../patches/0024-wined3d-keep-present-resize-DPI-diagnostics-at-trace.patch](../patches/0024-wined3d-keep-present-resize-DPI-diagnostics-at-trace.patch):
-  the probes, kept at trace level (`WINEDEBUG=trace+d3d`).
+[`tools/dpispy.c`](../tools/dpispy.c) reports the unaware
+`Vst3PlugWindow`.
 
-## Caveats
+## Related Wine patches
 
-The fix is host configuration: any editor hosted DPI-unaware (Auto-Scale on)
-can re-enter the loop; disabling Auto-Scale Plugin Window is a standard
-first-launch step. Patch 0023 does not remove the loop for unaware-hosted
-editors.
+[Patch 0023](../patches/0023-wined3d-dxgi-query-present-resize-client-rects-in-th.patch)
+queries present and resize rectangles in the target window's DPI context.
+This hardens mixed-DPI presentation but does not stop an editor that Live
+hosts as DPI-unaware.
+
+[Patch 0024](../patches/0024-wined3d-keep-present-resize-DPI-diagnostics-at-trace.patch)
+keeps the related probes behind `WINEDEBUG=trace+d3d`.

@@ -1,84 +1,95 @@
-# Plugin editor input dead / menus won't open / shortcuts inert
+# Plugin input, menu, and shortcut fixes
 
-## Symptoms
+Patches 0016 through 0020 fix four independent faults found in the same
+sessions. Symptoms included unresponsive SWAM VST3 editors, menus that closed
+immediately, inert shortcuts, `VST3: plug window creation failed`, and a
+process abort when opening a nih-plug or baseview editor.
 
-Three at once: SWAM VST3 editors render but ignore all mouse input;
-application menus open-then-instantly-close, or not at all, with multi-second
-freezes; keyboard shortcuts do nothing. Intermittently, `VST3: plug window
-creation failed` in the log. A fourth, separate crash: nih-plug/baseview
-plugin editors (Reel Deal) abort the whole process on open.
+## DirectComposition lost the original window procedure
 
-## Research
+JUCE 8's Direct2D renderer can recreate a composition device and target on
+the same window. Wine's second `CreateTargetForHwnd` call recorded its own
+DirectComposition window procedure as the original procedure. Releasing a
+target also cleared the shared `__wine_dcomp_target` property.
 
-Three independent root causes, plus one for the baseview crash:
+The window could then retain Wine's subclass without a target. Every message
+went to `DefWindowProcW`, including mouse input and `WM_NCHITTEST`. Timer-based
+Direct2D painting continued, which made the editor look functional while it
+ignored input.
 
-1. dcomp target-subclass black hole. The DirectComposition emulation
-   subclasses the composition target HWND. JUCE 8's Direct2D renderer (SWAM)
-   recreates its composition device+target on the same HWND; the second
-   `CreateTargetForHwnd` records dcomp's own wndproc as "original" and the
-   shared `__wine_dcomp_target` property is clobbered on release. End state:
-   subclass installed, no target property, every message goes to
-   `DefWindowProcW`. Painting survives (JUCE renders timer-driven D2D, no
-   WM_PAINT needed) but all input is swallowed, including WM_NCHITTEST; the
-   click-through JUCE overlay stops reporting HTTRANSPARENT and eats clicks.
-2. `_NET_ACTIVE_WINDOW` requests with timestamp 0, no retry. winex11 sends
-   activation requests with `data.l[1] = 0`; GNOME 50 mutter silently drops
-   them (focus-stealing prevention). The pending-request dedup then
-   suppresses every further request and the unacknowledged serial blocks
-   foreground sync: one dropped request wedges activation for the whole
-   session. Menus need activation, keyboard follows the compositor's focus,
-   and clicks on a not-yet-active window die in the WM_MOUSEACTIVATE dance.
-3. Stale shared-session views, NULL-wndproc window classes. Clients map
-   wineserver's shared session memfd as PAGE_READONLY views; ntdll maps
-   read-only views MAP_PRIVATE on Linux, which is not coherent for this
-   memfd. Views go permanently stale: `find_shared_session_object` reads id 0
-   where the server wrote a class object (verified against the memfd via
-   `/proc/<wineserver>/fd`), `NtUserRegisterClassExWOW` fails, and window
-   creation dies with a swallowed null-call AV in WM_NCCREATE; each AV burns
-   ~2.4 s in Live's vectored crash handler (the "menu opens then freezes"
-   feel), and the same mechanism kills `Vst3PlugWindow` creation.
-4. baseview GL crash. The Wine 11.11 EGL backend hardcodes
-   `framebuffer_srgb_capable = FALSE` (upstream TODO); baseview defaults to
-   `srgb: true`, gets 0 formats from `wglChoosePixelFormatARB`, and panics in
-   a cannot-unwind context, aborting the process.
+[Patch 0016](../patches/0016-dcomp-never-let-an-orphaned-target-subclass-swallow-.patch)
+stores the true original procedure in its own window property. It never
+chains the subclass to itself, forwards messages after the target disappears,
+and removes only state owned by the released target.
 
-## Mitigations
+## Mutter rejected activation requests with timestamp zero
 
-1. [../patches/0016-dcomp-never-let-an-orphaned-target-subclass-swallow-.patch](../patches/0016-dcomp-never-let-an-orphaned-target-subclass-swallow-.patch):
-   keep the true original wndproc in its own property, never chain the
-   subclass to itself, forward (never DefWindowProc) when the target struct
-   is gone, tear down only state owned by the released target.
-2. [../patches/0017-winex11-send-real-timestamps-in-_NET_ACTIVE_WINDOW-r.patch](../patches/0017-winex11-send-real-timestamps-in-_NET_ACTIVE_WINDOW-r.patch):
-   send the last real input timestamp and re-send when a newer one exists;
-   self-healing on user clicks.
-3. [../patches/0019-win32u-map-shared-session-views-MAP_SHARED-read-writ.patch](../patches/0019-win32u-map-shared-session-views-MAP_SHARED-read-writ.patch)
-   (decisive): map session views `SECTION_MAP_READ|SECTION_MAP_WRITE` +
-   `PAGE_READWRITE` so ntdll uses MAP_SHARED (read-only fallback kept).
-   [../patches/0018-server-pre-dirty-shared-session-mapping-pages-win32u.patch](../patches/0018-server-pre-dirty-shared-session-mapping-pages-win32u.patch)
-   adds server-side pre-dirtying of grown session blocks and a `<` to `<=`
-   block-match fix. Verified: 30 000 register-class + create/destroy-window
-   iterations across mapping growths, zero failures; 0 session-object
-   mismatches per boot (previously 10-12).
-4. [../patches/0020-opengl-advertise-and-honor-sRGB-capable-pixel-format.patch](../patches/0020-opengl-advertise-and-honor-sRGB-capable-pixel-format.patch):
-   advertise sRGB for 8-bit RGB formats when the display has
-   `EGL_KHR_gl_colorspace`; create X11 EGL surfaces with
-   `EGL_GL_COLORSPACE_SRGB_KHR` (plain retry fallback). Repro:
-   [../tools/glchild.c](../tools/glchild.c) runs baseview's exact attrib list
-   with/without the sRGB bit.
+winex11 sent `_NET_ACTIVE_WINDOW` requests with `data.l[1] = 0`. GNOME 50's
+Mutter dropped those requests as part of focus-stealing prevention. Wine then
+deduplicated later requests for the same window, so activation remained
+pending. Menus, keyboard focus, and `WM_MOUSEACTIVATE` all depended on that
+state.
 
-## Caveats
+[Patch 0017](../patches/0017-winex11-send-real-timestamps-in-_NET_ACTIVE_WINDOW-r.patch)
+sends the last processed input timestamp. A later user input event supplies a
+new timestamp and permits another activation request.
 
-- All four are upstream-worthy. The MAP_PRIVATE read-only view coherence
-  assumption in `ntdll/unix/virtual.c` is the deepest and may bite other
-  shared-memory consumers.
-- Diagnostic tools in [../tools/](../tools/): `swamprobe.c` (window
-  tree/DPI/hit-test/focus), `liveinject.c` (Wine-internal SendInput; mouse
-  reliable, synthetic keyboard is not, so don't use it for shortcut
-  testing), `xrec.c`/`xmon.c`/`xact.c` (X focus tracing/prodding),
-  `mousespy.c` + `spyhost.c` (WH_MOUSE hook with wndproc-to-module
-  resolution, which found dcomp as the subclasser; never add WH_CALLWNDPROC
-  hooks from the hook DLL, it wedges Live's UI thread),
-  `menutest.c`/`stresstest.c` (standalone repros).
-- Cheap canaries: `WINEDEBUG=+message` shows the black hole
-  ("DefWindowProc:" nesting); `warn+winstation,err+class` flags the
-  session-object failure; `+seh` shows the swallowed AVs.
+## Shared session mappings stopped receiving updates
+
+Wine clients mapped the wineserver session memfd with `PAGE_READONLY`. ntdll
+implemented that view with `MAP_PRIVATE` on Linux, so a client could stop
+seeing later server writes. In a captured failure,
+`find_shared_session_object` read object ID zero while the memfd contained a
+window-class object.
+
+Class registration then failed. Window creation reached `WM_NCCREATE` with a
+null window procedure and raised an access violation. Live's vectored
+exception handler spent about 2.4 seconds on each failure, which explained
+the menu delay and `Vst3PlugWindow` creation failures.
+
+[Patch 0019](../patches/0019-win32u-map-shared-session-views-MAP_SHARED-read-writ.patch)
+requests `SECTION_MAP_READ|SECTION_MAP_WRITE` and `PAGE_READWRITE`, which
+selects `MAP_SHARED`. It keeps a read-only fallback and never writes through
+the view.
+
+[Patch 0018](../patches/0018-server-pre-dirty-shared-session-mapping-pages-win32u.patch)
+pre-dirties grown session blocks on the server and corrects a block-boundary
+comparison. A 30,000-iteration register, create, and destroy test crossed
+mapping growth boundaries without a failure. Boot-time session-object
+mismatches fell from between 10 and 12 per boot to zero.
+
+## The EGL backend omitted sRGB-capable formats
+
+Wine 11.11's EGL backend set `framebuffer_srgb_capable = FALSE`. baseview
+requests `srgb: true`, so `wglChoosePixelFormatARB` returned no formats. Its
+Rust panic crossed a non-unwinding boundary and aborted Live.
+
+[Patch 0020](../patches/0020-opengl-advertise-and-honor-sRGB-capable-pixel-format.patch)
+advertises sRGB for 8-bit RGB formats when the display supports
+`EGL_KHR_gl_colorspace`. It creates the X11 EGL surface with
+`EGL_GL_COLORSPACE_SRGB_KHR` and retries with the default color space if the
+driver rejects it.
+
+[`tools/glchild.c`](../tools/glchild.c) reproduces baseview's pixel-format
+request with and without the sRGB bit.
+
+## Diagnostics
+
+The relevant programs in [`tools/`](../tools/) are:
+
+- `swamprobe.c` for window trees, DPI, hit testing, and focus.
+- `liveinject.c` for Wine-internal mouse input. Its synthetic keyboard mode
+  is not reliable enough for shortcut tests.
+- `xrec.c`, `xmon.c`, and `xact.c` for X11 focus traces.
+- `mousespy.c` with `spyhost.c` for identifying the subclassing module. Keep
+  this DLL limited to the mouse hook; adding `WH_CALLWNDPROC` blocks Live's
+  UI thread.
+- `menutest.c` and `stresstest.c` for standalone reproductions.
+
+Useful Wine debug channels are `+message` for repeated `DefWindowProc` calls,
+`warn+winstation,err+class` for session-object failures, and `+seh` for the
+handled access violations.
+
+Each fix changes general Wine behavior and may be suitable for upstream
+Wine. Patch 0019 also warrants review for other read-only shared-memory
+users.

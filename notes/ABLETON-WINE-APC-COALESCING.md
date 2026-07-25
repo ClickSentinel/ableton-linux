@@ -1,86 +1,79 @@
-# Live's APC coalescing: idle CPU cost and the playback-safe fix (2026-07-19)
+# APC coalescing CPU use and proposed Wine fix
 
-Live under this Wine burns a steady 30-40% of a core in its engine's APC
-coalescing thread. 2026.07.18.1 removed that cost by seeding
-`-DontCombineAPCs` into Options.txt; playback then flooded the wineserver
-with uncoalesced APCs and starved the PipeASIO callback into choppy,
-slowed-down audio (issue #29, confirmed by A/B on the reporter's machine:
-removing the line fixes it, restoring it reproduces it). 2026.07.19.1
-reverted the seed and strips it from prefixes. This note is the plan for
-winning the idle CPU back without touching Live's engine options again.
+Live's APC coalescing thread uses 30 to 40% of one CPU core while idle.
+Release 2026.07.18.1 added `-DontCombineAPCs`, which removed that load but
+caused choppy, slowed playback. Removing the option fixed issue #29 on the
+reporter's machine; restoring it reproduced the fault. Release 2026.07.19.1
+removed the option and strips it from existing prefixes.
 
-## Why coalescing costs CPU under Wine (working theory)
+The Wine-side fix below is a proposal. Its account of Live's internals has
+not been confirmed by profiling.
 
-Live's coalescing thread batches engine APCs on a high-frequency alertable
-wait. On Windows alertable waits are cheap; under Wine each one is a
-wineserver round trip. ntsync does not help: it accelerates handle waits,
-not alertable sleeps or APC delivery. A ~1 kHz batching loop is ~1,000
-round trips/s, which matches the observed 30-40% thread.
+## Current hypothesis
 
-The Live-internals half of this is inferred from the option's name and the
-observed behaviour, not from profiling. Confirm before building on it:
-WINEDEBUG=+server on an idle session, count select/queue_apc calls per
-second from the coalescing thread, with and without the option.
+Live appears to batch engine asynchronous procedure calls (APCs) with a
+high-frequency alertable wait. Wine sends each alertable wait through the
+wineserver. ntsync accelerates handle waits, but not alertable sleeps or APC
+delivery. A loop near 1 kHz would explain the measured CPU use.
 
-## Why -DontCombineAPCs regresses playback
+Confirm this before writing a patch. Run an idle session with
+`WINEDEBUG=+server`, then count `select` and `queue_apc` calls from the
+coalescing thread with and without `-DontCombineAPCs`.
 
-Uncoalesced, every engine APC is its own NtQueueApcThread: a wineserver
-round trip on the playback path plus a per-APC wake of the target thread.
-The wineserver is single threaded, so under playback load the storm
-serializes behind it and the PipeASIO callback misses graph cycles. The
-reported symptom matches a roughly half duty cycle: audio stutter at about
-twice the rate of the video stutter.
+With coalescing disabled, each engine APC appears to require its own
+`NtQueueApcThread` request and target-thread wake. The single-threaded
+wineserver serializes those requests. The hypothesis predicts that this
+serialization makes PipeASIO miss graph cycles under playback load. This
+explanation fits the reported audio and video stutter, but still needs a
+trace.
 
-## Fix: in-process user-APC delivery (patch series work)
+## Proposed implementation
 
-The ntsync driver's alert mechanism exists for exactly this case: its wait
-ioctls accept an alert event that aborts the wait for APC delivery. The
-runtime already vendors the header and gates both binaries on ntsync
-(notes/ABLETON-WINE-NTSYNC-REGRESSION.md).
+ntsync waits already accept an alert event for APC delivery. A Wine patch
+could use that event for same-process user APCs:
 
-1. Same-process NtQueueApcThread appends to an in-process per-thread APC
-   queue and sets the target thread's ntsync alert event. One ioctl, no
-   wineserver round trip.
-2. Alertable waits already multiplex the alert event in-kernel; on an
-   alerted wake, drain the in-process queue first, then fall through to
-   the existing server-side APC check.
-3. Cross-process APCs and system APCs (async I/O completion is queued by
-   the server) keep the server path unchanged; the server's delivery
-   notification also sets the alert event, so both sources funnel into one
-   wake.
-4. Result: Live's default engine config (coalescing on) gets cheap because
-   the batching loop's alertable sleeps stop round-tripping, and
-   -DontCombineAPCs becomes unnecessary in either mode.
+1. `NtQueueApcThread` adds a same-process user APC to a per-thread queue and
+   signals the target thread's ntsync alert event.
+2. An alertable wait drains that queue before checking the existing
+   server-side APC queue.
+3. Cross-process and system APCs continue through wineserver. Wineserver
+   delivery continues to signal the same alert event.
 
-Semantics to hold: per-thread user APC FIFO order across both queues,
-NtTestAlert, delivery during suspend/terminate, special user APCs. Build
-an apcprobe for the tester kit (pattern: ntsyncprobe) asserting delivery
-order, alertable wake semantics, cross-process delivery, and I/O
-completion APCs interleaved with user APCs. All assertions must pass on
-the unpatched build first to establish the baseline.
+The patch must preserve FIFO order across both queues, `NtTestAlert`,
+suspend and termination behavior, special user APCs, and I/O completion
+ordering. Add an `apcprobe` to the tester kit, following the existing
+`ntsyncprobe` pattern. Run it against the unpatched build first, then require
+the same results from the patch.
 
-## No-regression protocol
+## Verification
 
-Paired runs via scripts/bench-run.sh, unpatched vs patched, each crossed
-with ABLETON_RT=on/off and full cores vs `taskset -c 0-3` (low-core
-stand-in; see notes/ABLETON-WINE-RT-SCHEDULING.md).
+Compare unpatched and patched builds with `ABLETON_RT=on` and `off`. Repeat
+each pair with all available CPUs and with four CPUs allowed by the current
+cpuset; see
+[ABLETON-WINE-RT-SCHEDULING.md](ABLETON-WINE-RT-SCHEDULING.md).
 
-Idle: Live open, ASIO device open at 256 samples, transport stopped.
-Record per-thread CPU, wineserver CPU, context switches/s (the
-ntsync-regression note has the reference figures).
+For idle tests, open the ASIO device at 256 samples and stop transport.
+Record the coalescing thread's CPU use, wineserver CPU use, and context
+switches.
 
-Playback: 10 minutes of a fixed reference set. Record pw-top xrun count on
-the PipeASIO node and wineserver CPU.
+For playback, run the fixed reference set for five minutes. Record the
+PipeASIO node's `pw-top` xrun delta and wineserver CPU use. The existing
+`scripts/bench-run.sh` accepts the five-minute xrun count and DSP load, and
+records `wined3d_cs` CPU use plus wineserver context switches. Record the
+APC-specific CPU figures separately unless that script is extended.
 
-Gates, all rows: playback xruns equal to the unpatched baseline (zero),
-apcprobe fully green, idle coalescing-thread CPU under 5%. Any perf change
-on the audio path gets this playback verification run before release; the
-18.1 seed shipped on idle measurements alone, which is how issue #29
-happened. Beta tester kit round before the release, not after.
+Require all of these results:
 
-## Interim position
+- No more playback xruns than the unpatched baseline. The previous baseline
+  was zero.
+- Every `apcprobe` assertion passes.
+- Idle coalescing-thread CPU use stays below 5%.
 
-2026.07.19.1 ships no Options.txt options and the 30-40% idle thread is
-accepted until the patch lands. Distribution policy stays on surfaces this
-project owns (registry, launcher environment, ~/.config/pipeasio); nothing
-gets seeded into user-owned config files again.
+Run the beta tester kit before release. Release 2026.07.19.1 showed that an
+idle-only measurement is not enough for an audio-processing change.
+
+## Current status
+
+This proposal remains unimplemented. Current releases retain Live's default
+APC coalescing and its measured idle CPU use. Prefix setup only removes the
+known-bad `-DontCombineAPCs` line from `Options.txt`.

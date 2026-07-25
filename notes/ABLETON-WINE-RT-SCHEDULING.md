@@ -1,44 +1,82 @@
-# Realtime scheduling: probe reach and low-core verification (2026-07-19)
+# Realtime scheduling and low-core systems
 
-The launcher probes `chrt -r 10` and, when it succeeds, runs the whole
-Live process under SCHED_RR 10 (scripts/ableton-live, present since the
-first release). The assumption was that the probe only fires after a user
-runs setup-realtime.sh. Issue #29 disproved that: the reporter had
-`ulimit -r` = 99 on CachyOS without ever running it. Distributions with
-audio-tuned defaults grant rtprio out of the box, so whole-process RR is
-already live for part of the user base with no opt-in.
+Status: the launcher starts Wine under `SCHED_RR` priority 10 whenever
+`chrt -r 10 true` succeeds. Threads that inherit this policy use RR 10.
+PipeASIO separately requests `SCHED_FIFO` priority 15 for its data-loop thread.
+`ABLETON_RT=off` disables the launcher's RR policy for one launch, but not
+PipeASIO's policy. The effect on low-core systems has not been measured.
 
-Not the cause of issue #29 (2026.07.17.3 was fine under the same rights);
-that was the Options.txt seed (notes/ABLETON-WINE-APC-COALESCING.md).
+Realtime scheduling was not the cause of issue #29. The same host permissions
+worked in release 2026.07.17.3; the later playback fault came from
+`-DontCombineAPCs`. See
+[ABLETON-WINE-APC-COALESCING.md](ABLETON-WINE-APC-COALESCING.md).
 
-## Why whole-process RR is suspect on small machines
+## Current launcher behavior
 
-1. RT throttling: with kernel defaults (sched_rt_runtime_us 950000/
-   1000000), saturated RR load loses a 50 ms non-RT window per second per
-   core. On few cores that lands on the audio callback as a periodic
-   stutter.
-2. Same-priority round robin: every Live thread sits at RR 10, so the
-   audio callback queues behind GUI and render threads for multiples of
-   sched_rr_timeslice_ms (100 ms default) when cores are scarce.
-3. Inversion against the wineserver: Live's RR threads outrank the
-   SCHED_OTHER wineserver they do round trips through. Harmless on 32
-   cores; unmeasured on 4.
+The launcher tests `chrt -r 10 true`. When it succeeds, the launch command
+starts with `chrt -r 10 wine`.
 
-## Override
+`scripts/setup-realtime.sh` can grant this permission, but some distributions
+already set a high `rtprio` limit. On those systems, realtime mode starts
+without running the setup script.
 
-`ABLETON_RT=off` (added 2026.07.19.1) skips the probe for A/B runs and as
-the escape hatch on machines where RR is a net loss.
+To force normal scheduling:
 
-## Verification run (pending)
+```bash
+ABLETON_RT=off "$HOME/.local/bin/ableton-live"
+```
 
-On a 4-core restriction of the build machine, paired via
-scripts/bench-run.sh:
+## Low-core risks to test
 
-    taskset -c 0-3 ableton-live
-    ABLETON_RT=off taskset -c 0-3 ableton-live
+These are hypotheses, not confirmed faults:
 
-Confirm scheduling actually differs (`ps -eLo pid,tid,cls,rtprio,comm`
-shows RR vs TS), then record pw-top xruns over 10 minutes of the reference
-set and UI responsiveness in both rows. Decide from the numbers whether
-the probe stays whole-process, scopes to audio threads only, or gains a
-core-count floor. Until then the default stays as shipped.
+1. Linux normally limits realtime tasks to 950 ms of each one-second period.
+   Saturated realtime work can therefore be throttled for the remaining
+   50 ms.
+2. Live and Wine threads that inherit the launcher's policy share the same
+   round-robin priority. PipeASIO instead requests FIFO 15 for its data-loop
+   thread.
+3. Live's realtime threads outrank the separately running
+   `SCHED_OTHER` wineserver, even though they make synchronous wineserver
+   calls.
+
+## Pending comparison
+
+List the CPUs available to the current shell:
+
+```bash
+taskset -pc "$$"
+```
+
+Skip this comparison if the list contains fewer than four CPUs. Otherwise,
+replace `0-3` below with four CPU IDs from that list:
+
+```bash
+CPUS=0-3
+ABLETON_RT=off taskset -c "$CPUS" "$HOME/.local/bin/ableton-live"
+taskset -c "$CPUS" "$HOME/.local/bin/ableton-live"
+```
+
+Confirm the policies during each run:
+
+```bash
+ps -eLo pid,tid,cls,rtprio,comm
+```
+
+The `ABLETON_RT=off` run should show `TS` for Live and Wine threads. The
+default run should show `RR` for inherited threads. PipeASIO may show `FF` in
+both runs. Play the same reference set for five minutes and record the
+PipeWire xrun delta, Live's DSP load, and UI response. Keep Live open and
+playing while `scripts/bench-run.sh` samples it for 60 seconds:
+
+```bash
+./scripts/bench-run.sh before/launcher-rr 3 42
+./scripts/bench-run.sh after/launcher-rr 1 40
+```
+
+Use `before` for the `ABLETON_RT=off` run and `after` for the default RR run.
+Replace the example numbers with each run's five-minute `pw-top` ERR delta and
+Live DSP percentage. The script appends the result to `bench/results.csv`.
+
+Keep the current default until that comparison shows whether launcher-wide RR
+helps, needs a CPU-count limit, or should be narrowed.
