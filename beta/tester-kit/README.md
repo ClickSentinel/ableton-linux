@@ -1,38 +1,37 @@
 # Tester kit
 
-`run-session` is the automated half of the beta test plan: it records the
-system, installs the build under test and runs the regression probes,
-then writes one session report. Start with the [quick start](../README.md);
-the manual checks are in [TESTING.md](../TESTING.md).
+`run-session` collects a system report, installs the test build, runs the
+automated probes, and writes one session file. Start with the
+[quick start](../README.md). The [test plan](../TESTING.md) lists the manual
+checks.
 
-Use a physical x64 Linux machine. VMs are not supported.
+Use a physical x86-64 Linux machine. The kit does not support virtual machines.
 
 ## Default flow
 
 From the root of this repository:
 
 ```bash
-./tester-kit/run-session
+./beta/tester-kit/run-session
 ```
 
-1. Prepares an empty Wine folder at `~/.wine-ableton` (a non-empty folder
-   is refused unless `--reuse-prefix` is given).
+1. Prepares an empty Wine prefix at `~/.wine-ableton`. A non-empty prefix
+   requires `--reuse-prefix`.
 2. Collects the redacted Linux system report.
-3. Downloads the Para-Repos installer from `config/installer-url` and
-   verifies its SHA-256 before running it. No unverified remote code runs
-   unless the tester deliberately passes `--allow-unverified-installer`.
+3. Downloads the installer from `config/installer-url` and verifies its
+   SHA-256 before running it. `--allow-unverified-installer` bypasses this
+   requirement.
 4. Verifies every shipped probe against `probes/SHA256SUMS` and
    `probes/advanced/SHA256SUMS`; a mismatch stops the session as a damaged
    kit.
 5. Initialises the prefix with the installed Wine (`wineboot`) and runs
    the test set below.
-6. Writes `session-YYYY-MM-DD-HHMMSS.txt` into the current directory (or
-   `--output-dir`).
+6. Writes `session-YYYY-MM-DD-HHMMSS.txt` to the current directory or the
+   directory set by `--output-dir`.
 
-Every check appends a result row — `PASS`, `FAIL`, `WARN`, `REVIEW`,
-`SKIP` or `INFO` — and the summary at the end of the report. A session
-with any `FAIL` exits non-zero. File one issue per `FAIL` and attach the
-unchanged session file; review the report before sharing it.
+Each check records `PASS`, `FAIL`, `WARN`, `REVIEW`, `SKIP`, or `INFO`. A
+session with any `FAIL` exits with a nonzero status. Review the report, then
+file one issue per failure and attach the unchanged session file.
 
 ## Options
 
@@ -41,22 +40,21 @@ unchanged session file; review the report before sharing it.
 | `--output-dir DIR` | Directory for the final session text file |
 | `--prefix DIR` | Test prefix; default `~/.wine-ableton` |
 | `--reuse-prefix` | Permit a non-empty existing prefix |
-| `--installer-url URL` | Override the provisional Para-Repos URL |
+| `--installer-url URL` | Override the URL in `config/installer-url` |
 | `--installer-sha256 SHA256` | Expected installer hash |
 | `--allow-unverified-installer` | Run a downloaded installer without a checksum |
 | `--skip-installer` | Do not download or run the installer |
-| `--wine PATH` | Wine binary to test; required with `--skip-installer` |
-| `--live-probes` | Add passive probes while Ableton Live is running |
-| `--live-only` | Run only host readiness and passive Live probes |
+| `--wine PATH` | Prefer this Wine binary over discovered runtimes |
+| `--live-probes` | Add Live window probes and three manual checks |
+| `--live-only` | Run only host readiness and Live checks |
 | `--advanced-input-trace` | Add an explicitly confirmed global Wine input trace |
-| `--non-interactive` | Skip tests that need visual confirmation |
+| `--non-interactive` | Suppress prompts; manual results become `SKIP` or `REVIEW` |
 | `--quick` | Use 5,000 rather than 30,000 stress iterations |
 | `--keep-work` | Keep the private temporary evidence directory |
 | `--list` | List the test set without changing anything |
 
-With neither `--wine` nor an installer, the kit looks for an installed
-patched Wine under `~/.local/opt` and in
-`~/.config/ableton-wine/runtime-path`.
+The kit checks known paths under `~/.local/opt` and
+`~/.config/ableton-wine/runtime-path` after any path supplied with `--wine`.
 
 ## Test set
 
@@ -75,43 +73,52 @@ patched Wine under `~/.local/opt` and in
 | T07 | Virtual MIDI controller replug |
 | C01 | DPI, file-dialogue and audio-driver policy snapshot |
 | C02 | Nested audio endpoint FriendlyName guard |
-| L01–L12 | Optional passive and manual Live-session probes |
+| L01-L05, L10-L12 | Optional passive and manual Live-session probes |
 | A01 | Optional global Wine mouse and JUCE input trace |
 
-The Live probes (L01–L05) inspect Live's open windows without clicking or
-typing in it; L10–L12 are manual observations. A01 is the only test that
-hooks input, needs the tester to type `TRACE`, and is documented with the
-other investigation tools in [probes/advanced/README.md](probes/advanced/README.md).
+L01-L05 inspect Live's open windows without clicking or typing. L10-L12 ask
+for manual observations. A01 hooks Wine input and requires you to type
+`TRACE`. See [Advanced test tools](probes/advanced/README.md).
 
 ## Layout
 
-- `run-session` — the entry point above.
-- `config/installer-url` — default installer location, one URL.
-- `lib/` — the collector, installer fetch/verify and probe runner sourced
+- `run-session`: session entry point.
+- `config/installer-url`: default installer URL.
+- `lib/`: collector, installer fetcher, verifier, and probe runner sourced
   by `run-session`.
-- `probes/src` + `probes/windows` — the PE regression probes and their
-  sources; `probes/advanced` holds the investigation tools that change
-  Live, input or audio connections (never run by the normal session).
+- `probes/src` and `probes/windows`: PE probes and their sources.
+- `probes/advanced`: investigation tools that can change Live, input, or audio
+  routing.
 
 ## Privacy
 
-The collector omits unique hardware identifiers, account paths, MAC
-addresses, credential-like values and captured window titles; the exact
-scope is documented in [../scripts/README.md](../scripts/README.md). A
-report containing excluded data is a collector failure: keep it local and
-report the failure instead of cleaning and sharing it manually.
+The collector removes unique hardware identifiers. It redacts account paths,
+MAC addresses, credential lines, and captured window titles. The
+[profiler privacy guide](../scripts/README.md) defines the full scope. If
+excluded data appears, keep the report local and report the collector failure.
+Do not share that report, even after removing the data.
 
 ## Rebuilding the probes (maintainers)
 
-The shipped PE probes are rebuilt against a Wine build tree:
+The maintainer script rebuilds six PE artifacts against a Wine build tree:
 
 ```bash
 ABLETON_WINE_SOURCE=/path/to/wine-d2d1-nspa-src \
-  ./tester-kit/probes/build-maintainer-probes.sh
+  ./beta/tester-kit/probes/build-maintainer-probes.sh
 ```
 
-The tree must contain the `build-wow64` build directory (or point
-`ABLETON_WINE_BUILD` at it). The script rebuilds every probe and
-regenerates both `SHA256SUMS` files, so run it after changing any probe
-source — never edit a checksum by hand. `./tester-kit/probes/build-native-tools`
-builds the Linux-side advanced tools instead and needs only a C compiler.
+The source tree must contain `build-wow64`, or `ABLETON_WINE_BUILD` must point
+to that build directory. The command also requires Clang and LLD. The script
+currently rebuilds `resizeprobe.exe`,
+`pluginwindowprobe.exe`, `portalprobe.exe`, `ntsyncprobe.exe`, `spyhost.exe`,
+and `mousespy.dll`. It then regenerates both checksum files for the binaries
+already present. Do not edit checksums by hand.
+
+Build the Linux tools with:
+
+```bash
+./beta/tester-kit/probes/build-native-tools
+```
+
+This command needs a C compiler. Individual tools also need the development
+libraries reported by the build script.

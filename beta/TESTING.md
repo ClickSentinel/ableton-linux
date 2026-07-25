@@ -1,24 +1,23 @@
 # Ableton Wine beta test plan
 
-(note: in progress work)
-
 ## Goal
 
-Test the same Ableton Wine build on different x86-64 Linux systems and record what works.
+Test one Ableton Wine build across x86-64 Linux systems and record the result.
 
 A build passes on a system only when a tester can:
 
-1. start with an empty Wine folder at `~/.wine-ableton`;
+1. start with an empty Wine prefix at `~/.wine-ableton`;
 2. follow the published instructions without extra commands;
-3. install, authorise and use Ableton Live 12;
-4. complete the tests assigned to their machine; and
-5. produce a useful test report.
+3. install, authorise, and use Ableton Live 12;
+4. complete the tests assigned to that machine;
+5. produce a complete test report.
 
-If a tester needs an undocumented fix, that step has failed. Add the fix to the package or instructions, publish a new build and test it again.
+An undocumented workaround fails the affected step. Add the fix to the package
+or instructions, publish another build, and retest it.
 
 ## Systems needed
 
-The beta needs a useful mix of systems:
+Cover these system categories:
 
 - Ubuntu or Mint, Fedora, Arch and Debian;
 - GNOME and KDE;
@@ -28,35 +27,42 @@ The beta needs a useful mix of systems:
 - built-in and external audio devices; and
 - at least one MIDI controller.
 
-One machine can cover several items. Record the exact distribution, kernel, desktop, session, graphics driver, display scale, audio device and MIDI devices for every test. Passing on one distribution does not prove that every related distribution works.
+One machine can cover several categories. Record its distribution, kernel,
+desktop, session type, graphics driver, display scale, audio device, and MIDI
+devices. A pass applies only to the tested system.
 
-Results from NixOS, Sway, Hyprland, COSMIC and unusual audio setups are useful, but list them separately until they complete the same tests.
+Report NixOS, Sway, Hyprland, COSMIC, and unusual audio setups separately until
+each completes the same test set.
 
 ## Test rounds
 
 | Round | Description | Done |
 | - | - | - |
-| Initialisation | prepare a numbered build and test it with an empty Wine folder. | Done |
-| Multi-user pilot | two other people install that build and complete the basic tests. | In progress |
-| Ecosystem test | test the build across the systems and devices listed above. | - |
-| Pre-release test | repeat full tests on new and existing linux systems, minimal intervention or diagnostics needed | - |
+| Initialisation | Test a numbered build with an empty Wine prefix. | Done |
+| Multi-user pilot | Two other people install that build and run the basic tests. | In progress |
+| Compatibility test | Cover the systems and devices listed above. | Not started |
+| Pre-release test | Repeat the full test set on new and existing Linux systems. | Not started |
 
-Increment the build number in this repository whenever the dev project itself changes.
+Record the value in `VERSION` for every run. Update it before publishing a
+changed build.
 
 ## Pre-test preparation
 
-- Back up Ableton projects and any existing Wine folder.
+- Back up Ableton projects and any existing Wine prefix.
 - Use a physical x86-64 Linux machine.
-- Use an empty Wine folder or a new user account.
+- Use an empty Wine prefix or a new user account.
 - Connect the audio, MIDI and display hardware being tested.
-- Record the build number before changing anything.
+- Record `VERSION` before changing anything.
 - Keep the system configuration unchanged until the report is saved.
 
-Stop testing if a step has extremely weird results that could damage a project, generate unsafe audio output or puts private data in a report.
+Stop if a result could damage a project, produce unsafe audio output, or expose
+private data.
 
 ## Tests
 
-Use the [quick start](README.md) for the automated tests. Then run the checks below. Only skip a check when the required software or hardware is not available.
+Run the automated tests in the [quick start](README.md), then complete the
+checks below. Skip a check only when its required software or hardware is
+unavailable.
 
 | ID | Check | Pass result |
 | --- | --- | --- |
@@ -71,59 +77,79 @@ Use the [quick start](README.md) for the automated tests. Then run the checks be
 | 09 | Audio | Select PipeASIO, play for ten minutes at 48 kHz and 256 frames, then record and play audio. |
 | 10 | MIDI | Test notes, controls and output. Unplug and reconnect the controller while Live is open. |
 | 11 | Stability | Use the demo set, plug-ins and controls for 30 minutes without a crash, hang or lost device. |
-| 12 | Update | Install a newer build, switch back to the previous build, then remove and reinstall the package. The Wine folder and Live settings remain. |
-| 13 | Report | The session report names the build and system, contains the results and contains no private files or values. |
+| 12 | Update | Install a newer build, restore the previous build with its installer, then remove and reinstall the newer package. The Wine prefix and Live settings remain. |
+| 13 | Report | The session report names the build and system, records the results, and contains none of the data excluded by the privacy rules. |
+
+### Update test
+
+Keep the previous and newer installer files. Replace `OLD.run` and `NEW.run`
+with their paths:
+
+```bash
+sh NEW.run --update
+sh OLD.run --update
+sh NEW.run --uninstall
+sh NEW.run --no-launch
+```
+
+The first two commands install the newer package and restore the previous one.
+The uninstaller keeps the Wine prefix. The final command reinstalls the newer
+package without starting Ableton's installer.
 
 ### Audio tests
 
-Every audio test machine runs 48 kHz at 256 frames. We also want to test 44.1, 48 and 96 kHz at 128, 256 and 512 frames on suitable machines.
+Run every audio test at 48 kHz and 256 frames. On suitable machines, also cover
+44.1, 48, and 96 kHz at 128, 256, and 512 frames.
 
-The session collector records the active rate, buffer size, device, channel
-layout and audio dropouts (`xruns`). Reviewers determine the result from the
-report; testers are not asked to type up a hardware inventory.
+The collector takes one host-audio snapshot before installation. It includes
+device and channel data, the PipeWire rate and quantum, and current `pw-top`
+counters. During test 09, record Live's selected rate, buffer, PipeASIO
+channels, and the change in `pw-top` ERR.
 
-Where available, at least one external interface must test eight or more channels. Test device reconnection at a safe monitoring level.
+Where available, test at least one external interface with eight or more
+channels. Keep monitoring at a safe level during reconnection tests.
 
-Slow hardware may glitch at demanding settings. A crash, hang, lost device or wrong channel order is always a failure.
+Slow hardware may glitch at demanding settings. A crash, hang, lost device, or
+wrong channel order is a failure.
 
 ## Results and issues
 
-The test runner uses these results:
+The test runner records these results:
 
 | Term | Meaning |
-|-|-|
-| `PASS` | the check worked |
-| `FAIL` | the check did not work |
-| `WARN` | the setup may need attention |
-| `REVIEW` | a person must decide |
-| `REGRESS` | this worked before, and now doesn't |
-| `SKIP` | the check could not run for some reason |
-| `INFO` | details were recorded without a pass or fail result |
+| --- | --- |
+| `PASS` | The check passed. |
+| `FAIL` | The check failed. |
+| `WARN` | The check needs attention but did not fail. |
+| `REVIEW` | A person must decide the result. |
+| `SKIP` | A requirement or confirmation was missing, so the check did not run. |
+| `INFO` | The check recorded data without a pass or fail result. |
 
-Planned: the test suite will generate issues and post them to https://repos.parare.al/ automatically. Today the script saves reports locally and you file issues by hand (see [tester-kit/README.md](tester-kit/README.md)).
+The script saves reports locally. Review each report, then file issues by hand.
+See the [tester kit reference](tester-kit/README.md).
 
-Each new issue includes:
+Include these details in each issue:
 
-- build number;
+- `VERSION`;
 - test ID;
-- exact system details;
+- tested system details;
 - steps that reproduce the problem;
 - expected and actual result;
-- whether it happens every time; and
+- whether it happens every time;
 - the reviewed session report or the smallest useful log.
 
-Review every report before sharing it. Do not post Ableton installers, authorisation files, projects, samples, recordings, account details or plug-in credentials.
+Review every report before sharing it. Do not post Ableton installers,
+authorisation files, projects, samples, recordings, account details, or plugin
+credentials.
 
 ## Release check
 
 A build is ready when:
 
-- a fresh install passes on every system listed in the release notes;
+- a fresh install passes on each system listed in the release notes;
 - install, launch, save, audio, reporting, update and removal all pass;
 - each reported failure is fixed and retested, or stated plainly in the release notes;
 - the release notes list the exact tested systems and devices; and
 - the published files are the same files that were tested.
 
----
-
-Updates? Questions? Email: [cade@parare.al](mailto:cade@parare.al)
+Questions: [cade@parare.al](mailto:cade@parare.al)

@@ -1,44 +1,37 @@
-# Audio device disconnect/reconnect
+# Audio reconnect behavior
 
-## Symptoms
+Current PipeASIO installs expose Live as a native PipeWire client.
+WirePlumber reconnects its streams when an audio device returns. The Live
+launcher does not start a hotplug helper.
 
-Unplug and replug an audio interface while Live runs: the ports return,
-Live stays silent until its audio engine is restarted.
+If Live remains silent after a device reconnect, inspect WirePlumber and the
+PipeWire graph. `jacklinkd` cannot repair Live's PipeASIO connections.
 
-## Research
+## Previous WineASIO behavior
 
-Not a Wine bug, and since 2026.07.17.2 no longer a link-restoration bug
-either. Under PipeASIO Live is a native PipeWire client — the graph
-survives hardware changes, and the session manager (WirePlumber) owns
-reconnecting native streams when a device node returns. The launcher
-starts no helper daemon.
+Releases through 2026.07.17.1 routed Live through the PipeWire JACK graph.
+Unplugging an interface removed the JACK links between WineASIO and the
+hardware ports. PipeWire did not restore those links when the device
+returned.
 
-The WineASIO era (through 2026.07.17.1) was worse: Live's ASIO "device"
-was the PipeWire-JACK graph, and what died on unplug were the JACK links
-between wineasio's ports and the hardware ports. PipeWire destroys them
-with the device node, and neither PipeWire nor WirePlumber restores JACK
-links (restore logic covers pulse/native streams only). The launcher
-therefore started `jacklinkd`, a JACK client that tracked every link in
-the graph, remembered the links of a port that died, and re-created them
-when a port with a remembered name registered again. JACK is out of
-Live's path now, so the launcher no longer starts it.
+The launcher therefore started `jacklinkd`. It recorded JACK links and
+recreated them when ports with the same names returned. PipeASIO removed JACK
+from Live's audio path, so release 2026.07.17.2 stopped starting this helper.
 
-## Mitigations
+## Separate JACK graphs
 
-None required in the default setup: replug the device and WirePlumber
-re-links Live's native streams. `jacklinkd`
-([../tools/jacklinkd.c](../tools/jacklinkd.c), also in the tester-kit
-advanced probes) remains for setups that route a separate JACK graph —
-it guards every JACK link it has seen, but it has nothing to do with
-Live's own PipeASIO connections.
+[`tools/jacklinkd.c`](../tools/jacklinkd.c) remains available for setups that
+still use JACK outside Live. The tester kit also includes it under advanced
+probes.
 
-## Caveats
+`jacklinkd` can restore only links it has already observed. It matches port
+names, so renamed or renumbered ports do not match and identical names can
+collide.
 
-- Restores only links the session manager has seen; neither WirePlumber
-  nor jacklinkd can invent routing for a never-connected device.
-- Name-matched: a device that renumbers its ports on replug (rare under
-  PipeWire) doesn't re-match; identically-named devices collide.
-- Sample-rate mismatch on replug is resampled by PipeWire as usual. Live
-  requesting a rate the graph doesn't run at is covered by the clamp in
-  [../patches/pipeasio/](../patches/pipeasio/) (previously ASE_NoClock,
-  startup crash).
+WirePlumber also needs prior routing state before it can restore a native
+stream. Neither tool can infer routing that was never connected.
+
+PipeWire resamples a returning device when its rate differs from the graph.
+The [PipeASIO patches](../patches/pipeasio/) also clamp unsupported rate
+requests; without that clamp, Live could fail at startup with
+`ASE_NoClock`.

@@ -1,191 +1,139 @@
-# First-class Ableton Link: design proposal
+# Ableton Link implementation record
 
-Status: implemented, shipped in 2026.07.23.1 (updated 2026-07-23; proposed
-2026-07-22). This design superseded the "experimental" phase;
-notes/ABLETON-WINE-LINK.md documents the shipped setup.
+This design shipped in release 2026.07.23.1. Current setup and verification
+instructions are in [ABLETON-WINE-LINK.md](ABLETON-WINE-LINK.md). This file
+records the implementation choices and remaining test coverage.
 
-## Goal
+## Direct Wine networking
 
-Ableton Link works for Live 12 under this project exactly as it does on Windows
-and macOS — toggle on, join the session, sync tempo/beat/phase, optional
-Start Stop Sync — with zero hand-built dependencies, plus the two things the
-platform cannot give us by itself: the session survives a Live restart, and
-native Linux apps join the same session.
+Live joins Ableton Link as its own Wine peer. Wine 11.11 passes the multicast
+socket options used by the Link SDK, including `IP_ADD_MEMBERSHIP`,
+`IP_MULTICAST_IF`, and `SO_REUSEADDR`. No patch in this project changes the
+network stack.
 
-## Where we are today (verified by code review, 2026-07-22)
+`WSAJoinLeaf` remains a Wine stub, but the Link SDK does not use it. The
+Wine-side probe confirmed bidirectional discovery traffic through Wine on
+this machine.
 
-- Option A (Live joins directly from Wine) is **plausible but unproven**. Stock
-  Wine 11.11 WinSock2 passes through every multicast sockopt Link needs
-  (`IP_ADD_MEMBERSHIP` etc. — `dlls/ntdll/unix/socket.c:2120` ff.), the
-  wineserver emulates `SO_REUSEADDR` sharing correctly, and no patch in
-  `patches/` touches networking. The only latent gap is the `WSAJoinLeaf` stub
-  (`dlls/ws2_32/socket.c:4165`), which modern Link stacks never use. Nobody has
-  ever run the verification checklist to completion; CHANGELOG says "I have no
-  idea if this works yet."
-- Option B (external `jack_link`) is anchor-only on this stack: PipeASIO has no
-  JACK transport layer, so the bridge **cannot drive Live's tempo**. It also
-  requires a manual clone/build/install/unit, none of which ships in the `.run`
-  installer (`setup-link.sh` is not even staged).
-- Networking setup (multicast route, firewall) is a manual sudo script with a
-  non-persistent route and a copy-paste NetworkManager dispatcher hook.
-- Naming hazard: `tools/jacklinkd.c` is a stale JACK **port-link** guardian
-  (WineASIO era) that registers the JACK client name `ableton-linkd`. It is not
-  Ableton Link and is no longer started by anything.
+An external `jack_link` process cannot synchronize Live with the current
+PipeASIO configuration. PipeASIO is a native PipeWire client and has no JACK
+transport layer.
+JACK-only applications can still use upstream `jack_link` separately.
 
-## Design
+## Persistent native peer
 
-Three components, all first-party, all built by the existing pipeline.
+`tools/ableton-linkd.cpp` builds against the vendored Ableton Link 4.0 SDK.
+The daemon joins the session as a native peer. It is designed to retain the
+shared timeline state while Live restarts. It enables Start Stop Sync.
 
-### 1. `ableton-linkd` — native session anchor + probe (replaces jack_link)
+After construction, the daemon does not call `setTempo`,
+`forceBeatAtTime`, or `requestBeatAtTime`. Its `--tempo` value is only the
+construction tempo for a new session. When it joins an existing session, it
+adopts that session's state.
 
-A small native daemon built from the **vendored Ableton Link SDK** (Link 4.0,
-header-only C++17 + asio; the clone at `../ableton-link` becomes
-`vendor/link-4.0.tar.zst` + `vendor/link.sha256`). It joins
-224.76.78.75:20808 natively and:
+Supported modes are:
 
-- **anchors the session** — it is the always-on peer, so the session tempo and
-  timeline survive Live restarts (longest-lived-peer rule);
-- **relays Start Stop Sync** (`enableStartStopSync(true)`) without owning a
-  transport;
-- is **strictly passive**: it never calls `forceBeatAtTime`/`setTempo` after
-  founding, per the Ableton Link anti-hijack guidelines;
-- doubles as the **verification probe** the project has never had:
-  `ableton-linkd --probe 10` prints peer count and session tempo and exits 0
-  iff peers ≥ 1 — an automated, scriptable verdict on whether Live's
-  Wine-side membership works, with no eyeballing Live's UI.
+- No arguments: run in the foreground for the systemd user unit.
+- `--daemon`: run in the background and log to
+  `~/.log/ableton-linkd/ableton-linkd.log`.
+- `--probe [seconds]`: print peer count and session tempo, then exit zero
+  after seeing another peer.
+- `--tempo BPM`: set the construction tempo, with a default of 120.
 
-It deliberately does **not** do JACK transport bridging. Native Link-enabled
-Linux apps (Bitwig, Ardour, SuperCollider, Sonic Pi, VCV Rack) join the same
-session over the network directly; JACK-only apps can still run upstream
-`jack_link` alongside. Dropping JACK also drops the `libjack` host dependency
-and jack_link's client-churn instability (upstream issue #9).
+The daemon does not bridge JACK. Native applications with Ableton Link
+support join the same network session directly.
 
-Modes: foreground (systemd), `--daemon` (self-backgrounding, logs to
-`~/.log/ableton-linkd/`, for the launcher), `--probe [secs]`, `--tempo BPM`
-(initial tempo when founding, default 120). Built with
-`-static-libstdc++ -static-libgcc`; DT_NEEDED limited to libc/libm/libpthread/
-libatomic host sonames, no RPATH — same loader-cleanliness rule as PipeASIO.
+## Wine multicast probe
 
-### 2. `linkprobe.exe` — Wine-side multicast verdict (the missing evidence)
+`tools/linkprobe.c` builds a Windows PE program that exercises the socket
+operations Live needs:
 
-A tiny Windows PE tool (`tools/linkprobe.c`, built like the other `tools/`
-PE helpers) that runs under the project's Wine and exercises exactly what Live
-needs: `SO_REUSEADDR` bind to 0.0.0.0:20808, `IP_ADD_MEMBERSHIP` on
-224.76.78.75, multicast TX, and RX with self/peer discrimination (parses the
-`_asdp_v1` header: msgType + nodeId). Output is a verdict:
-`TX OK`, `RX OK (loopback)`, `RX OK (network)`, `PEERS: n`.
+- bind `0.0.0.0:20808` with `SO_REUSEADDR`
+- join `224.76.78.75` on each local IPv4 interface
+- transmit through `IP_MULTICAST_IF`
+- receive and distinguish local from non-local source addresses
+- parse the `_asdp_v1` discovery header and node ID
 
-This settles Option A mechanically, before and independently of Live.
-**If network RX fails under Wine, the fix lands as a new numbered patch in
-`dlls/ntdll/unix/socket.c` or `server/sock.c`** — the first networking patch in
-the series. That is the only contingency in which Wine-side work is needed.
+Its verdicts are `LINKPROBE TX`, `LINKPROBE RX-LOOPBACK`,
+`LINKPROBE RX-NETWORK`, and `LINKPROBE PEERS`. The process exits zero when
+transmit and loopback receive succeed. Network receive requires a packet from
+another host.
 
-### 3. Packaging, setup, and launcher integration
+The probe's discovery packet has no session payload. It verifies Wine's
+multicast socket behavior but does not become a full Link peer.
 
-- **Vendoring** follows the pinned-blob rule: `vendor/link-4.0.tar.zst` (full
-  repo incl. asio submodule, minus `.git`; deterministic tar) +
-  `vendor/link.sha256`, added to the verify lists in `build.sh` and `Makefile`.
-- **Build at pack time**, exactly like `cabextract-static`: `make-installer.sh`
-  compiles `tools/ableton-linkd.cpp` in the pinned container against the
-  vendored tarball → `kit/bin/ableton-linkd`. The vendored tarball itself is
-  also staged in the kit: it is the GPL corresponding source accompanying the
-  binary (Link is GPLv2+, no linking exception; this project is an appropriate
-  GPL distribution point, and the kit will carry the license text).
-- **Install**: `install.sh` copies the daemon to
-  `~/.local/share/ableton-wine/ableton-linkd` with the usual required-file and
-  `readelf` gates; `uninstall.sh` learns to disable/remove the user unit (its
-  `$HOME`-only rule is preserved — the unit lives under
-  `~/.config/systemd/user`).
-- **`setup-link.sh` hardening** and first shipment in the kit:
-  - Option B now means the shipped `ableton-linkd.service` user unit, which the
-    script installs and enables — no more "build jack_link yourself" bail-out;
-  - fix the spurious exit-1 when only Option A networking was requested;
-  - auto-install the NetworkManager dispatcher hook for route persistence
-    (today a copy-paste heredoc in the note) when NM is present;
-  - keep VPN refusal, ufw/firewalld 20808/udp allowance; document that Link's
-    unicast measurement port is ephemeral and covered by conntrack for
-    outbound-initiated exchanges.
-- **Launchers**: the `jack_link` auto-start block in `scripts/ableton-live`
-  (:651-658) becomes an `ableton-linkd` auto-start (`--daemon`, silent skip if
-  not installed, `ABLETON_LINKD` override); the same block is added to
-  `scripts/max9` and `bin/ableton-live-beta`.
-- **Docs**: rewrite `notes/ABLETON-WINE-LINK.md` for the new architecture;
-  README loses the "experimental / unverified" wording once the probe verdict
-  is in; CHANGELOG entry. Naming follows the Ableton Link Guidelines:
-  "Ableton Link", two words, capital A/L; enablement language is
-  "Enabled/Disabled".
+## Build and packaging
 
-## What "1:1" means — acceptance checklist
+The repository vendors `vendor/link-4.0.tar.zst`, including the asio
+submodule, and verifies it with `vendor/link.sha256`. `make verify` and
+`build.sh` include that checksum.
 
-- [ ] `linkprobe.exe` under this Wine: TX OK, network RX OK (or a Wine patch
-      landed that makes it so).
-- [ ] Live's Link toggle shows peer count ≥ 1 when `ableton-linkd` runs.
-- [ ] Tempo change on any peer propagates to all others, both directions;
-      Live is not hijacked on join (TEMPO-1..5 of the SDK's TEST-PLAN).
-- [ ] Beat/phase alignment audible/measurable; AUDIOENGINE-1 < 3 ms on a
-      healthy machine.
-- [ ] Start Stop Sync works when enabled on both sides.
-- [ ] Session tempo survives a full Live restart (anchor holds it).
-- [ ] A native app (e.g. SuperCollider `LinkClock` or Bitwig) syncs with Live.
-- [ ] Fresh machine: `.run` installer + one `setup-link.sh` run (sudo) = all of
-      the above; no git checkout, no manual builds, route persists reboots.
+`build.sh` calls `scripts/build-ableton-linkd.sh`. The installer packager
+reuses an executable `dist/ableton-linkd`; if the file is absent or not
+executable, the packager calls the same helper. It runs `--help` before
+packaging. The helper uses the configured Podman build image, extracts the
+vendored SDK, compiles `tools/ableton-linkd.cpp`, and writes
+`dist/ableton-linkd`. It validates the new binary before replacing an existing
+artifact. The packager copies that artifact to `kit/bin/ableton-linkd`.
 
-## Explicitly out of scope
+The build uses `-static-libstdc++ -static-libgcc`. The tested binary had
+`DT_NEEDED` entries for `libm.so.6`, `libc.so.6`, and
+`ld-linux-x86-64.so.2`, with no RPATH. When `readelf` and `strings` are
+available, `scripts/install.sh` rejects an unexpected shared library.
+Otherwise it verifies the package checksum and skips the shared-library and
+portal-backend checks.
 
-- LinkAudio (SDK 4.0 networked audio) — separate API, days old upstream.
-- JACK transport bridging — upstream `jack_link` remains supported for that.
-- Reimplementing the Link protocol — embedding the vendored SDK inherits the
-  conformance-tested session arbitration (ghost-time measurement, 500 µs EPS
-  session selection, anti-hijack resets) and future upstream fixes. The wire
-  protocol (`_asdp_v1`/`_link_v1`) has been stable since 2016, but the
-  arbitration logic is where reimplementations go to die.
-- `WSAJoinLeaf` un-stubbing — only if the probe ever proves Live needs it.
+The installer includes the vendored SDK archive and its GPLv2-or-later
+license as corresponding source for `ableton-linkd`. It installs the daemon,
+the systemd user unit, and `setup-link.sh` under
+`~/.local/share/ableton-wine/`.
 
-## Status 2026-07-22 (build complete, verification partial)
+## Host and launcher integration
 
-Built and verified on this machine:
+`scripts/setup-link.sh` configures the multicast route, adds a UDP 20808
+allowance when UFW or firewalld is installed, and enables the user unit when
+its files are present. The script must run as the user because it calls
+`systemctl --user`; it requests `sudo` only for host network changes. The
+current NetworkManager dispatcher hook is not interface-filtered, so the route
+must be checked after VPN and network reconnects.
 
-- `ableton-linkd` built from the vendored SDK (host g++ and the pinned
-  pack-time container both; DT_NEEDED = libm/libc/ld-linux only, no
-  libstdc++, no RPATH). `--daemon`, `--probe`, `--tempo`, `--help`,
-  signal handling all exercised.
-- Anti-hijack proven live: the anchor adopted a real LAN peer's 133.0 BPM
-  session tempo; a `--probe` client adopted the anchor's tempo rather
-  than forcing its construction tempo.
-- `linkprobe.exe` under the installed patched Wine: `TX OK`,
-  `RX-LOOPBACK OK`, `PEERS: 1` (the anchor). strace showed Wine's
-  sockopt translation byte-perfect (per-interface `IP_ADD_MEMBERSHIP`,
-  `IP_MULTICAST_IF`), and the anchor receives the Wine peer's alives and
-  answers them with unicast kResponses — Option A's Wine-side data path
-  is evidence-backed in both directions. Protocol gotcha found and fixed
-  during bring-up: the `_asdp_v1` magic is 7 ASCII bytes + the integer
-  0x01, not the ASCII string "_asdp_v1".
-- `setup-link.sh` route step switched to `ip route replace` after a
-  pre-existing `224.0.0.0/4 dev lo` route on this host proved the old
-  silent `append` never landed.
-- Full packaging wired: make-installer pack-time build, kit staging
-  (daemon, unit, setup-link.sh, GPL source + license), install.sh gates
-  + share-dir installs, uninstall.sh unit cleanup, launcher autostart in
-  ableton-live/max9/beta, docs/README/CHANGELOG.
+The Live, Max, and beta launchers start `ableton-linkd --daemon` when the
+binary is installed and no process with that name is running.
+`ABLETON_LINKD` overrides the binary path.
 
-Still open (needs a live LAN peer and/or a Live run):
+`tools/jacklinkd.c` is an older JACK port-link restorer. Its JACK client name
+is also `ableton-linkd`, but it is not part of Ableton Link and current
+launchers do not start it.
 
-- `RX-NETWORK OK` from linkprobe.exe (no second host was online).
-- Live's Control-Bar peer count, tempo propagation both directions,
-  Start Stop Sync, phase < 3 ms.
-- Session survival across a real Live restart (anchor semantics are
-  proven; the Live-side observation is not).
-- Fresh-machine install from the assembled `.run` + one sudo
-  `setup-link.sh` run.
+## Recorded verification
 
-## Build order
+Tests completed on 2026-07-22:
 
-1. Vendor the SDK; write and host-build `ableton-linkd`; smoke-test `--probe`.
-2. Write and build `linkprobe.exe`; run it under the project's Wine for the
-   first real Option A verdict.
-3. Packaging: make-installer / install.sh / audit / GPL license staging.
-4. `setup-link.sh` hardening, systemd unit, launcher wiring.
-5. Docs, README, CHANGELOG.
-6. Full container build + installer assembly; end-to-end verification against
-   the acceptance checklist (needs a second Link peer on the LAN, e.g.
-   `ableton-linkd` on another machine or any Link iOS app).
+- The daemon built both with the host compiler and in the configured Podman
+  image. `--daemon`, `--probe`, `--tempo`, `--help`, and signal handling ran
+  successfully.
+- The daemon joined an existing 133.0 BPM LAN session instead of applying its
+  120 BPM construction value. A second probe joined the daemon's state.
+- `linkprobe.exe` under the installed Wine reported `LINKPROBE TX OK`,
+  `LINKPROBE RX-LOOPBACK OK`, and one peer from the same-host daemon.
+- A system-call trace showed per-interface `IP_ADD_MEMBERSHIP` and
+  `IP_MULTICAST_IF` translation. The daemon received Wine's discovery
+  packets and answered with unicast responses.
+- Packaging included the daemon, unit, setup script, SDK source archive, and
+  license. Install and uninstall paths were exercised.
+
+The `_asdp_v1` signature uses seven ASCII bytes followed by the byte `0x01`.
+Treating the final byte as the character `1` produced an invalid packet and
+was corrected during probe development.
+
+## Tests still needed
+
+- Confirm `LINKPROBE RX-NETWORK OK` with a second LAN host.
+- Verify Live's peer count and two-way tempo changes.
+- Measure beat and phase alignment under audio load.
+- Verify Start Stop Sync from Live and another peer.
+- Confirm session continuity across a full Live restart.
+- Run the assembled `.run` installer and Link setup on a fresh machine.
+
+LinkAudio and a bundled JACK transport bridge remain outside this
+implementation.
