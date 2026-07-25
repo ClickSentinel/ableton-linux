@@ -42,7 +42,7 @@ Different people perceive the world in different ways, and we expect everyone pa
 
 Whether working with diagnostic data, test reports, logs, or simply participating in this repository, think before you share. Do not access user data you're not entitled to or disclose information someone provided in confidence. Do not post photos of others online without their consent. Do not share personally identifying information posted by repository participants to other places. Do not post the personal details of others, do not engage in doxing, and do not re-post or re-share links to sites or resources that share or weaponise personal details without first checking with the Para-Real Ltd. team.
 
-Review diagnostic output before publishing it. Do not post Ableton installers, authorisation files, licence keys, projects, samples, recordings, account details or plug-in credentials.
+Review diagnostic output before publishing it. Do not post Ableton installers, authorisation files, licence keys, or projects samples, recordings or other Ableton IP. Do not post plugin credentials, serial numbers or any other third party company's commercial code.
 
 ### De-escalate conflict.
 
