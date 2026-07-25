@@ -1,5 +1,7 @@
-Subject: winex11: always advertise MWM_FUNC_CLOSE in the Motif
- hints
+From a080cbd2c3493398ff37a874f0dd635e13d632ac Mon Sep 17 00:00:00 2001
+From: ableton-wine <local@ableton-wine>
+Date: Sun, 19 Jul 2026 11:37:13 +0200
+Subject: [PATCH] winex11: always advertise MWM_FUNC_CLOSE in the Motif hints
 
 Live's main window is WS_DISABLED while its startup modal is up.  When
 the window is mapped during that phase, set_mwm_hints omits
@@ -47,3 +49,6 @@ index adcbeb8e..8bd2c7e3 100644
              if (style & WS_MINIMIZEBOX) mwm_hints.functions |= MWM_FUNC_MINIMIZE;
              if (style & WS_MAXIMIZEBOX) mwm_hints.functions |= MWM_FUNC_MAXIMIZE;
  
+-- 
+2.55.0
+

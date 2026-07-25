@@ -1,8 +1,12 @@
 Subject: wined3d, dxgi: query present/resize client rects in the
  window's DPI context
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
 Bracket the client-rect queries in wined3d_swapchain_present, resize_buffers, state_init and
 d3d12_swapchain ResizeBuffers with the window's own DPI awareness context.
+
 ---
  dlls/dxgi/swapchain.c    | 13 +++++++++++--
  dlls/wined3d/swapchain.c | 28 +++++++++++++++++++++++++---

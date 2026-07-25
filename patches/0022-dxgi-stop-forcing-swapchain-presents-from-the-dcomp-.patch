@@ -1,5 +1,8 @@
 Subject: dxgi: stop forcing swapchain presents from the dcomp
  reblit timer
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
 On reblit-timer ticks, signal frame_latency_event and refresh the window surface from the
 persistent comp buffer instead of forcing a Present; ticks where the app presented on its own do nothing.

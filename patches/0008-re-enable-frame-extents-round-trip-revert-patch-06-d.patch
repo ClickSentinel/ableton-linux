@@ -3,10 +3,6 @@ Subject: re-enable frame-extents round-trip (revert patch 06) +
  WM frame
 
 ---
- dlls/win32u/window.c      | 18 ------------------
- dlls/winex11.drv/window.c | 19 ++++++++++---------
- 2 files changed, 10 insertions(+), 27 deletions(-)
-
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
 index 8d8e3839..755aeed1 100644
 --- a/dlls/win32u/window.c

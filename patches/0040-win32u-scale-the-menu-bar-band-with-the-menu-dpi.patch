@@ -1,5 +1,7 @@
-Subject: win32u: scale the menu-bar band with the menu DPI,
- minus one
+From 1173c1d54303670c9e8fb62e542b04dbd352fe57 Mon Sep 17 00:00:00 2001
+From: dist <build@localhost>
+Date: Thu, 1 Jan 2026 00:00:00 +0000
+Subject: [PATCH] win32u: scale the menu-bar band with the menu DPI, minus one
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -68,3 +70,6 @@ index d6caea03..88d27e67 100644
      }
      item->rect.bottom += item_height;
      TRACE( "%s\n", wine_dbgstr_rect( &item->rect ));
+-- 
+2.55.0
+

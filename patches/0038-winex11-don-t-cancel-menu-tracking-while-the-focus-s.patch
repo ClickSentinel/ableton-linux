@@ -1,5 +1,5 @@
-Subject: winex11: don't cancel menu tracking while the focus
- stays in the process
+Subject: winex11: don't cancel menu tracking while the focus stays in
+ the process
 
 Issue #3: Live's Preferences dropdowns are win32u popup menus, mapped as
 override-redirect X11 windows. Mapping or clicking one makes GNOME's

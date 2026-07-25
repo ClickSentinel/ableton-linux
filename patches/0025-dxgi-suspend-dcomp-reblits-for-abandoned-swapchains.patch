@@ -1,7 +1,11 @@
 Subject: dxgi: suspend dcomp reblits for abandoned swapchains
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
 Count consecutive idle ticks per target; after DCOMP_STALE_TICKS (3s) skip comp-buffer blits and forward
 WM_PAINT to the original wndproc. frame_latency_event keeps firing; a new present resets the counter.
+
 ---
  dlls/dxgi/factory.c | 45 +++++++++++++++++++++++++++++++++++++++++----
  1 file changed, 41 insertions(+), 4 deletions(-)
