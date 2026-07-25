@@ -1,235 +1,114 @@
-Base tree: https://github.com/giang17/wine.git
-Branch:    d2d1-dcomp-11.13  (wine-11.13, at upstream commit 5c23dd1cf6:
-           "winex11: use NORMAL not UTILITY for non-DComp ownerless
-           TOOLWINDOW popups (issue 84)")
+# Wine patch base and provenance
 
-Apply the 00*.patch series in order on top of that branch tip with `git am`
-(rebuild-wine.sh does this). Patches 0001-0030 were regenerated 2026-07-09 with
-`git format-patch 7ea0c8b7..HEAD -- ':!build-wow64'` from the working tree at
-~/Projects/Code/ableton/wine-d2d1-nspa-src (HEAD 182ae79b); that is the full
-30-commit history, including the titlebar experiments and their reverts
-(0008-0013) — apply all of them, the net result is what runs.
-Patches 0031 and 0032 were exported 2026-07-11 from a disposable isolated
-worktree on base 182ae79b (commits 8c51a80e and 66f0cc98 there). The mailbox
-patches shipped here are the canonical record of those commits; they match the
-project-root exports in ~/Projects/Code/ableton by git patch-id. The full
-32-patch series is regenerated as format-patch 0001-0030 from
-wine-d2d1-nspa-src plus these two mailbox patches.
-Patches 0033 and 0034 were exported 2026-07-14 the same way, from a
-disposable worktree on base 182ae79b (commits 21be973f and 283d8fa9 there):
-two stability fixes. The 0027 patch file was removed from the
-series directory on 2026-07-14; its commit remains in the tree history, so
-regenerating 0001-0030 from the tree will re-create it.
-Patch 0038 was exported 2026-07-19 the same way, from a disposable worktree
-on base 182ae79b (commit 0106d01f there). The 0037 number was taken by the
-fixes/close-button branch (MWM_FUNC_CLOSE); both branches merged together
-on 2026-07-19, closing the gap.
-Patch 0039 was exported 2026-07-19 the same way, from a disposable worktree
-on base 182ae79b (commit dd25887c there).
-Base bumped 2026-07-21 from d2d1-dcomp-11.11 (7ea0c8b7dd) to d2d1-dcomp-11.13
-(5c23dd1cf6), closing the Wine point-version gap with upstream's
-actively-maintained branch and with ENCORE (github.com/wowitsjack/ENCORE),
-which runs plain Wine 11.13; full rebase narrative (5 merge conflicts,
-three build breaks the clean rebase didn't catch, a build.sh/pipefail
-tooling gotcha) is in notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md. Patches 0043,
-0044 and 0045 were new at the time of this bump (later renumbered to
-0046-0048 when this branch merged upstream/main's own new 0043 and 0045 —
-see the 0046-0048 entries below); 0027 stays reserved as noted above.
+Base repository: https://github.com/giang17/wine.git
+Branch: `d2d1-dcomp-11.13`
+Base commit: `5c23dd1c`, `winex11: use NORMAL not UTILITY for non-DComp ownerless TOOLWINDOW popups (issue 84)`
 
-The previous 6-patch series (state of 2026-07-03, commit b826f21e) is in
-archive-2026-07-03/ for reference only.
+Bumped 2026-07-21 from `d2d1-dcomp-11.11` (`7ea0c8b7dd`) to close the Wine
+point-version gap with upstream's actively-maintained branch and with ENCORE
+(github.com/wowitsjack/ENCORE), which runs plain Wine 11.13. Full rebase
+narrative — 5 merge conflicts, three build breaks the clean rebase didn't
+catch, a build.sh/pipefail tooling gotcha — is in
+`notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-Provenance:
-  0001      = sashaduke/ableton-live12-linux patches/0001-ableton-live12-wine-d2d-dcomp-redraw-fixes.patch
-              (known-good-2026-06-30)
-  0002-0003 = nine7nine/wine-nspa-src commits a63120d350 + ec6cc844f0 (winex11 hunks only)
-              + 7e15021e3f (WineHQ bug 57955 fix stack; 0003 includes a hand-fix:
-              winex11 atom enum/name-table order)
-  0004-0026 = local fixes, including GNOME/mutter frame + reentrancy fixes; plugin-editor
-              native titlebar (0014) + layered-attr sync (0015); dcomp orphan-subclass,
-              activation timestamp, shared-session-view fixes (0016-0019); sRGB EGL formats
-              (0020); mmdevapi FriendlyName re-wrap fix (0021); dxgi/wined3d dcomp
-              reblit + DPI-context fixes (0022-0025); winex11 DC visual/depth
-              tracking for GL plugin editors (0026).
-  0027      = gitignore housekeeping (untrack local build trees); patch file
-              removed from the shipped series 2026-07-14, commit remains in
-              the tree history.
-  0028      = winealsa MIDI hotplug re-subscribe (2026-07-07), see
-              ABLETON-WINE-MIDI-HOTPLUG.md
-  0029      = win32u menu-bar +4px (2026-07-09): fixes the main-window +56px
-              resize settle at 100% scale (Live models NC as adjust+4), see
-              ABLETON-WINE-DPI-SCALE-100.md
-  0030      = dxgi stale-size dcomp blit gating (2026-07-09): partial fix for
-              the Learn View mangled band, see ABLETON-WINE-LEARNVIEW-FLICKER.md
-              (still open: LAYERED|NOREDIRECTIONBITMAP display path)
-  0031      = comdlg32/shell32 XDG file-dialog portal backend (2026-07-11).
-              Origin: Wine MR !10060 v5, runtime patches 0001 + 0002 + 0003 +
-              0005, plus the responsiveness follow-up used by MusicBee — both
-              written against Wine 11.0. Local adaptation: consolidated into
-              one integration boundary rebased onto this Wine 11.11 tree.
-              Excluded: MR patch 0004 (test-only; its Wine 11.0 test context
-              does not match the evolved 11.11 test file).
-              ABLETON-WINE-FILE-PORTAL.md
-  0032      = x64 helper-scoped host-libusb bridge for the Push 2 display
-              (2026-07-11) with a suite of new new dlls and a libusb-1.0
-              builtin exporting the exact 16-function Win64 libusb 1.0.23 ABI
-              used by Push2DisplayProcess.exe; x86_64-only by design (i386
-              subdir disabled at configure). See ABLETON-WINE-PUSH2-DISPLAY.md
-  0033      = ntdll WINE_DISABLE_UNIX_MOUNT_REPARSE opt-out (2026-07-14),
-              dlls/ntdll/unix/file.c hunks. With the variable set, Unix
-              mount boundaries stop being reported as
-              IO_REPARSE_TAG_MOUNT_POINT junctions (which carry no
-              FSCTL_GET_REPARSE_POINT data); launchers set it to 1.
-  0034      = winex11 XdndStatus flush (2026-07-14),
-              dlls/winex11.drv/event.c hunk: flush each XdndStatus reply so
-              a queued XdndLeave from a fast source cannot overtake the
-              acceptance (intermittent refused drops dragging from file
-              managers under Xwayland).
-  0035      = wined3d Intel Battlemage G21 GPU description (2026-07-18).
-              Local fix for issue #11: without a table entry for device
-              0xe20b, an Arc B580 is reported through the generic Intel
-              fallback as "Intel(R) HD Graphics 4000", a name Live 12
-              blacklists (D3D11 refused, GDI fallback). Should also be
-              upstreamed to Wine.
-  0036      = dxgi suspend dcomp reblits on a null d2d1 device (2026-07-18).
-              Local fix for issue #16: when the dcomp device's d2d1 device
-              never comes up (e.g. Mesa libEGL without the NVIDIA GLVND
-              vendor config under NixOS/steam-run), the 200ms reblit timer
-              spins on the dead swapchain's GetDesc. The bind is flagged in
-              the WM_WINE_DCOMP_SET_TARGET wparam and the dxgi side skips
-              the timer-idle reblit while no present has succeeded, backing
-              the timer off exponentially and killing it after 20 null
-              ticks until device recreation rebinds.
-  0037      = winex11 always advertise MWM_FUNC_CLOSE (2026-07-19).
-              Local fix for issue #31: Live's main window is WS_DISABLED
-              while its startup modal is up, set_mwm_hints omits
-              MWM_FUNC_CLOSE for disabled windows, and KWin derives the
-              close button from the Motif function list, so the button is
-              missing until the next hints flush (maximizing forces one via
-              window_request_desired_state). Windows never hides the close
-              button and handle_wm_protocols already drops WM_DELETE_WINDOW
-              while disabled, so the function is now advertised
-              unconditionally. Exported from a disposable worktree on base
-              182ae79b (commit a080cbd2 there).
-  0038      = winex11 menu-tracking FocusOut gate (2026-07-19). Local fix
-              for issue #3: mutter and muffin shuffle the X input focus
-              when an override-redirect menu popup maps or is clicked; the
-              NotifyNormal FocusOut reached focus_out() mid menu-track and
-              the WM_CANCELMODE it sends closed the dropdown (flash on
-              select under Cinnamon, repeated clicks needed under GNOME,
-              occasional glitches under KDE). While the foreground thread
-              reports GUI_INMENUMODE the cancel is only sent when
-              XGetInputFocus shows another client's window holding the
-              focus. See ABLETON-WINE-MENU-FOCUSOUT.md
-  0039      = winex11 mapped-window managed-flip refusal (2026-07-19).
-              The root fix for issue #3, found by tracing a live repro:
-              Live pokes its open Preferences dropdown lists (its own
-              WS_POPUP windows, mapped override-redirect) with an
-              activating no-op SetWindowPos; is_window_managed's
-              "activated windows are managed" rule then flipped the
-              mapped popup to managed, which unmaps and remaps it through
-              the WM mid-interaction as a dialog-typed toplevel (flash,
-              eaten first click, mutter wobble and Dash-over-fullscreen,
-              KWin shadow frame, Rounded Window Corners styling).
-              window_set_managed now refuses the unmanaged-to-managed
-              flip while the window is mapped; the managed decision is
-              made at map time and re-evaluated on the next map. See
-              ABLETON-WINE-DROPDOWN-MANAGED-FLIP.md
-  0040      = win32u menu-bar band DPI scaling (drafted 2026-07-19,
-              revised 2026-07-21 before ever shipping). The draft's
-              muldiv(4,dpi,96) overshoot fixed the wmresize2 mimic but
-              not real Live; the live-resize-trace-20260721-0024
-              analysis showed Live 12.4.3's model band is SM_CYMENU + 4
-              at 96 dpi and SM_CYMENU + 7 at 192, so the final law is
-              max(4, muldiv(4,dpi,96)-1). Fixes the 12.4.3 main-window
-              +1px/WM-configure growth ratchet at 125% (verified on
-              12.4.2 and 12.4.3). Exported from a disposable worktree on
-              base 182ae79b (commit 1173c1d5 there). See
-              ABLETON-WINE-DPI-SCALE-100.md and
-              FINDINGS-RESIZE-GROWTH-2026-07-21.md.
-  0041      = dxgi dcomp display path for WebView2's unattributed
-              layered targets (2026-07-21): opaque LWA normalization at
-              WM_WINE_DCOMP_SET_TARGET, one-shot delayed-resize reblit
-              closing the 0030 race, 0025 idle-abandonment removed so
-              healed Learn View content holds instead of reverting at
-              the 3s idle mark. Exported from a disposable worktree on
-              base 182ae79b (commit 9d34f87f there). See
-              ABLETON-WINE-LEARNVIEW-FLICKER.md.
-Patch 0042 was exported 2026-07-21 from a worktree at
-~/Projects/Code/ableton/wt-0042: base 182ae79b with the 0031-0041
-mailbox series applied first (git apply + commit), then the 0042
-commit (988ef771 there). The installed runtime's winex11.so was built
-from that worktree; dist artifacts come from the container rebuild as
-usual.
+The current Wine series contains 46 files, numbered 0001 through 0048.
+Patches 0027 and 0044 are intentionally absent.
 
-Patch 0043 was exported 2026-07-21 from a worktree at
-~/Projects/Code/ableton/wt-0043: branched from the wt-0042 tip
-(a014d2aa, base 182ae79b plus the 0031-0042 series as commits), then
-the 0043 commit (996524ab there). shell32 routes Live's Show in
-Explorer (explorer.exe /select) to the host file browser through the
-0031 portal unix library, via a new comdlg32 export
-__wine_portal_show_item and org.freedesktop.portal.OpenURI.OpenDirectory;
-Wine's explorer stays the fallback whenever the portal or the
-FileDialogPortal policy refuses (issue 41). See
-ABLETON-WINE-SHOW-IN-EXPLORER.md. The installed runtime's comdlg32.dll,
-comdlg32.so and shell32.dll were built from that worktree; dist
-artifacts come from the container rebuild as usual. Landed on main via
-upstream/main directly (not part of this branch's own rebase work);
-merged in unchanged.
+## Applying the series
 
-Patch 0044 is not a patch: reserved for the issue 57 parked-pane
-reblit gate, not yet landed. Left as a documented gap (see
-scripts/build-audit.sh's SERIES_GAPS) rather than reused, so it stays
-available whenever that patch actually lands.
+Run `./build.sh`. Inside the Podman image, `scripts/container-build.sh`
+unpacks `vendor/wine-base-5c23dd1c.tar.zst`, creates a Git repository, and
+applies `patches/00*.patch` in lexical order with `git am --3way`.
 
-Patch 0045 (PR #59, 2026-07-24, issue 52 — Live crashes closing a
-WebView2-based plugin editor, e.g. Splice INSTRUMENT): a use-after-free
-in Wine-core ole32, not this stack's own dcomp/dxgi patches. The
-WebView2 helper process registers an OLE drop target on its own
-Chrome_WidgetWin_1 child window, parented into the host's window tree;
-RegisterDragDrop stores the IDropTarget as a raw pointer in the
-OleDropTargetInterface window property, valid only in the registering
-process, but window properties are visible system-wide. On editor
-close, the host-side teardown (JUCE's HWNDComponentPeer, which Splice
-INSTRUMENT behaves like) revokes drag-and-drop on every child window
-it can enumerate, including the foreign one — Wine's RevokeDragDrop
-fetched that foreign pointer and called Release on it in Live's
-address space, an access violation in ole32 in Live's own process.
-RegisterDragDrop already rejects windows owned by other processes;
-RevokeDragDrop now does too (DRAGDROP_E_INVALIDHWND), after which
-teardown completes and the helper process revokes its own registration
-itself. Fix by Giang Nguyen (giang17/wine commit fafb443f85e0, found
-2026-07-23 with a JUCE 8 WebView2 editor under yabridge, their issue
-8); ported here. Reproduced and verified without Splice via the new
-tools/webviewclose.c (variant 'e', JUCE-style teardown). See
-notes/ABLETON-WINE-WEBVIEW2-PLUGIN-CLOSE-CRASH.md. Landed on main via
-upstream/main directly (not part of this branch's own rebase work);
-merged in unchanged.
+Some early patch files have no `From` or `Date` header. The build script adds a
+fixed identity and date before passing those files to `git am`. A bare
+`git am patches/00*.patch` command does not reproduce this step.
 
-Patch 0046 (renumbered from 0043 when this branch merged
-upstream/main, which had independently landed its own 0043 and 0045
-in the meantime): fixes build against 11.13's
-frame-latency-as-semaphore refactor (2026-07-21). `struct
-d3d11_swapchain` no longer carries its own `frame_latency_event`
-HANDLE upstream; fetches the waitable object via
-`wined3d_swapchain_get_frame_latency_waitable_object()`, releases it
-as a semaphore, and closes the duplicated handle each tick. See the
-rebase-method section above.
+Patches 0008 through 0013 contain title-bar experiments and their reverts.
+Apply them in sequence with the rest of the series.
 
-Patch 0047 (renumbered from 0044 alongside 0046/0048, same merge):
-fixes build against 11.13's fractional-DPI `struct ratio` refactor
-(2026-07-21). 0029 (this stack's menu-bar +4px fix, carried through
-0040's revised band law) computed its overshoot from a raw `UINT` DPI
-value that `get_dpi_for_window()` no longer returns upstream; wraps
-with `round_dpi()`, matching the convention the refactor established
-everywhere else. See the rebase-method section above.
+## Provenance
 
-Patch 0048 (renumbered from 0045 alongside 0046/0047, same merge):
-fixes libusb-1.0 detection against 11.13's `AC_CHECK_FUNC` switch
-(2026-07-21). 0032's Push2 bridge build gate checked a cache variable
-only `AC_CHECK_LIB` set; upstream's switch to `AC_CHECK_FUNC` between
-11.11 and 11.13 left it checking a variable configure never sets,
-silently disabling the bridge. Fixes both the generated `configure`
-script and `configure.ac` (container-build.sh runs the pre-generated
-script directly, never `autoreconf`). See the rebase-method section
-above.
+- `0001`: redraw fixes from
+  `sashaduke/ableton-live12-linux`, known good on 2026-06-30.
+- `0002-0003`: winex11 changes from nine7nine/wine-nspa-src commits
+  `a63120d350`, `ec6cc844f0`, and `7e15021e3f`. Patch 0003 also corrects the
+  winex11 atom enum and name-table order.
+- `0004-0026`: local GNOME and Mutter frame, reentrancy, plugin-window,
+  DirectComposition, shared-session, sRGB, audio-name, and OpenGL fixes.
+- `0027`: Git housekeeping. Its commit remains in the source history, but the
+  patch file was removed from the shipped series on 2026-07-14.
+- `0028`: resubscribe to Wine ALSA MIDI devices after reconnect. See
+  `notes/ABLETON-WINE-MIDI-HOTPLUG.md`.
+- `0029`: add 4 px to the Win32 menu-bar band at 96 DPI. This fixes the
+  main-window resize offset at 100% scale. See
+  `notes/ABLETON-WINE-DPI-SCALE-100.md`.
+- `0030`: block stale-size DirectComposition blits. This is a partial Learn
+  View fix. See `notes/ABLETON-WINE-LEARNVIEW-FLICKER.md`.
+- `0031`: add the XDG file-dialog portal backend. It combines Wine MR !10060
+  v5 patches 0001, 0002, 0003, and 0005 with its responsiveness follow-up,
+  rebased from Wine 11.0 to this Wine 11.11 tree. MR patch 0004 was test-only
+  and was not included. See `notes/ABLETON-WINE-FILE-PORTAL.md`.
+- `0032`: add an x86-64 helper-scoped host libusb bridge for the Push 2
+  display. It exports the 16-function Win64 libusb 1.0.23 ABI used by
+  `Push2DisplayProcess.exe`. The i386 bridge is disabled. See
+  `notes/ABLETON-WINE-PUSH2-DISPLAY.md`.
+- `0033`: add `WINE_DISABLE_UNIX_MOUNT_REPARSE`. The launchers set it to `1`
+  so Unix mount boundaries appear as normal directories instead of incomplete
+  mount-point reparse records.
+- `0034`: flush each XdndStatus reply. This prevents a queued XdndLeave from
+  overtaking drop acceptance during fast drags from file managers under
+  XWayland.
+- `0035`: identify Intel Battlemage G21 GPUs, including Arc B580 device
+  `0xe20b`. Without the entry, Wine reports the device as Intel HD Graphics
+  4000, which Live 12 rejects for D3D11.
+- `0036`: suspend DirectComposition reblits when the d2d1 device is null.
+  This prevents a 200 ms timer loop when the graphics stack cannot create the
+  device. See issue 16.
+- `0037`: always advertise `MWM_FUNC_CLOSE`. KWin otherwise removes Live's
+  close button while its startup modal disables the main window. Wine still
+  ignores close requests while that window is disabled. Mailbox commit:
+  `a080cbd2`.
+- `0038`: keep menu tracking active while X input focus stays inside the same
+  client. This prevents dropdowns from closing during focus changes under
+  Mutter and Muffin. See `notes/ABLETON-WINE-MENU-FOCUSOUT.md`.
+- `0039`: do not change a mapped popup from unmanaged to managed. The window
+  manager makes that decision again on the next map. This prevents dropdown
+  remaps and lost clicks. See `notes/ABLETON-WINE-DROPDOWN-MANAGED-FLIP.md`.
+- `0040`: scale the menu-bar band with DPI. It corrects one-shot geometry for
+  programmatic window-manager tiles at 125%. It did not stop the interactive
+  resize loop, which patch 0042 fixes. Mailbox commit: `1173c1d5`. See
+  `notes/ABLETON-WINE-DPI-SCALE-100.md`.
+- `0041`: make DirectComposition presents visible on WebView2 layered targets,
+  retry stale resize blits on a 120 ms timer for up to five attempts, and keep
+  reblits active after idle. Mailbox commit: `9d34f87f`. See
+  `notes/ABLETON-WINE-LEARNVIEW-FLICKER.md`.
+- `0042`: treat sub-scale window-manager geometry differences as compositor
+  rounding instead of returning them to Win32. This stopped Live's 2 px
+  interactive resize loop on the tested 125% GNOME/XWayland setup. Adapted
+  from ENCORE. Mailbox commit: `a014d2aa`. See
+  `FINDINGS-RESIZE-GROWTH-2026-07-21.md`.
+- `0043`: send Live's Show in Explorer request through the XDG OpenDirectory
+  portal. Wine Explorer remains the fallback when the portal or policy refuses
+  the request. Mailbox commit: `996524ab`. See
+  `notes/ABLETON-WINE-SHOW-IN-EXPLORER.md`.
+- `0044`: reserved for the issue 57 parked-pane reblit work. No patch file is
+  shipped.
+- `0045`: reject `RevokeDragDrop` for a window owned by another process. This
+  prevents a foreign-process drop-target pointer from crashing Live when a
+  WebView2 plugin editor closes. Ported from `giang17/wine` commit
+  `fafb443f85e0`. See
+  `notes/ABLETON-WINE-WEBVIEW2-PLUGIN-CLOSE-CRASH.md`.
+- `0046`: fix build against 11.13's frame-latency-as-semaphore refactor.
+  `struct d3d11_swapchain` no longer carries its own `frame_latency_event`
+  handle upstream; fetches the waitable object, releases it as a semaphore,
+  and closes the duplicated handle each tick. Renumbered from 0043 when this
+  branch merged `main`'s own 0043 and 0045.
+- `0047`: fix build against 11.13's fractional-DPI `struct ratio` refactor.
+  Patch 0029/0040's menu-bar overshoot took a raw `UINT` DPI value that
+  `get_dpi_for_window()` no longer returns; wraps with `round_dpi()`.
+  Renumbered from 0044 alongside 0046/0048.
+- `0048`: fix libusb-1.0 detection against 11.13's `AC_CHECK_FUNC` switch.
+  Patch 0032's Push2 bridge gate checked a cache variable only
+  `AC_CHECK_LIB` sets; fixes both the generated `configure` script and
+  `configure.ac`. Renumbered from 0045 alongside 0046/0047.

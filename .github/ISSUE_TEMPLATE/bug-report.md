@@ -13,12 +13,15 @@ about: Report a problem with Ableton Live on Linux
 
 ## System summary
 
-Run the profiler for the machine you saw the problem on. It prints a redacted system summary and copies it to your clipboard.
+Run the profiler on the affected machine from the root of this repository. It
+prints a redacted system summary and copies it when a supported clipboard tool
+is available.
 
-You can also share additional information - like what your working setup looks like - by running the macOS or Windows profiler and adding this to the issue as well.
+If the same setup works on macOS or Windows, add that profiler's output for
+comparison.
 
 - Linux: `./beta/scripts/ableton-linux-profiler.sh`
 - macOS: `./beta/scripts/ableton-macos-profiler.sh`
 - Windows: `powershell -ExecutionPolicy Bypass -File beta\scripts\ableton-windows-profiler.ps1`
 
-Paste the summary here:
+Review the summary, then paste it here:

@@ -1,148 +1,118 @@
-# Learn View flicker / mangled rendering (FIXED 2026-07-21, with a documented residual)
+# Learn View stale rendering and automatic refresh
 
-## Symptoms (original)
+[`Patch 0041`](../patches/0041-dxgi-make-dcomp-presents-visible-on-webview2-s-unat.patch)
+makes WebView2 frames visible and keeps the latest frame on screen.
+`learnheal.exe`, added in release 2026.07.21.2, refreshes each settled Learn
+View automatically. A stale, clipped band can remain visible for about three
+seconds while the helper waits for the pane size to stabilize.
 
-Live's Learn View (the WebView2 lesson panel, `Chrome_WidgetWin_1`
-"Learn View 12") showed a band of stale, horizontally clipped content
-laid out for a much wider viewport, mixed with correct regions,
-flickering between states on activity. Everything else rendered fine.
+If the helper is missing, move the Learn View splitter once.
+`tools/posteresize.exe` performs the same size change from inside the prefix.
 
-## Resolution (2026-07-21, patch 0041)
+## Patch 0041
 
-Three interlocked fixes, all in `dlls/dxgi`:
+Patch 0041 changes three parts of `dlls/dxgi`.
 
-1. **The display path (root cause #3 below).** At
-   `WM_WINE_DCOMP_SET_TARGET` time, a target with
-   `WS_EX_NOREDIRECTIONBITMAP`, or `WS_EX_LAYERED` that never received
-   attributes, is normalized with
-   `SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA)`. On Windows
-   this call is a no-op for a NOREDIRECTIONBITMAP window (there is no
-   redirection bitmap for the attributes to affect); in Wine it makes
-   the window an ordinary opaque surface, so the dcomp comp-buffer
-   blits actually land on screen. Attributed layered windows (JUCE
-   DropShadower, UpdateLayeredWindow users) are never touched — the
-   guard fires exactly once per WebView2 bind and never for plugin
-   editors.
-2. **The resize race (caveat under patch 0030).** A stale-skip now arms
-   a one-shot 120 ms timer (`DCOMP_RESIZE_REBLIT_TIMER_ID`); the reblit
-   re-gates on currency, capped at 5 retries, cleaned up in both
-   NCDESTROYs and in `d3d11_swapchain_Release`.
-3. **The 3 s heal-revert.** Patch 0025's idle-abandonment
-   (`DCOMP_STALE_TICKS`) is removed: with the target now visible,
-   suspending reblits after 3 s idle handed the window back to
-   Chromium's fossil GDI paints, reverting every healed pane. Always-
-   reblit holds the last good frame indefinitely.
+1. At `WM_WINE_DCOMP_SET_TARGET`, Wine normalizes a target that has
+   `WS_EX_NOREDIRECTIONBITMAP`, or has `WS_EX_LAYERED` without layered
+   attributes:
 
-Verified on Live 12.4.3 at 125% scale: the pane heals fully on a
-splitter nudge / reopen / `tools/posteresize.exe` and now STAYS healed
-(previously correct content either never appeared, or reverted ~3 s
-after any heal).
+   ```c
+   SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA)
+   ```
 
-## Residual (documented, not a regression)
+   Windows treats this as a no-op for a `NOREDIRECTIONBITMAP` window. Wine
+   turns the target into an opaque surface, which gives the DirectComposition
+   buffer a visible destination. Attributed layered windows, including JUCE
+   DropShadower and `UpdateLayeredWindow` users, are unchanged.
 
-- **Fossil-on-open.** The pane can still open showing the wide-layout
-  fossil band: Chromium lays the page out once at the transient
-  creation size, and no Wine-side trigger reliably forces the
-  re-render (an auto-heal poke firing timed `SetWindowPos` +1/-1 nudges
-  was implemented and rejected: it never healed and left Chromium
-  resize-deaf afterwards). A single splitter nudge heals it for the
-  session. `tools/posteresize.exe` performs the nudge programmatically
-  from inside the prefix.
-  - Automated 2026-07-21 (release 2026.07.21.2): `learnheal.exe`
-    (tools/learnheal.c), a resident watcher the launcher starts, applies
-    the nudge automatically once per pane. The rejected in-Wine poke
-    failed because it fired at bind time; the watcher instead requires a
-    pane to hold a stable rect across scans (about 3 s) before its
-    single nudge, re-arms only on a material later size change, and
-    exits when Live is gone. Gating verified against an instrumented
-    stand-in pane (tools/fakepane.c): one nudge, after settle, none
-    afterwards. The user-visible residual shrinks to a few seconds of
-    fossil band right after opening the pane.
-- **Shimmer while fossilized.** With 0025's suspension gone, the two
-  painters (our reblit, Chromium's own GDI paints into the same window)
-  alternate at ~10 Hz until the pane is healed; pre-0041 the fossil was
-  static. Healed panes are stable (both painters carry the same current
-  content).
-- Doc sidebar: same WebView2 pattern, same behavior, same heal.
+2. A stale-size skip starts one 120 ms reblit timer. The callback checks the
+   current size again, stops after five attempts, and is removed by both
+   `WM_NCDESTROY` paths and `d3d11_swapchain_Release`.
 
-## Root cause (as established by the original research)
+3. Patch 0025 used to stop reblits after three idle seconds. Patch 0041
+   removes that timeout. Otherwise Chromium's old GDI frame returned after a
+   correct DirectComposition frame had been shown.
 
-From `+dxgi` traces, dcompspy/hwndspy, and X pixel sampling:
+Live 12.4.3 at 125% scale was tested by moving the splitter, reopening the
+pane, and running `tools/posteresize.exe`. Correct content remained visible
+after the refresh.
 
-1. Creation-size mismatch: Chromium creates the composition swapchain at
-   the pane's transient initial size (`CreateSwapChainForComposition
-   (1273x1552)`), then calls `ResizeBuffers(299x804)`, the real pane,
-   ~400 ms later.
-2. Stale-size paints: between creation and resize, WM_PAINT /
-   `dcomp_reblit_comp_buffer` blit the old 1273-wide snapshot into the
-   already-299-wide window; that crop of wide-layout content is the
-   mangled band. (Fixed by patch 0030.)
-3. Correct paints never reached the screen. After the resize the comp
-   buffer was correct and full-frame BitBlts executed, yet X-side pixels
-   never changed. The Intermediate D3D Window has `WS_EX_LAYERED |
-   WS_EX_NOREDIRECTIONBITMAP | WS_EX_TRANSPARENT` and never calls
-   SetLayeredWindowAttributes; winex11 delays mapping layered windows
-   until attributes arrive (`dlls/winex11.drv/window.c` "layered windows
-   are mapped only once their attributes are set") and the server
-   suppresses their redraws, so GDI blits to it were invisible. What
-   showed instead was the sibling below, `Chrome_RenderWidgetHostHWND`:
-   Chromium's software fallback frame, drawn once at the old geometry.
-   (Fixed by patch 0041 item 1.)
-4. Window chain: `AbletonWebViewHelperWindow` (hidden) →
-   `Chrome_WidgetWin_0` → `Chrome_WidgetWin_1` → siblings
-   `Chrome_RenderWidgetHostHWND` (visible) + `Intermediate D3D Window`
-   (visible, layered), all the same rect.
+## Automatic refresh
 
-## Approaches tried 2026-07-21 and rejected (do not retry blindly)
+The launcher starts `learnheal.exe` with Live. The helper waits until a Learn
+View or documentation pane keeps the same rectangle for about three seconds,
+then changes its width by one pixel and restores it. It refreshes the first
+stable rectangle. A combined width and height change greater than four pixels
+rearms it. It exits about 60 seconds after Live closes.
 
-- **dce.c discard of GDI draws to NOREDIRECTIONBITMAP windows**
-  (Windows parity: no redirection bitmap). Kills the two-painter
-  flicker dead (xgrid 0/30 s), but it also discards OUR reblit into the
-  same window — no delivery path remains. Only viable together with a
-  working non-GDI delivery, which does not exist for child windows.
-- **UpdateLayeredWindow delivery.** Structurally dead for the
-  Intermediate window: `win32u get_window_surface` never gives CHILD
-  windows their own surface (`window.c:2114`), so ULW takes the
-  driver-only branch and blits nothing.
-- **Sibling-DC delivery** (blit into `Chrome_RenderWidgetHostHWND`'s DC
-  instead). Invisible: the sibling's own X child window shows its own
-  stale frame above the shared toplevel surface (proven by posteresize
-  healing the attributed-Intermediate runtime but not the
-  sibling-delivery runtime).
-- **Hiding the sibling or the Intermediate.** Both break Chromium's
-  occlusion tracking; presenting stops entirely.
-- **`ABLETON_DCOMP=off` (dcomp disabled).** WebView2 shows its error
-  page; no lesson content at all. (ENCORE ships dcomp-off by default;
-  it does not transfer to this stack.)
-- **WebView2 flag matrix** (`--disable-gpu-compositing` dropped, SW-DComp
-  forced, `--disable-gpu`, real-GPU angle): no set produces a stable
-  correct pane. Ableton itself hardcodes `--disable-gpu
-  --disable-gpu-compositing --disable-direct-composition
-  --disable-accelerated-2d-canvas` for its embedded WebView2 (seen on
-  the browser process cmdline); launcher flags only affect the
-  gpu-process GL backend. Dropping `--disable-gpu-compositing` DID
-  route full content through the swapchain (proof that a single
-  presentation path can carry the whole pane) but the two-painter
-  alternation remained.
-- **Auto-heal poke** (timed programmatic +1/-1 SetWindowPos on the
-  widget, once per bind): fired correctly, healed never (6/6 boots),
-  and correlated with the manual heal failing afterwards (Chromium
-  resize-deaf). Not shipped; code preserved uncommitted in the dev
-  tree.
+An instrumented `tools/fakepane.c` test confirmed one delayed refresh and no
+repeat at the same size. A refresh sent when WebView2 first binds did not
+update the content and could make later manual resizing ineffective.
 
-## Regression watch
+Until the helper runs, Chromium's stale GDI frame and Wine's current reblit
+can alternate at about 10 Hz. Once refreshed, both contain the same content
+and the pane remains stable. The documentation sidebar uses the same WebView2
+layout and helper.
 
-- JUCE DropShadower layered windows
-  ([../patches/0015-win32u-sync-layered-attributes-to-the-scaled-surface.patch](../patches/0015-win32u-sync-layered-attributes-to-the-scaled-surface.patch)),
-  SWAM plugin GUIs: structurally unaffected (never
-  NOREDIRECTIONBITMAP, never unattributed-layered dcomp targets);
-  spot-check visually anyway.
-- Doc sidebar: same WebView2 pattern — it receives the same
-  normalization (intended); watch for the shimmer-on-fossil there too.
-- Test at 100% and 125% display scale.
-- Tools: [../tools/dcompspy.c](../tools/dcompspy.c) (dumps layered
-  attributes since 2026-07-21), [../tools/hwndspy.c](../tools/hwndspy.c),
-  [../tools/xdmg.c](../tools/xdmg.c), [../tools/xsamp.c](../tools/xsamp.c),
-  [../tools/xgrid.c](../tools/xgrid.c),
-  [../tools/xsettle.c](../tools/xsettle.c),
-  [../tools/posteresize.c](../tools/posteresize.c) (scriptable heal).
+## Cause
+
+Traces from `+dxgi`, `dcompspy`, `hwndspy`, and X11 pixel sampling established
+this sequence:
+
+1. Chromium created a composition swapchain at the pane's temporary size,
+   observed as 1273x1552. About 400 ms later it called
+   `ResizeBuffers(299x804)` for the final pane.
+2. Before that resize, `WM_PAINT` and `dcomp_reblit_comp_buffer` copied the
+   wide snapshot into the narrow window. The result was a clipped band laid
+   out for the old width. Patch 0030 rejects those stale-size copies.
+3. After the resize, the composition buffer was correct and full-frame
+   `BitBlt` calls ran, but the X11 pixels did not change. The Intermediate
+   D3D Window had `WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP |
+   WS_EX_TRANSPARENT` and no layered attributes. winex11 did not map that
+   window, and the server suppressed its redraws. The visible sibling below
+   it, `Chrome_RenderWidgetHostHWND`, still held Chromium's old software
+   frame. Patch 0041 gives the composition buffer a visible target.
+4. The window chain is `AbletonWebViewHelperWindow`, `Chrome_WidgetWin_0`,
+   `Chrome_WidgetWin_1`, then sibling windows
+   `Chrome_RenderWidgetHostHWND` and `Intermediate D3D Window`.
+
+## Rejected approaches
+
+- Discarding GDI draws to `NOREDIRECTIONBITMAP` windows removed the
+  alternation but also discarded Wine's reblit. Child windows had no other
+  working rendering method.
+- `UpdateLayeredWindow` could not deliver the frame because win32u does not
+  give child windows their own surface. It took the driver-only branch and
+  copied nothing.
+- Copying into the sibling window's DC remained hidden behind the sibling's
+  own X child window.
+- Hiding either sibling stopped Chromium presentation through occlusion
+  tracking.
+- `ABLETON_DCOMP=off` made WebView2 show its error page.
+- Tested WebView2 GPU and software-composition flags did not produce a stable
+  pane. Ableton's browser process supplies its own
+  `--disable-gpu --disable-gpu-compositing --disable-direct-composition
+  --disable-accelerated-2d-canvas` flags. Launcher flags affect only the GPU
+  process backend.
+- A bind-time one-pixel refresh failed in six of six starts and could prevent
+  the later manual refresh. `learnheal.exe` waits for stable geometry instead.
+
+## Regression checks
+
+Check JUCE DropShadower windows and SWAM plugin editors after dxgi changes.
+They use the
+[layered-attribute handling](../patches/0015-win32u-sync-layered-attributes-to-the-scaled-surface.patch),
+not the unattributed `NOREDIRECTIONBITMAP` target handled by patch 0041. A
+visual test still covers the shared DirectComposition handling.
+
+Test the Learn View and documentation sidebar at 100% and 125% scale. Relevant
+tools are:
+
+- [`dcompspy.c`](../tools/dcompspy.c)
+- [`hwndspy.c`](../tools/hwndspy.c)
+- [`xdmg.c`](../tools/xdmg.c)
+- [`xsamp.c`](../tools/xsamp.c)
+- [`xgrid.c`](../tools/xgrid.c)
+- [`xsettle.c`](../tools/xsettle.c)
+- [`posteresize.c`](../tools/posteresize.c)

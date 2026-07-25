@@ -1,61 +1,64 @@
-# Show in Explorer opens Wine's explorer instead of the host file manager
+# Show in Explorer uses the host file manager
 
-2026-07-21.
+Status: fixed in release 2026.07.22.1 by Wine patch 0043. When the XDG portal
+accepts Live's request, Show in Explorer opens the host file manager. Wine
+Explorer remains the fallback.
 
-## Symptoms
+## Request path
 
-Right-clicking a file in Live and choosing Show in Explorer opens Wine's
-built-in explorer.exe file listing instead of the desktop's file manager
-(issue #41).
+Live calls `ShellExecuteW` or `ShellExecuteExW` with:
 
-## Research
+```text
+explorer.exe /select,"<path>"
+```
 
-Live's exe imports ShellExecuteW/ShellExecuteExW, does not import
-SHOpenFolderAndSelectItems, and carries the wide string `,/select,"`: Show
-in Explorer is `ShellExecute(Ex)W` of `explorer.exe /select,"<path>"`.
-Under Wine that command line reaches shell32's SHELL_execute, which finds
-Wine's explorer.exe and spawns it.
+The executable imports those functions, does not import
+`SHOpenFolderAndSelectItems`, and contains the wide string `,/select,"`.
+Unpatched Wine resolves `explorer.exe` and opens its own file browser.
 
-The XDG Desktop Portal already offers the right primitive:
-`org.freedesktop.portal.OpenURI.OpenDirectory` takes a file descriptor and
-opens the containing folder in the host file browser; backends that talk
-`org.freedesktop.FileManager1` (Nautilus, Dolphin, Nemo and others) select
-the item too. The portal plumbing (dlopened libdbus, session bus
-connection, request tokens) exists since patch 0031 in comdlg32's unix
-library.
+XDG Desktop Portal provides
+`org.freedesktop.portal.OpenURI.OpenDirectory`. It accepts a file descriptor
+for the target. Backends connected to `org.freedesktop.FileManager1` can open
+the containing directory and select the item.
 
-## Mitigations
+## Patch 0043
 
-Patch 0043 routes it through that plumbing:
+[Patch 0043](../patches/0043-shell32-reveal-explorer-select-targets-through-the-X.patch)
+reuses the portal code introduced by patch 0031:
 
-- comdlg32's unix library gains `portal_open_directory`, an OpenDirectory
-  call that waits only for the method reply, not the Response signal, so
-  the caller's UI thread does not sit behind the file manager launch.
-- comdlg32 exports `__wine_portal_show_item(path)`: policy check, DOS to
-  Unix path conversion, unix call.
-- shell32's SHELL_execute recognises explorer `/select,` command lines
-  whose target exists and calls that export; comdlg32 imports shell32, so
-  the export is resolved with LoadLibrary/GetProcAddress to avoid an
-  import cycle.
+1. comdlg32 adds `portal_open_directory`, which calls `OpenDirectory`.
+2. comdlg32 exports `__wine_portal_show_item(path)`. It checks policy,
+   converts the DOS path to a Unix path, and calls the Unix portal library.
+3. shell32 recognizes Explorer `/select,` commands with an existing target
+   and resolves that export with `LoadLibrary` and `GetProcAddress`. Dynamic
+   lookup avoids an import cycle because comdlg32 already imports shell32.
 
-Verified 2026-07-21 with tools/showexp.c (mimics Live's exact call) on
-GNOME/Nemo: ShellExecuteExW and ShellExecuteW, file and directory targets
-all open the host file manager with the item selected, and dbus-monitor
-shows the OpenDirectory call. No Wine explorer process is spawned.
+The portal call waits for the method reply but not the later `Response`
+signal, so Live does not wait for the file manager to finish handling the
+request.
+
+## Verification
+
+[`tools/showexp.c`](../tools/showexp.c) is the source of the probe used during
+development. This repository does not ship its compiled binary or a build
+target for it. Tests on 2026-07-21 covered both `ShellExecuteExW` and
+`ShellExecuteW`. With GNOME and Nemo, file and directory targets opened in the
+host file manager. `dbus-monitor` recorded `OpenDirectory`, and Wine Explorer
+did not start.
 
 ## Policy and fallback
 
-The reveal obeys the same `FileDialogPortal` prefix policy as the file
-dialogs (`bin/set-file-portal-policy`): `never` turns it off. On any
-refusal (policy, missing target, no portal on the bus, 32-bit caller,
-portal call failure) the old explorer.exe spawn runs unchanged; verified
-for the policy and missing-target cases.
+The reveal uses the same `FileDialogPortal` policy as file dialogs. A
+`never` value disables it; see
+[ABLETON-WINE-FILE-PORTAL.md](ABLETON-WINE-FILE-PORTAL.md).
 
-## Caveats
+Wine Explorer starts when the policy refuses the portal, the target is
+missing, the caller is 32-bit, the portal library is unavailable, or the
+portal call fails. Policy and missing-target fallbacks were tested.
 
-- 32-bit callers cannot load the portal unix library under new WoW64 and
-  always fall back to Wine's explorer, same as the 0031 dialogs.
-- Whether the item is selected or only its folder opened depends on the
-  desktop's portal backend; the folder always opens.
-- A plain `explorer.exe <folder>` (no `/select`) still opens Wine's
-  explorer; Live does not issue that form.
+New WoW64 cannot load the portal Unix library for a 32-bit caller, so those
+calls always use Wine Explorer. A plain `explorer.exe <folder>` command also
+keeps the Wine behavior because patch 0043 handles only `/select,`.
+
+Selection depends on the desktop backend. A backend may open the containing
+folder without selecting the item.

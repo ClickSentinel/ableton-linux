@@ -78,9 +78,9 @@ for required in \
     lib/wine/x86_64-unix/pipeasio.dll.so; do
     [ -s "$candidate/$required" ] || { echo "!! package is missing $required" >&2; exit 1; }
 done
-# ableton-linkd (native Ableton Link session anchor) is not part of the runtime
-# tree: the kit carries it in bin/, a repo checkout carries the pack-time build
-# in dist/. Its user unit ships next to the install scripts.
+# ableton-linkd (persistent native Ableton Link peer) is not part of the runtime
+# tree. The kit carries it in bin/, and a repository checkout reads it from
+# dist/. Its user unit ships next to the install scripts.
 linkd=""
 for f in "$here/../bin/ableton-linkd" "$root/dist/ableton-linkd"; do
     if [ -f "$f" ]; then linkd="$f"; break; fi
@@ -112,10 +112,10 @@ if command -v readelf >/dev/null && command -v strings >/dev/null; then
             echo "!! PipeASIO is not linked to host libpipewire-0.3.so.0" >&2
             exit 1
         }
-    # ableton-linkd must resolve against host C-runtime sonames only:
-    # -static-libstdc++ -static-libgcc keep libstdc++/libgcc_s out of
-    # DT_NEEDED (same loader-cleanliness rule as PipeASIO). Anything else,
-    # above all a shared libstdc++, means the pack-time flags were lost.
+    # ableton-linkd must resolve against host C-runtime sonames only.
+    # -static-libstdc++ and -static-libgcc keep libstdc++ and libgcc_s out of
+    # DT_NEEDED. Any other dependency means the required static-link flags
+    # were omitted.
     linkd_needed="$(readelf -d "$linkd" | sed -n 's/.*Shared library: \[\(.*\)\]/\1/p')"
     for so in $linkd_needed; do
         case "$so" in

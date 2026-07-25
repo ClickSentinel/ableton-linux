@@ -1,57 +1,54 @@
 # Environment profilers
 
-One-command system summaries for bug reports:
+These scripts produce redacted system summaries for bug reports:
 
 - `ableton-linux-profiler.sh`
 - `ableton-macos-profiler.sh`
 - `ableton-windows-profiler.ps1`
 
-Each prints a short system summary and copies it to the clipboard, fenced
-for pasting straight into a GitHub issue. Review the printed summary
-before pasting it. They collect only what a reviewer needs to place a
-report:
+Each profiler prints a Markdown-formatted summary. It also copies the summary
+when a supported clipboard tool is available. Review the output before sharing
+it.
 
-- **Linux:** distribution and kernel, CPU model and count, memory, board
+- **Linux:** distribution and kernel, CPU model and count, memory, system
   vendor/product, OpenGL vendor/renderer/version, desktop and session
   type, PipeWire/WirePlumber state and versions, audio devices, MIDI
   devices.
 - **macOS:** OS version, hardware model, CPU, memory, audio devices
   (device names generalised), installed Ableton Live versions.
-- **Windows:** the equivalent system, graphics and audio summary.
+- **Windows:** OS, CPU, memory, system model, graphics, audio, MIDI, and
+  installed Ableton Live versions.
 
 ## Redaction scope
 
-All three profilers filter their output through the same rules:
+All three profilers apply these rules:
 
-- the user's home directory becomes `<HOME>`, other account paths become
-  `<USER>` (`/home/<name>`, `/Users/<name>`, and `/run/user/<uid>` on
-  Linux);
-- MAC addresses become `<MAC>`, email addresses become `<EMAIL>`, LUKS
-  volume UUIDs become `luks-<REDACTED>`;
-- any line keyed by a unique identifier is dropped: serial numbers,
-  UUID/UDID/WWN/GUID, unique or processor IDs, asset tags, instance or
-  PNP device IDs, addresses, location IDs, mount points, BSD names,
-  device identifiers;
-- credential and licence values are blanked in place (`password`,
-  `token`, `secret`, API keys, `MachineGuid`, `Unlock.json`, Ableton
-  serial/licence fields) as `<key>=<REDACTED>`;
-- redaction replaces whole path components only, so a placeholder never
-  lands inside ordinary data (the word-boundary rule; captures older
-  than 2026-07-11 predate it).
+- The configured home-directory string becomes `<HOME>` wherever it appears.
+- Native account paths replace the account name with `<USER>`:
+  `/home/<name>` on Linux, `/Users/<name>` on macOS, and
+  `C:\Users\<name>` on Windows.
+- MAC addresses become `<MAC>`, and email addresses become `<EMAIL>`.
+- Lines keyed by unique identifiers are removed. These include serial
+  numbers, UUIDs, GUIDs, asset tags, processor IDs, device IDs, addresses,
+  location IDs, and mount points.
+- Credential and licence values become `<key>=<REDACTED>`. The patterns cover
+  passwords, tokens, secrets, API keys, `MachineGuid`, `Unlock.json`, and
+  Ableton serial or licence fields.
 
-The tester-kit session collector applies the same rules plus captured
-window titles, and additionally replaces credential-like lines outright.
+The Linux profiler also replaces `/run/user/<uid>` with `/run/user/<UID>` and
+LUKS volume UUIDs with `luks-<REDACTED>`. The macOS profiler also removes
+lines keyed by BSD names.
+
+The tester-kit collector also replaces captured window titles and removes
+credential-like lines.
 
 ## Privacy gate
 
-`check-profiler-privacy.sh` enforces the scope: it fails if a forbidden
-collection pattern (login names, hardware serials, full inventories)
-appears in any profiler or in the tester-kit collector, if a required
-redaction step goes missing, or if a mock profiler run against a stubbed
-`system_profiler` retains a private value. Run it after editing any
-profiler or collector — a report that contains excluded data is a
-collector failure, not something to clean by hand.
+`check-profiler-privacy.sh` checks for forbidden collection patterns, required
+redaction rules, and private values in a mocked macOS profiler run. Run it after
+editing a profiler or collector. A report containing excluded data is a
+collector failure. Keep it local.
 
 ```bash
-./scripts/check-profiler-privacy.sh
+./beta/scripts/check-profiler-privacy.sh
 ```
