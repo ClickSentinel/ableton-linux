@@ -193,10 +193,15 @@ Provenance:
               revokes drag-drop on every enumerated child, including
               that foreign one. RegisterDragDrop already rejected
               windows owned by other processes; RevokeDragDrop now does
-              too (DRAGDROP_E_INVALIDHWND). Ported from giang17/wine
-              commit fafb443f85e0 (Giang Nguyen, 2026-07-23). Landed on
-              main via upstream/main directly (not part of this branch's
-              own rebase work); merged in unchanged. See
+              too (DRAGDROP_E_INVALIDHWND), after which teardown
+              completes and the helper process revokes its own
+              registration itself. Fix by Giang Nguyen (giang17/wine
+              commit fafb443f85e0, found 2026-07-23 with a JUCE 8
+              WebView2 editor under yabridge, their issue 8); ported
+              here. Reproduced and verified without Splice via the new
+              tools/webviewclose.c (variant 'e', JUCE-style teardown).
+              Landed on main via upstream/main directly (not part of
+              this branch's own rebase work); merged in unchanged. See
               notes/ABLETON-WINE-WEBVIEW2-PLUGIN-CLOSE-CRASH.md.
   0046      = dxgi: fix build against 11.13's frame-latency-as-semaphore
               refactor (2026-07-21). `struct d3d11_swapchain` no longer
