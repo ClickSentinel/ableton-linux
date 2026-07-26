@@ -7,7 +7,7 @@
 # Trigger from the Actions tab ("Run workflow") or:
 #
 #   gh workflow run ci-build-matrix.yml --repo <owner>/ableton-linux \
-#       -f refs="shibco-latest,wine-11.13-color-theming"
+#       -f refs="shibco-latest,color-theming"
 #
 # `refs` is a comma-separated list. Each entry is either:
 #   - shibco-latest   shibco/ableton-linux's newest v* release tag,
@@ -33,7 +33,7 @@ on:
   workflow_dispatch:
     inputs:
       refs:
-        description: 'Comma-separated refs to build (e.g. shibco-latest,wine-11.13-color-theming)'
+        description: 'Comma-separated refs to build (e.g. shibco-latest,color-theming)'
         required: true
         default: 'shibco-latest'
 
