@@ -137,14 +137,11 @@ ableton_newest_prefs_dir() {
 }
 
 # ableton_live_theme_file <wineprefix> <install-themes-dir> <live-major> <dark|light>
-# prints the .ask Live renders with. Preferences.cfg is an opaque binary whose
-# values are not anchored to their tags, but a picked theme is stored as its plain
-# name ("Catppuccin Auto"), so the newest cfg's UTF-16 strings (via `strings`,
-# binutils) are matched against the themes actually installed: the factory Themes
-# dir and the User Library: and the last match wins. No match (the stock Default
-# theme, or no binutils) falls back to the follow-system default pair; the Tone and
-# Contrast variant enums are not recoverable from the binary, so default-theme
-# users get Neutral Medium. ABLETON_TOPBAR_MODE=system or a hex pair overrides.
+# prints the .ask Live renders with, resolved by grepping Preferences.cfg's
+# UTF-16 strings for an installed theme's name (factory dir + User Library,
+# last match wins) since the binary has no tag-anchored values. Falls back
+# to the follow-system default (Neutral Medium) when there's no match or no
+# binutils. ABLETON_TOPBAR_MODE=system or a hex pair overrides.
 ableton_live_theme_file() {
     local prefix="$1" themes="$2" major="$3" scheme="$4" prefs line drive cand d file=""
     local -a dirs

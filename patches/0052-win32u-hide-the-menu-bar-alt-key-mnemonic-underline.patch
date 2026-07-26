@@ -1,0 +1,70 @@
+Subject: win32u/user32: hide the menu bar's alt-key mnemonic
+ underlines
+
+Real Windows only shows these once Alt is pressed (the
+WM_UPDATEUISTATE/UISF_HIDEACCEL keyboard-cues system); this Wine tree
+never implements that message handling at all (confirmed: no
+WM_UPDATEUISTATE/WM_QUERYUISTATE/WM_CHANGEUISTATE handling outside
+tests), so the top-level menu bar always draws them, unlike real
+Windows or macOS - reported as issue 35 point 6 ("is it possible to
+remove the underlines from the Wine menu bar").
+
+Implementing the full Alt-to-reveal toggle is a much larger feature
+(global UI-state tracking, Alt key press/release wiring, propagation
+through every window). DT_HIDEPREFIX on the menu bar's DrawTextW call
+gets the actual visual result asked for - permanently hidden, & still
+handled as an escape rather than drawn literally - without any of
+that. Scoped to the menu bar only; popup/dropdown items keep their
+mnemonics, where Alt-key in-menu navigation is still commonly used.
+
+DT_HIDEPREFIX turned out to be a dead flag in this tree: defined in
+winuser.h and mentioned in a text.c comment, but dlls/user32/text.c's
+actual underline-drawing site (TEXT_DrawUnderscore's call, gated on
+prefix_offset) only ever checked DT_NOPREFIX, never DT_HIDEPREFIX -
+so setting it alone had no visible effect, confirmed by testing.
+DT_NOPREFIX isn't the right substitute either: it stops '&' from
+being treated as an escape at all, which would show a literal '&' in
+the text instead of just hiding the underline. Fixed by gating the
+underscore draw itself on DT_HIDEPREFIX too, leaving '&'-stripping
+and prefix-offset tracking (unaffected by this flag pre-existing)
+exactly as before.
+---
+ dlls/user32/text.c |  2 +-
+ dlls/win32u/menu.c | 10 +++++++++-
+ 2 files changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/user32/text.c b/dlls/user32/text.c
+index 114d069..56d07de 100644
+--- a/dlls/user32/text.c
++++ b/dlls/user32/text.c
+@@ -1018,7 +1018,7 @@ INT WINAPI DrawTextExW( HDC hdc, LPWSTR str, INT i_count,
+                                  ((flags & DT_RTLREADING) ? ETO_RTLREADING : 0),
+                                  rect, str, len_seg, NULL ))
+                     goto done;
+-                if (prefix_offset != -1 && prefix_offset < len_seg)
++                if (prefix_offset != -1 && prefix_offset < len_seg && !(flags & DT_HIDEPREFIX))
+                 {
+                     TEXT_DrawUnderscore (hdc, xseg, y + tm.tmAscent + 1, str, prefix_offset, (flags & DT_NOCLIP) ? NULL : rect);
+                 }
+diff --git a/dlls/win32u/menu.c b/dlls/win32u/menu.c
+index 08b1665..1ff3403 100644
+--- a/dlls/win32u/menu.c
++++ b/dlls/win32u/menu.c
+@@ -2677,8 +2677,16 @@ static void draw_menu_item( HWND hwnd, struct menu *menu, HWND owner, HDC hdc,
+     {
+         int i;
+         HFONT prev_font = 0;
++        /* Real Windows hides these mnemonic underlines until Alt is pressed
++         * (the WM_UPDATEUISTATE/UISF_HIDEACCEL "keyboard cues" system) - not
++         * implemented anywhere in this Wine tree (confirmed: no handling of
++         * WM_UPDATEUISTATE/WM_QUERYUISTATE/WM_CHANGEUISTATE outside tests),
++         * so without DT_HIDEPREFIX the top-level bar always shows them,
++         * unlike either real Windows' default or macOS. Scoped to the menu
++         * bar itself (issue 35 point 6); popup/dropdown items keep theirs,
++         * where Alt-key navigation within an open menu is still used. */
+         UINT format = menu_bar ?
+-            DT_CENTER | DT_VCENTER | DT_SINGLELINE :
++            DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_HIDEPREFIX :
+             DT_LEFT | DT_VCENTER | DT_SINGLELINE;
+ 
+         if (!(menu->dwStyle & MNS_CHECKORBMP))

@@ -167,6 +167,7 @@ STAMP_ONLY='
 0049|logic-only (grayed-menu-item bevel dropped entirely; no new string literal)
 0050|logic-only (per-process sys-color cache reset on WM_SYSCOLORCHANGE; no new string literal)
 0051|logic-only (RDW_FRAME added to the SetSysColors redraw flags; no new string literal)
+0052|logic-only (DT_HIDEPREFIX on the menu bar DrawTextW call; no new string literal)
 '
 wide_pattern() {  # ascii string -> PCRE matching its UTF-16LE bytes
     printf '%s' "$1" | od -An -v -tx1 | tr -d '\n' | tr -s ' ' ' ' \

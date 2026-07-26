@@ -300,15 +300,11 @@ blend_gray_text() {   # <menu "R G B"> <menutext "R G B"> -> "R G B"
     printf '%d %d %d' $(( mr + (tr - mr) * 45 / 100 )) $(( mg + (tg - mg) * 45 / 100 )) $(( mb + (tb - mb) * 45 / 100 ))
 }
 
-# win32u-drawn menus: Live's menu bar and dropdowns: take their colours from the
-# [Control Panel\Colors] table, which neither the prefix setup nor the theme sync below
-# has ever written, so the bar keeps stock light colours in dark mode. Sync the entries
-# the bar uses alongside AppsUseLightTheme (current values read from the registry file,
-# no wineserver spin-up when unchanged). When the host titlebar colours are known
-# (issue #32), the bar and its text take those instead, so the WM titlebar and Live's
-# menu bar read as one unified strip; the wine-drawn title colours (virtual desktops)
-# follow along. Do NOT add "Window" here: a dark Window colour blacks out comdlg32
-# dialog lists.
+# win32u-drawn menu bar/dropdowns take their colours from [Control Panel\Colors],
+# which nothing else ever writes, so they'd otherwise stay stock light in dark
+# mode. When the host titlebar colours are known (issue #32), the bar/text take
+# those too, unifying the WM titlebar with Live's menu bar. Do NOT add "Window"
+# here: a dark Window colour blacks out comdlg32 dialog lists.
 sync_win32_colors() {   # dark|light [bar-bg bar-fg [menu-bg sel-bg sel-fg]]  ("R G B")
     local scheme="$1" bar_bg="${2:-}" bar_fg="${3:-}" menu_bg="${4:-}" sel_bg="${5:-}" sel_fg="${6:-}"
     local pair name want cur changed=0 menubar menutext menu
@@ -388,18 +384,13 @@ parse_topbar_override() {
         $(( 16#${fg:1:2} )) $(( 16#${fg:3:2} )) $(( 16#${fg:5:2} ))
 }
 
-# ABLETON_TOPBAR_MODE=live: colour the chrome with Live's active theme, so the bar
-# and menus continue Live's own surface (the Push 3 standalone look). Ground and
-# text come from the theme's Desktop and ControlForeground; the selection set from
-# SelectionBackground/SelectionForeground (see detect-theme.sh for the resolution).
-#
-# Bar takes Desktop, dropdowns take ControlBackground - swapped from the first
-# cut of this (bar<-ControlBackground, dropdown<-Desktop). On the stock Light
-# themes ControlBackground is the brighter of the two (e.g. Neutral Medium:
-# ControlBackground 207,207,207 vs Desktop 129,129,129), which put the always
-# -visible bar lighter than its own dropdowns - visually backwards from every
-# reference (a darker chrome strip framing lighter popup/content surfaces).
-# Confirmed against a real screenshot in light mode and swapped on request.
+# ABLETON_TOPBAR_MODE=live: colour the chrome with Live's active theme (the
+# Push 3 standalone look). Bar takes Desktop, dropdowns take ControlBackground;
+# selection set from SelectionBackground/SelectionForeground (see
+# detect-theme.sh for resolution). Swapped from the first cut (bar<-
+# ControlBackground) after a light-mode screenshot showed the always-visible
+# bar lighter than its own dropdowns - backwards from every reference (a
+# darker chrome strip framing lighter content).
 resolve_live_topbar() {   # sets topbar/menu_bg/sel_bg/sel_fg; fails when unresolvable
     local themes major theme_file bg fg
     [ -n "$live_exe_unix" ] || return 1
