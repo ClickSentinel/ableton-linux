@@ -26,10 +26,10 @@ shuffle resolves.
  1 file changed, 29 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
-index 50c56e6f..4db65bcb 100644
+index 018e00e0..a5247610 100644
 --- a/dlls/winex11.drv/event.c
 +++ b/dlls/winex11.drv/event.c
-@@ -823,6 +823,20 @@ BOOL is_current_process_focused(void)
+@@ -682,6 +682,20 @@ BOOL is_current_process_focused(void)
      return FALSE;
  }
  
@@ -50,7 +50,7 @@ index 50c56e6f..4db65bcb 100644
  /**********************************************************************
   *              X11DRV_FocusIn
   */
-@@ -887,7 +901,21 @@ static void focus_out( Display *display , HWND hwnd )
+@@ -747,7 +761,21 @@ static void focus_out( Display *display , HWND hwnd )
      if (is_virtual_desktop()) return;
      if (hwnd != NtUserGetForegroundWindow()) return;
      if (!(NtUserGetWindowLongW( hwnd, GWL_STYLE ) & WS_MINIMIZE))

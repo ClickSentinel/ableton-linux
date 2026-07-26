@@ -136,7 +136,7 @@ From a checkout, test Wine's local multicast socket behavior:
 
 ```bash
 WINEPREFIX="$HOME/.wine-ableton" \
-  "$HOME/.local/opt/wine-d2d1-nspa-11.11/bin/wine" tools/linkprobe.exe
+  "$HOME/.local/opt/wine-d2d1-nspa-11.13/bin/wine" tools/linkprobe.exe
 ```
 
 Require `LINKPROBE TX OK` and `LINKPROBE RX-LOOPBACK OK`. To require

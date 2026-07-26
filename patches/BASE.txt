@@ -1,16 +1,23 @@
 # Wine patch base and provenance
 
 Base repository: https://github.com/giang17/wine.git
-Branch: `d2d1-dcomp-11.11`
-Base commit: `7ea0c8b7dd`, `d2d1-dcomp stack: port to wine-11.11`
+Branch: `d2d1-dcomp-11.13`
+Base commit: `5c23dd1c`, `winex11: use NORMAL not UTILITY for non-DComp ownerless TOOLWINDOW popups (issue 84)`
 
-The current Wine series contains 43 files, numbered 0001 through 0045. Patches
-0027 and 0044 are intentionally absent.
+Bumped 2026-07-21 from `d2d1-dcomp-11.11` (`7ea0c8b7dd`) to close the Wine
+point-version gap with upstream's actively-maintained branch and with ENCORE
+(github.com/wowitsjack/ENCORE), which runs plain Wine 11.13. Full rebase
+narrative — 5 merge conflicts, three build breaks the clean rebase didn't
+catch, a build.sh/pipefail tooling gotcha — is in
+`notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
+
+The current Wine series contains 46 files, numbered 0001 through 0048.
+Patches 0027 and 0044 are intentionally absent.
 
 ## Applying the series
 
 Run `./build.sh`. Inside the Podman image, `scripts/container-build.sh`
-unpacks `vendor/wine-base-7ea0c8b7.tar.zst`, creates a Git repository, and
+unpacks `vendor/wine-base-5c23dd1c.tar.zst`, creates a Git repository, and
 applies `patches/00*.patch` in lexical order with `git am --3way`.
 
 Some early patch files have no `From` or `Date` header. The build script adds a
@@ -92,3 +99,16 @@ Apply them in sequence with the rest of the series.
   WebView2 plugin editor closes. Ported from `giang17/wine` commit
   `fafb443f85e0`. See
   `notes/ABLETON-WINE-WEBVIEW2-PLUGIN-CLOSE-CRASH.md`.
+- `0046`: fix build against 11.13's frame-latency-as-semaphore refactor.
+  `struct d3d11_swapchain` no longer carries its own `frame_latency_event`
+  handle upstream; fetches the waitable object, releases it as a semaphore,
+  and closes the duplicated handle each tick. Renumbered from 0043 when this
+  branch merged `main`'s own 0043 and 0045.
+- `0047`: fix build against 11.13's fractional-DPI `struct ratio` refactor.
+  Patch 0029/0040's menu-bar overshoot took a raw `UINT` DPI value that
+  `get_dpi_for_window()` no longer returns; wraps with `round_dpi()`.
+  Renumbered from 0044 alongside 0046/0048.
+- `0048`: fix libusb-1.0 detection against 11.13's `AC_CHECK_FUNC` switch.
+  Patch 0032's Push2 bridge gate checked a cache variable only
+  `AC_CHECK_LIB` sets; fixes both the generated `configure` script and
+  `configure.ac`. Renumbered from 0045 alongside 0046/0047.

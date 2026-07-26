@@ -122,7 +122,7 @@ the newest version. Use `ABLETON_LIVE_VERSION=11 ableton-live` to select Live
 Run a Windows plugin installer in Live's prefix:
 
 ```bash
-WINEPREFIX=~/.wine-ableton ~/.local/opt/wine-d2d1-nspa-11.11/bin/wine \
+WINEPREFIX=~/.wine-ableton ~/.local/opt/wine-d2d1-nspa-11.13/bin/wine \
   "/path/to/PluginInstaller.exe"
 ```
 
@@ -209,7 +209,7 @@ requires both `zstd` and `binutils`.
 ./build.sh
 ./scripts/install.sh
 ./scripts/setup-prefix.sh
-WINEPREFIX=~/.wine-ableton ~/.local/opt/wine-d2d1-nspa-11.11/bin/wine \
+WINEPREFIX=~/.wine-ableton ~/.local/opt/wine-d2d1-nspa-11.13/bin/wine \
   "/path/to/Ableton Live 12 Suite Installer.exe"
 ableton-live
 ```
@@ -236,7 +236,7 @@ Use `ABLETON_DPI_MODE` to override detection.
 ### Common environment variables
 
 - `ABLETON_WINE_ROOT` selects the Wine runtime. The default is
-  `~/.local/opt/wine-d2d1-nspa-11.11`.
+  `~/.local/opt/wine-d2d1-nspa-11.13`.
 - `ABLETON_WINEPREFIX` selects the Wine prefix. The default is
   `~/.wine-ableton`.
 - `ABLETON_LIVE_VERSION=11|12` selects a Live major version.

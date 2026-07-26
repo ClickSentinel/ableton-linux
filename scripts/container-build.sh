@@ -8,7 +8,7 @@ OUT=/out
 WORK=/work
 JOBS="${JOBS:-$(nproc)}"
 VERSION="$(cat "$SRC/VERSION")"
-NAME="wine-d2d1-nspa-11.11"
+NAME="wine-d2d1-nspa-11.13"
 CONFIGURE_PREFIX="${INSTALL_PREFIX:?build.sh must pass INSTALL_PREFIX}"
 [ "$(basename "$CONFIGURE_PREFIX")" = "$NAME" ] || {
     echo "!! INSTALL_PREFIX must end in /$NAME" >&2
@@ -18,15 +18,19 @@ DESTDIR="$WORK/stage"
 PREFIX_ROOT="$DESTDIR$CONFIGURE_PREFIX"
 npatch="$(ls "$SRC"/patches/00*.patch | wc -l)"
 
-echo "== [1/8] unpack pristine Wine base (giang17 d2d1-dcomp-11.11 @ 7ea0c8b7) =="
+echo "== [1/8] unpack pristine Wine base (giang17 d2d1-dcomp-11.13 @ 5c23dd1c) =="
 mkdir -p "$WORK/wine-src"
-zstd -dc --long=27 "$SRC/vendor/wine-base-7ea0c8b7.tar.zst" | tar -x -C "$WORK/wine-src"
+zstd -dc --long=27 "$SRC/vendor/wine-base-5c23dd1c.tar.zst" | tar -x -C "$WORK/wine-src"
 
 echo "== [2/8] git init + apply the $npatch-patch fix series =="
 cd "$WORK/wine-src"
+# Rootless podman can bind-mount /work owned by a UID outside the container's
+# user namespace; git (>=2.35.2) refuses to operate on a tree it doesn't own.
+# Scoped to this exact path, not a global opt-out.
+git config --global --add safe.directory "$WORK/wine-src"
 git init -q
 git -c user.email=build@localhost -c user.name=dist add -A
-git -c user.email=build@localhost -c user.name=dist commit -q -m "base 7ea0c8b7"
+git -c user.email=build@localhost -c user.name=dist commit -q -m "base 5c23dd1c"
 # The series ships without From:/Date: mail headers; git am refuses to commit
 # with an empty author, so supply a fixed neutral ident (fixed date keeps the
 # apply reproducible). Patches that still carry headers keep their own.
@@ -59,11 +63,13 @@ ln -s "$PREFIX_ROOT" "$CONFIGURE_PREFIX"
 bridge_pe="$PREFIX_ROOT/lib/wine/x86_64-windows/libusb-1.0.dll"
 bridge_unix="$PREFIX_ROOT/lib/wine/x86_64-unix/libusb-1.0.so"
 portal_unix="$PREFIX_ROOT/lib/wine/x86_64-unix/comdlg32.so"
-test -f "$bridge_pe"
-test -f "$bridge_unix"
-test -f "$portal_unix"
-test ! -e "$PREFIX_ROOT/lib/wine/i386-windows/libusb-1.0.dll"
-test ! -e "$PREFIX_ROOT/lib/wine/i386-unix/libusb-1.0.so"
+i386_bridge_pe="$PREFIX_ROOT/lib/wine/i386-windows/libusb-1.0.dll"
+i386_bridge_unix="$PREFIX_ROOT/lib/wine/i386-unix/libusb-1.0.so"
+[ -f "$bridge_pe" ] || { echo "!! Push 2 bridge PE missing: $bridge_pe" >&2; exit 1; }
+[ -f "$bridge_unix" ] || { echo "!! Push 2 bridge Unix side missing: $bridge_unix" >&2; exit 1; }
+[ -f "$portal_unix" ] || { echo "!! comdlg32 (XDG portal) missing: $portal_unix" >&2; exit 1; }
+[ ! -e "$i386_bridge_pe" ] || { echo "!! Push 2 bridge unexpectedly built for i386: $i386_bridge_pe" >&2; exit 1; }
+[ ! -e "$i386_bridge_unix" ] || { echo "!! Push 2 bridge unexpectedly built for i386: $i386_bridge_unix" >&2; exit 1; }
 
 expected_exports=$'4 libusb_alloc_transfer\n10 libusb_cancel_transfer\n12 libusb_claim_interface\n16 libusb_close\n26 libusb_error_name\n32 libusb_exit\n40 libusb_free_device_list\n50 libusb_free_transfer\n72 libusb_get_device_descriptor\n74 libusb_get_device_list\n110 libusb_handle_events_timeout\n120 libusb_init\n132 libusb_open\n140 libusb_release_interface\n154 libusb_set_option\n161 libusb_submit_transfer'
 actual_exports="$(llvm-readobj --coff-exports "$bridge_pe" | awk '
@@ -198,7 +204,7 @@ build_info="$PREFIX_ROOT/ABLETON-WINE-BUILD-INFO.txt"
 {
     echo "dist-version: $VERSION"
     echo "wine:         $("$PREFIX_ROOT/bin/wine" --version)"
-    echo "base:         giang17/wine d2d1-dcomp-11.11 @ 7ea0c8b7"
+    echo "base:         giang17/wine d2d1-dcomp-11.13 @ 5c23dd1c"
     echo "prefix:       $CONFIGURE_PREFIX (configure-time only; tarball is relocatable, see relocation gate)"
     echo "patches:      $((npatch + nasio))"     # wine series + pipeasio series
     echo "wine-patches: $npatch"

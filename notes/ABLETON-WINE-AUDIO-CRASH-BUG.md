@@ -41,7 +41,7 @@ prefix:
 
 ```bash
 WINEPREFIX="$HOME/.wine-ableton" \
-  "$HOME/.local/opt/wine-d2d1-nspa-11.11/bin/wine" reg delete \
+  "$HOME/.local/opt/wine-d2d1-nspa-11.13/bin/wine" reg delete \
   'HKLM\Software\Microsoft\Windows\CurrentVersion\MMDevices\Audio' /f
 ```
 

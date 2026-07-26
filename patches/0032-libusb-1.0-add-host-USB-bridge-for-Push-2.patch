@@ -16,10 +16,10 @@ Subject: libusb-1.0: add host USB bridge for Push 2
  create mode 100644 dlls/libusb-1.0/unixlib.h
 
 diff --git a/configure b/configure
-index 4fad7b26..014565d9 100755
+index 73a4d6a4..c76787b9 100755
 --- a/configure
 +++ b/configure
-@@ -1234,6 +1234,7 @@ enable_ksuser
+@@ -1241,6 +1241,7 @@ enable_ksuser
  enable_ktmw32
  enable_l3codeca_acm
  enable_l3codecx_ax
@@ -27,7 +27,7 @@ index 4fad7b26..014565d9 100755
  enable_loadperf
  enable_localspl
  enable_localui
-@@ -17991,6 +17992,10 @@ This is an error since --with-usb was requested." "$LINENO" 5 ;;
+@@ -17829,6 +17830,10 @@ This is an error since --with-usb was requested." "$LINENO" 5 ;;
  esac
  enable_wineusb_sys=${enable_wineusb_sys:-no}
  fi
@@ -38,7 +38,7 @@ index 4fad7b26..014565d9 100755
  
  if test "x$with_v4l2" != "xno"
  then
-@@ -22638,6 +22643,8 @@ fi ;;
+@@ -22101,6 +22106,8 @@ fi ;;
  esac
  
  
@@ -47,7 +47,7 @@ index 4fad7b26..014565d9 100755
  enable_vcruntime140_1=${enable_vcruntime140_1:-x86_64,arm64ec}
  
  if test -n "$PE_ARCHS"
-@@ -23100,6 +23107,7 @@ wine_fn_config_makefile dlls/ksuser enable_ksuser
+@@ -22564,6 +22571,7 @@ wine_fn_config_makefile dlls/ksuser enable_ksuser
  wine_fn_config_makefile dlls/ktmw32 enable_ktmw32
  wine_fn_config_makefile dlls/l3codeca.acm enable_l3codeca_acm
  wine_fn_config_makefile dlls/l3codecx.ax enable_l3codecx_ax
@@ -56,11 +56,11 @@ index 4fad7b26..014565d9 100755
  wine_fn_config_makefile dlls/localspl enable_localspl
  wine_fn_config_makefile dlls/localspl/tests enable_tests
 diff --git a/configure.ac b/configure.ac
-index d597bad3..e443e21b 100644
+index ee0b1c48..5297a4f8 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1587,6 +1587,8 @@ fi
- WINE_NOTICE_WITH(usb,[test "$ac_cv_lib_usb_1_0_libusb_interrupt_event_handler" != "yes"],
+@@ -1609,6 +1609,8 @@ fi
+ WINE_NOTICE_WITH(usb,[test "$ac_cv_func_libusb_interrupt_event_handler" != "yes"],
                   [libusb-1.0 ${notice_platform}development files not found (or too old), USB devices won't be supported.],
                   [enable_wineusb_sys])
 +AS_IF([test "$ac_cv_lib_usb_1_0_libusb_interrupt_event_handler" != "yes"],
@@ -68,7 +68,7 @@ index d597bad3..e443e21b 100644
  
  dnl **** Check for libv4l2 ****
  if test "x$with_v4l2" != "xno"
-@@ -2367,6 +2369,8 @@ esac
+@@ -2388,6 +2390,8 @@ esac
  
  dnl *** Check for modules to disable by default
  
@@ -77,7 +77,7 @@ index d597bad3..e443e21b 100644
  enable_vcruntime140_1=${enable_vcruntime140_1:-x86_64,arm64ec}
  
  if test -n "$PE_ARCHS"
-@@ -2835,6 +2839,7 @@ WINE_CONFIG_MAKEFILE(dlls/ksuser)
+@@ -2857,6 +2861,7 @@ WINE_CONFIG_MAKEFILE(dlls/ksuser)
  WINE_CONFIG_MAKEFILE(dlls/ktmw32)
  WINE_CONFIG_MAKEFILE(dlls/l3codeca.acm)
  WINE_CONFIG_MAKEFILE(dlls/l3codecx.ax)

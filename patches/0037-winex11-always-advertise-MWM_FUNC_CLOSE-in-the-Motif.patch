@@ -25,10 +25,10 @@ Fixes shibco/ableton-linux#31.
  1 file changed, 9 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 9d1697d6..f4e110ff 100644
+index adcbeb8e..8bd2c7e3 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -1073,11 +1073,18 @@ static void set_mwm_hints( struct x11drv_win_data *data, UINT style, UINT ex_sty
+@@ -1104,11 +1104,18 @@ static void set_mwm_hints( struct x11drv_win_data *data, UINT style, UINT ex_sty
      else
      {
          mwm_hints.decorations = get_mwm_decorations( data, style, ex_style );

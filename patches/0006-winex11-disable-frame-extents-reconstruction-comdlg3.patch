@@ -6,10 +6,10 @@ Subject: winex11: disable frame-extents reconstruction (comdlg32
  1 file changed, 9 insertions(+), 5 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 0f6d34ee..aff22a5a 100644
+index e68ad83a..3c3166f1 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -1718,11 +1718,15 @@ BOOL read_net_frame_extents( Display *display, Window window, long *extents )
+@@ -1769,11 +1769,15 @@ BOOL read_net_frame_extents( Display *display, Window window, long *extents )
  
  void window_net_frame_extents_notify( struct x11drv_win_data *data, const long *extents, BOOL valid )
  {

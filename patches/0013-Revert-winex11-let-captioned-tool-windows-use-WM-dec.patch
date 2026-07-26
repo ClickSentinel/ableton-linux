@@ -7,7 +7,7 @@ This reverts commit 02afb562af4977fd669abda8bed37ac3c2230692.
  1 file changed, 1 insertion(+), 7 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 33f9e3cb..20dae46f 100644
+index 109b1067..92e611fa 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -500,13 +500,7 @@ static unsigned long get_mwm_decorations_for_style( DWORD style, DWORD ex_style

@@ -52,7 +52,7 @@ JUCE/SWAM editors; xgrid steady-state confirms.
  3 files changed, 112 insertions(+), 33 deletions(-)
 
 diff --git a/dlls/dxgi/dxgi_private.h b/dlls/dxgi/dxgi_private.h
-index 3d0820ce..0e2fa0c3 100644
+index 686c7e7f..039105b9 100644
 --- a/dlls/dxgi/dxgi_private.h
 +++ b/dlls/dxgi/dxgi_private.h
 @@ -173,6 +173,7 @@ struct dxgi_adapter *unsafe_impl_from_IDXGIAdapter(IDXGIAdapter *iface);
@@ -64,10 +64,10 @@ index 3d0820ce..0e2fa0c3 100644
  /* Count of currently subclassed DComp target windows (defined in factory.c).
   * Controls full-vs-popup mode; d3d11_swapchain_Release() decrements it when it
 diff --git a/dlls/dxgi/factory.c b/dlls/dxgi/factory.c
-index 436d5885..34751677 100644
+index 31ac94ab..bc07aec7 100644
 --- a/dlls/dxgi/factory.c
 +++ b/dlls/dxgi/factory.c
-@@ -384,13 +384,16 @@ static void STDMETHODCALLTYPE dxgi_factory_UnregisterOcclusionStatus(IWineDXGIFa
+@@ -393,13 +393,16 @@ static void STDMETHODCALLTYPE dxgi_factory_UnregisterOcclusionStatus(IWineDXGIFa
   * no d2d1 device (mirrored there, like the message id itself). */
  #define DCOMP_SET_TARGET_NULL_D2D1_DEVICE 0x1
  
@@ -91,7 +91,7 @@ index 436d5885..34751677 100644
  
  /* Issue #16 (NixOS/steam-run: the FHS provides Mesa's libEGL without the
   * NVIDIA GLVND vendor config, so Wine's D2D1/EGL init fails): the dcomp
-@@ -415,6 +418,24 @@ static void dcomp_clear_null_device_props(HWND hwnd)
+@@ -424,6 +427,24 @@ static void dcomp_clear_null_device_props(HWND hwnd)
      RemovePropW(hwnd, L"__wine_dcomp_nulldev_ms");
  }
  
@@ -116,7 +116,7 @@ index 436d5885..34751677 100644
  static inline struct d3d11_swapchain *d3d11_swapchain_from_IDXGISwapChain4(IDXGISwapChain4 *iface)
  {
      return CONTAINING_RECORD(iface, struct d3d11_swapchain, IDXGISwapChain4_iface);
-@@ -447,18 +468,24 @@ static BOOL dcomp_comp_buffer_current(HWND hwnd, unsigned int w, unsigned int h)
+@@ -456,18 +477,24 @@ static BOOL dcomp_comp_buffer_current(HWND hwnd, unsigned int w, unsigned int h)
  
  /* Re-blit composition content from persistent buffer to window.
   * Called on WM_PAINT, focus changes, timer tick, and other events
@@ -148,7 +148,7 @@ index 436d5885..34751677 100644
      if (comp_dc && dims)
      {
          unsigned int w = LOWORD(dims);
-@@ -472,6 +499,7 @@ static void dcomp_reblit_comp_buffer(HWND hwnd, const char *reason)
+@@ -481,6 +508,7 @@ static void dcomp_reblit_comp_buffer(HWND hwnd, const char *reason)
              if (stale_count <= 5 || !(stale_count % 200))
                  FIXME("Re-blit skipped (stale %ux%u buffer): hwnd %p reason=%s.\n",
                          w, h, hwnd, reason);
@@ -156,7 +156,7 @@ index 436d5885..34751677 100644
              return;
          }
  
-@@ -635,6 +663,7 @@ static LRESULT CALLBACK dcomp_popup_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -644,6 +672,7 @@ static LRESULT CALLBACK dcomp_popup_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
              dcomp_update_active_prop();
              dcomp_popup_stack_remove(hwnd);
              KillTimer(hwnd, DCOMP_POPUP_REBLIT_TIMER_ID);
@@ -164,7 +164,7 @@ index 436d5885..34751677 100644
  
              /* Before the popup window is destroyed, switch the swapchain back
               * to its composition window.  This drains the CS queue (no more
-@@ -677,6 +706,7 @@ static LRESULT CALLBACK dcomp_popup_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -686,6 +715,7 @@ static LRESULT CALLBACK dcomp_popup_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
              RemovePropW(hwnd, L"__wine_dcomp_swapchain");
              RemovePropW(hwnd, L"__wine_dcomp_comp_dc");
              RemovePropW(hwnd, L"__wine_dcomp_comp_size");
@@ -172,7 +172,7 @@ index 436d5885..34751677 100644
              dcomp_clear_null_device_props(hwnd);
              return result;
          }
-@@ -706,12 +736,12 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -715,12 +745,12 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
              HDC comp_dc = (HDC)GetPropW(hwnd, L"__wine_dcomp_comp_dc");
              LPARAM dims = (LPARAM)GetPropW(hwnd, L"__wine_dcomp_comp_size");
  
@@ -191,7 +191,7 @@ index 436d5885..34751677 100644
              BeginPaint(hwnd, &ps);
              if (comp_dc && dims
                      && dcomp_comp_buffer_current(hwnd, LOWORD(dims), HIWORD(dims)))
-@@ -769,13 +799,16 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -778,13 +808,16 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
                      {
                          /* App idle since the previous tick. Always signal the
                           * frame-latency event (JUCE's swapchain event loop
@@ -215,7 +215,7 @@ index 436d5885..34751677 100644
                          if (swapchain->frame_latency_event)
                              SetEvent(swapchain->frame_latency_event);
                          if (GetPropW(hwnd, L"__wine_dcomp_null_device")
-@@ -812,17 +845,15 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -821,17 +854,15 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
                                  SetTimer(hwnd, DCOMP_REBLIT_TIMER_ID, ms, NULL);
                              }
                          }
@@ -236,7 +236,7 @@ index 436d5885..34751677 100644
                          if (GetPropW(hwnd, L"__wine_dcomp_null_device"))
                          {
                              /* Presents are flowing: disarm the null-device
-@@ -839,6 +870,19 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -848,6 +879,19 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
                  }
                  return 0;
              }
@@ -256,7 +256,7 @@ index 436d5885..34751677 100644
              break;
  
          case WM_WINDOWPOSCHANGED:
-@@ -879,6 +923,7 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -888,6 +932,7 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
              dcomp_update_active_prop();
              dcomp_popup_stack_remove(hwnd);
              KillTimer(hwnd, DCOMP_REBLIT_TIMER_ID);
@@ -264,7 +264,7 @@ index 436d5885..34751677 100644
              /* Window dies first: clear the back-pointer so a later
               * d3d11_swapchain_Release won't touch this (recycled) HWND. */
              if (sc)
-@@ -891,7 +936,7 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -900,7 +945,7 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
              RemovePropW(hwnd, L"__wine_dcomp_comp_dc");
              RemovePropW(hwnd, L"__wine_dcomp_comp_size");
              RemovePropW(hwnd, L"__wine_dcomp_last_present");
@@ -273,7 +273,7 @@ index 436d5885..34751677 100644
              dcomp_clear_null_device_props(hwnd);
              return result;
          }
-@@ -1008,6 +1053,38 @@ static LRESULT CALLBACK dcomp_swapchain_wndproc(HWND hwnd, UINT msg, WPARAM wpar
+@@ -1017,6 +1062,38 @@ static LRESULT CALLBACK dcomp_swapchain_wndproc(HWND hwnd, UINT msg, WPARAM wpar
                  RemovePropW(target_hwnd, L"__wine_dcomp_nulldev_ticks");
                  RemovePropW(target_hwnd, L"__wine_dcomp_nulldev_ms");
  
@@ -313,10 +313,10 @@ index 436d5885..34751677 100644
  
                  /* Detect popup mode via subclassed target count.
 diff --git a/dlls/dxgi/swapchain.c b/dlls/dxgi/swapchain.c
-index 577ae1fd..289c11eb 100644
+index 0454a2d0..b4ed824f 100644
 --- a/dlls/dxgi/swapchain.c
 +++ b/dlls/dxgi/swapchain.c
-@@ -298,6 +298,7 @@ static ULONG STDMETHODCALLTYPE d3d11_swapchain_Release(IDXGISwapChain4 *iface)
+@@ -318,6 +318,7 @@ static ULONG STDMETHODCALLTYPE d3d11_swapchain_Release(IDXGISwapChain4 *iface)
  
                  KillTimer(t, DCOMP_REBLIT_TIMER_ID);
                  KillTimer(t, DCOMP_POPUP_REBLIT_TIMER_ID);

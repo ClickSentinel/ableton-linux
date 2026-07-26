@@ -4,7 +4,7 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
-NAME="wine-d2d1-nspa-11.11"
+NAME="wine-d2d1-nspa-11.13"
 SERIES="$root/patches/SERIES.sha256"
 
 say()  { printf '%s\n' "$*"; }
@@ -161,6 +161,9 @@ STAMP_ONLY='
 0037|logic-only (MWM_FUNC_CLOSE advertised unconditionally; adds no string literal)
 0040|logic-only (DPI-scaled menu-bar band; amends 0029 arithmetic)
 0042|logic-only (sub-scale WM config-rounding alias; literals are TRACE-only)
+0046|logic-only (frame-latency-as-semaphore fix; no new string literal)
+0047|logic-only (round_dpi() wrap; no new string literal)
+0048|configure/build-gate fix only; effect verified structurally (libusb-1.0.dll presence) and by 0032 fingerprint, not by a literal of its own
 '
 wide_pattern() {  # ascii string -> PCRE matching its UTF-16LE bytes
     printf '%s' "$1" | od -An -v -tx1 | tr -d '\n' | tr -s ' ' ' ' \

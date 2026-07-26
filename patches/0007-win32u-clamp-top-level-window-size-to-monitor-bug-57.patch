@@ -6,10 +6,10 @@ Subject: win32u: clamp top-level window size to monitor
  1 file changed, 18 insertions(+)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index d325f2eb..c30a88c9 100644
+index 755aeed1..8d8e3839 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
-@@ -4123,6 +4123,24 @@ BOOL WINAPI NtUserSetWindowPos( HWND hwnd, HWND after, INT x, INT y, INT cx, INT
+@@ -4277,6 +4277,24 @@ BOOL WINAPI NtUserSetWindowPos( HWND hwnd, HWND after, INT x, INT y, INT cx, INT
      winpos.cy = cy;
      winpos.flags = flags;
  

@@ -11,10 +11,10 @@ persistent comp buffer instead of forcing a Present; ticks where the app present
  1 file changed, 29 insertions(+), 8 deletions(-)
 
 diff --git a/dlls/dxgi/factory.c b/dlls/dxgi/factory.c
-index 7f96e332..9fd77076 100644
+index b6c87980..7912cd60 100644
 --- a/dlls/dxgi/factory.c
 +++ b/dlls/dxgi/factory.c
-@@ -666,14 +666,34 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -675,14 +675,34 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
  
                  if (sc)
                  {
@@ -57,7 +57,7 @@ index 7f96e332..9fd77076 100644
                  }
                  else
                  {
-@@ -732,6 +752,7 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -741,6 +761,7 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
              RemovePropW(hwnd, L"__wine_dcomp_swapchain");
              RemovePropW(hwnd, L"__wine_dcomp_comp_dc");
              RemovePropW(hwnd, L"__wine_dcomp_comp_size");
