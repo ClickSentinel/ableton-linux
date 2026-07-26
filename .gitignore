@@ -23,7 +23,7 @@ xact
 xmon
 xrec
 xtool
-.scratch/
+.scratch/**/*
 # Local safety backups from the 2026-07-05 audio fix
 mmdevapi-backup-2026-07-05/
 prefix-reg-backup-2026-07-05/
