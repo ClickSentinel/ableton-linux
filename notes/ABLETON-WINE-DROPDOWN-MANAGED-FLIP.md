@@ -1,82 +1,68 @@
-# Preferences dropdowns flash, eat the first click, grow WM decorations (issue #3 root cause)
+# Preferences dropdowns change window-management mode
 
-Status 2026-07-19: root cause found by tracing a live repro on GNOME;
-fix is patch 0039, compile-verified and applies on base; runtime
-verification in progress. Supersedes the root-cause hypothesis in
-[ABLETON-WINE-MENU-FOCUSOUT.md](ABLETON-WINE-MENU-FOCUSOUT.md) (patch
-0038): that gate is correct but covers a path Live's dropdowns never
-hit, which is why 2026.07.19.1 did not resolve the issue.
+Patch 0039 fixes issue #3 and shipped in release 2026.07.19.2. A runtime
+trace on GNOME confirmed the cause and the fix. Reported effects included a
+flash or lost click on Cinnamon, a second-click requirement on GNOME, and an
+extra shadow frame on KDE.
 
-## Symptoms
+Patch 0038 remains valid but fixes a different FocusOut path used by win32u
+menus. Live's Preferences lists do not use that path. See
+[ABLETON-WINE-MENU-FOCUSOUT.md](ABLETON-WINE-MENU-FOCUSOUT.md).
 
-Same set as issue #3 on all desktops: dropdown flashes or vanishes on
-select (Cinnamon), needs a second click and wobbles on open (GNOME,
-Dash appears over fullscreen), grows a shadow frame that reads as a
-"second popup" (KDE). Whitelisting the Live window in Rounded Window
-Corners does not help.
+## Cause
 
-## Research
+A reproduction was traced with:
 
-Traced with `WINEDEBUG=warn+event,trace+event,trace+x11drv,trace+menu`
-against a live repro (log excerpts in the patch 0039 commit message):
+```bash
+WINEDEBUG=warn+event,trace+event,trace+x11drv,trace+menu
+```
 
-- Live's menu bar dropdowns are win32u menus (#32768). Their tracking
-  completes normally; patch 0038's FocusOut path never fires. They are
-  not the problem.
-- The Preferences dropdown lists are Live's own WS_POPUP windows. They
-  are shown with SWP_NOACTIVATE, mapped override-redirect, and work
-  until Live pokes the open list with an activating no-op SetWindowPos
-  (NOSIZE|NOMOVE|NOZORDER, no NOACTIVATE). On Windows that call changes
-  nothing.
-- Under this Wine, `is_window_managed` treats any SetWindowPos without
-  SWP_NOACTIVATE/SWP_HIDEWINDOW as "activated windows are managed", and
-  `X11DRV_WindowPosChanged` then calls `window_set_managed(TRUE)` on the
-  mapped popup. The flip can only happen through a WM_STATE unmap/remap
-  round-trip. Trace of the open dropdown, right after
-  EnterNotify/MotionNotify from mousing over it:
+Live's menu bar uses win32u `#32768` menus. Their tracking completed normally
+and never reached patch 0038's FocusOut gate.
 
-  ```
-  window_set_wm_state  0x30156 WM_STATE 0x1 -> 0     (unmapped in use)
-  window_set_managed   0x30156 override-redirect 1 -> 0
-  window_set_wm_state  0x30156 WM_STATE 0 -> 0x1     (remapped, managed)
-  ```
+Preferences lists are Live-owned `WS_POPUP` windows. Live first shows them
+with `SWP_NOACTIVATE`, so Wine maps them as override-redirect windows. Live
+then sends an otherwise inert `SetWindowPos` call with
+`NOSIZE|NOMOVE|NOZORDER` and without `NOACTIVATE`.
 
-- Everything DE-visible follows from that one flip: the unmap/remap is
-  the flash and the eaten click, and the popup is now a WM-managed
-  dialog-typed toplevel, so mutter animates it, GNOME reacts over
-  fullscreen, KWin decorates it, and compositor extensions style it.
-  The popup is also typed `_NET_WM_WINDOW_TYPE_DIALOG` (owned WS_POPUP
-  rule in `set_wm_hints`), which makes the WM treatment worse.
+Wine interpreted that second call as a request to manage the already mapped
+popup. `X11DRV_WindowPosChanged` called `window_set_managed(TRUE)`, which
+required an unmap and remap:
 
-## Mitigation
+```text
+window_set_wm_state  0x30156 WM_STATE 0x1 -> 0
+window_set_managed   0x30156 override-redirect 1 -> 0
+window_set_wm_state  0x30156 WM_STATE 0 -> 0x1
+```
 
-[../patches/0039-winex11-never-flip-a-mapped-window-to-managed.patch](../patches/0039-winex11-never-flip-a-mapped-window-to-managed.patch)
-(`dlls/winex11.drv/window.c`): `window_set_managed` refuses the
-unmanaged-to-managed flip while the window's desired WM_STATE is not
-Withdrawn. The managed decision is made at map time; a mapped window
-keeps its mode until withdrawn and the next map re-evaluates. Legitimate
-flips are unaffected: a hidden window shown activated passes because its
-desired WM_STATE is still Withdrawn when the flip runs (the map request
-comes later in the same SetWindowPos), `make_window_embedded` withdraws
-explicitly first, and the desktop window is created withdrawn. The
-reverse direction was already refused outright.
+The unmap loses the click and causes the flash. The remapped popup is a
+window-manager-controlled, dialog-typed top-level, so compositors may animate,
+decorate, or restyle it.
+
+## Fix
+
+[Patch 0039](../patches/0039-winex11-never-flip-a-mapped-window-to-managed.patch)
+changes `dlls/winex11.drv/window.c`. `window_set_managed` now rejects an
+unmanaged-to-managed change while the window's desired `WM_STATE` is not
+`Withdrawn`.
+
+Wine still chooses the management mode when it maps a window. A hidden window
+shown with activation can change mode before its map request. Embedded
+windows are withdrawn before their mode changes, and the desktop window is
+created withdrawn. Wine already rejected the reverse change while mapped.
 
 ## Verification
 
-- Compile: full series 0001-0039 applies on base 7ea0c8b7; winex11
-  builds clean.
-- Runtime: open Preferences on GNOME/Cinnamon/KDE, work every dropdown
-  including under fullscreen. With the patch the trace must show no
-  `window_set_managed ... override-redirect 1 -> 0` on any popup while
-  it is mapped, and the canary `WINEDEBUG=warn+x11drv` logs
-  "is mapped, refusing to make it managed" each time the gate declines
-  a flip.
-- The build-audit fingerprint for 0039 greps that canary string in
-  `winex11.so`.
+The full 0001 to 0039 series applied to base `7ea0c8b7`, and winex11 built
+successfully. The GNOME trace no longer showed
+`override-redirect 1 -> 0` for a mapped popup.
 
-## Known limits
+For desktop checks, open every Preferences dropdown on GNOME, Cinnamon, and
+KDE, including over a full-screen Live window. With
+`WINEDEBUG=warn+x11drv`, each rejected change logs:
 
-Patch 0038 (FocusOut gate) stays: it covers the win32u menu path, which
-is a real, separate cancellation route even though Live's dropdowns do
-not use it. If Live one day stops poking its popups, the 0039 gate
-simply never fires.
+```text
+is mapped, refusing to make it managed
+```
+
+`scripts/build-audit.sh` checks for this string in `winex11.so`.

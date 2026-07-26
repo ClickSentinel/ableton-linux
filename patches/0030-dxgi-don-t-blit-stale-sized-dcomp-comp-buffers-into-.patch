@@ -1,8 +1,5 @@
 Subject: dxgi: don't blit stale-sized dcomp comp buffers into
  the target
-MIME-Version: 1.0
-Content-Type: text/plain; charset=UTF-8
-Content-Transfer-Encoding: 8bit
 
 Gate both comp-buffer blit sites on the buffer matching the swapchain's current desc (not the
 client rect: comp dims are physical, an unaware target's client rect is logical).
@@ -11,10 +8,10 @@ client rect: comp dims are physical, an unaware target's client rect is logical)
  1 file changed, 37 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/dxgi/factory.c b/dlls/dxgi/factory.c
-index 0b0b8ba8..9906de89 100644
+index cf1ef6e7..c8357fd7 100644
 --- a/dlls/dxgi/factory.c
 +++ b/dlls/dxgi/factory.c
-@@ -397,6 +397,28 @@ static inline struct d3d11_swapchain *d3d11_swapchain_from_IDXGISwapChain4(IDXGI
+@@ -406,6 +406,28 @@ static inline struct d3d11_swapchain *d3d11_swapchain_from_IDXGISwapChain4(IDXGI
  /* DCOMP_REBLIT_TIMER_ID / DCOMP_POPUP_REBLIT_TIMER_ID moved to dxgi_private.h
   * so d3d11_swapchain_Release() can KillTimer them on teardown. */
  
@@ -43,7 +40,7 @@ index 0b0b8ba8..9906de89 100644
  /* Re-blit composition content from persistent buffer to window.
   * Called on WM_PAINT, focus changes, timer tick, and other events
   * that may cause the window surface to be overwritten. */
-@@ -415,8 +437,19 @@ static void dcomp_reblit_comp_buffer(HWND hwnd, const char *reason)
+@@ -424,8 +446,19 @@ static void dcomp_reblit_comp_buffer(HWND hwnd, const char *reason)
      {
          unsigned int w = LOWORD(dims);
          unsigned int h = HIWORD(dims);
@@ -65,7 +62,7 @@ index 0b0b8ba8..9906de89 100644
          {
              static unsigned int reblit_count;
              ++reblit_count;
-@@ -653,7 +686,8 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -662,7 +695,8 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
                              : DefWindowProcW(hwnd, msg, wparam, lparam);
  
              BeginPaint(hwnd, &ps);

@@ -1,90 +1,91 @@
-# Upstream issue draft: interactive-resize feedback loop at 2x Xwayland scaling (2026-07-21)
+# Draft upstream report for 2x resize rounding
 
-Ready-to-file material for the resize-growth root cause. File against
-mutter (primary) and optionally Wine (secondary). Not Xwayland: the
-24.1.12 to 24.1.13 source diff was reviewed in full for this
-investigation and contains only dix/fb/glamor font and glyph fixes,
-colormap fixes, GLX vendor dispatch and Xi cursor changes, and an xkb
-maprules fix. There is no geometry, hw/xwayland, or input-transform
-change in that release. Tarballs and the diff are preserved under
-`~/Projects/Code/ableton/xw-diff/`. The apparent correlation with the
-24.1.13 upgrade was timing coincidence; the regime that exposes the bug
-was re-enabled by the IFEO dpiAwareness re-application on 2026-07-19.
+Status: draft prepared on 2026-07-21. This repository records no filed issue
+URL. Patch 0042 works around the fault in this Wine build.
 
-## Where to file
+File the compositor behavior with
+[Mutter](https://gitlab.gnome.org/GNOME/mutter/-/issues). A separate
+[Wine report](https://bugs.winehq.org) can cover how winex11 handles the
+rounded grant.
 
-- mutter: https://gitlab.gnome.org/GNOME/mutter/-/issues
-- Wine (optional, for the client-side half): https://bugs.winehq.org
-- Not xorg/xserver; a report there will be bounced to the compositor.
+The Xwayland 24.1.12 to 24.1.13 source diff was reviewed during the
+investigation. It contained no geometry or `hw/xwayland` change, so the
+version correlation did not identify an Xwayland regression. Reapplying the
+Live `dpiAwareness` setting on 2026-07-19 exposed the behavior again.
 
-## Suggested title (mutter)
+## Suggested Mutter title
 
 X11 configure requests with odd physical geometry are rounded up under
-xwayland-native-scaling; clients with snapped internal layout can enter
-an endless resize feedback loop
+xwayland-native-scaling and can cause a resize feedback loop
 
-## Body (mutter)
+## Suggested Mutter report
 
-Environment: GNOME Shell 50.3, mutter 50.3, xorg-xwayland 24.1.13,
-Wayland session, single 2x-framebuffer monitor (experimental-features
-scale-monitor-framebuffer + xwayland-native-scaling, 125% fractional
-scale), CachyOS (Arch-based).
+Environment:
 
-With xwayland-native-scaling, X11 windows live on a physical-pixel
-coordinate grid but mutter constrains their geometry to the logical
-grid: a client XConfigureWindow request whose width or height is an odd
-number of physical pixels is granted rounded up by one pixel. Observed
-directly (Wine debug trace of the X11 client):
+- GNOME Shell 50.3 and Mutter 50.3
+- xorg-xwayland 24.1.13
+- Wayland session on CachyOS
+- one monitor at 125% fractional scale with a 2x XWayland framebuffer
+- `scale-monitor-framebuffer` and `xwayland-native-scaling` enabled
 
-    requested config (1182,132)-(3210,2613)  ; height 2481, odd
-    granted ConfigureNotify height 2482      ; rounded up, every time
+With `xwayland-native-scaling`, an observed X11 `XConfigureWindow` request
+with an odd physical height was granted one pixel larger:
 
-For most clients that is a harmless one-time adjustment. It becomes an
-endless loop for a client whose own internal layout also snaps to a
-grid. Concrete case: Ableton Live 12 under Wine, per-monitor-DPI-aware
-at 2x, lays out in logical units, so every window height it can accept
-is even in physical pixels; Wine's window frame model adds an odd
-offset between the client area and the outer frame. After any
-interactive resize (grab op), each round of the negotiation flips
-parity: the app re-requests grant+1, mutter grants request+1, forever.
-The window grows 2 physical px per cycle, roughly 20 to 40 px/s,
-without bound (reproduced growing from 2390 px to over 6600 px tall
-until stopped externally).
+```text
+requested: (1182,132)-(3210,2613), height 2481
+granted ConfigureNotify height: 2482
+```
 
-Reproduction sketch (no Wine required in principle): an X11 client that,
-on every ConfigureNotify with an even height H, requests H+1. Under
-xwayland-native-scaling at 2x it will grow monotonically; on a 1x
-session it converges after one round.
+This repeated on every request. Ableton Live 12 under Wine exposed a parity
+loop:
 
-Expected behaviour: some fixed point for clients whose requests the
-compositor cannot represent exactly. Options: grant unrepresentable
-sizes verbatim on the X11 side (letting the surface viewport handle the
-fraction), or clamp the granted size to never exceed the request, so a
-snapping client converges from above.
+1. Live used per-monitor DPI at 2x and accepted only even physical client
+   sizes.
+2. Wine's frame calculation added an odd offset between client and outer
+   geometry.
+3. After an interactive resize, Live requested one pixel more than each
+   grant.
+4. Mutter rounded that odd request up by one pixel.
 
-Impact: any per-monitor-aware application under Wine on a fractional-
-scale GNOME session is affected when its frame arithmetic produces odd
-physical sizes. Worked around in our Wine build by aliasing sub-scale
-rounding at the winex11 layer (the app never sees the rounded grant);
-patch: shibco/ableton-linux, patches/0042.
+The outer window grew two physical pixels per cycle, about 20 to 40 pixels
+per second. One trace grew from 2390 to more than 6600 pixels before the test
+stopped.
 
-## Body (Wine, optional)
+A standalone reproducer still needs to be written. It should request `H + 1`
+after each even-height `ConfigureNotify`. On the tested 2x configuration,
+that sequence should grow continuously; on 1x it should settle after one
+request.
 
-winex11 feeds window-manager configure grants that differ from the
-request by sub-scale rounding straight back to the Win32 window state,
-where per-monitor-aware applications with snapped layout re-round and
-re-request endlessly (see the mutter issue above for the compositor
-half). Suggested behaviour: treat a grant within one scale unit of the
-request as acknowledging the request. Reference implementation: this
-project's patch 0042.
+Questions for Mutter:
 
-## Evidence bundle (this machine)
+- Is rounding odd X11 geometry up an intended
+  `xwayland-native-scaling` contract?
+- Can an unrepresentable grant avoid exceeding the requested size?
+- Is there another acknowledgement rule that lets grid-aligned clients
+  converge?
 
-- `~/Projects/Code/ableton/live-trace-interactive-20260721.log`: full
-  +win,+x11drv trace of a ratcheting session (band 7); the extracted
-  cycle is in `~/Projects/Code/ableton/ratchet-segment.log`.
-- `~/Projects/Code/ableton/live-trace-band8-20260721.log`: the same with
-  a +1 frame-constant change proving the loop is constant-independent
-  (excerpt: `~/Projects/Code/ableton/band8-segment.log`).
-- `~/Projects/Code/ableton/xw-diff/`: xwayland 24.1.12 and 24.1.13 trees
-  and their diff, showing no geometry changes.
+The local workaround is
+[patch 0042](../patches/0042-winex11-alias-sub-scale-WM-config-rounding-instead-o.patch).
+Wine keeps the requested Win32 rectangle when the host grant differs only by
+sub-scale rounding on aligned edges.
+
+## Optional Wine report
+
+winex11 passes a window-manager grant that differs by sub-scale rounding back
+to Win32. A per-monitor-aware application with grid-aligned layout can round
+again and issue another request without reaching a fixed size.
+
+Suggested Wine behavior: when a grant differs from the request only within
+one integer scale unit on aligned edges, record the host geometry but keep
+the requested Win32 geometry. Patch 0042 provides a tested implementation.
+
+## Local evidence
+
+The supporting traces are not included in this repository:
+
+- `live-trace-interactive-20260721.log`: full `+win,+x11drv` trace with the
+  measured 7-pixel menu band.
+- `ratchet-segment.log`: extracted resize cycle.
+- `live-trace-band8-20260721.log` and `band8-segment.log`: the same test with
+  an 8-pixel band, showing that the frame constant does not stop the loop.
+- `xw-diff/`: Xwayland 24.1.12 and 24.1.13 source trees and their diff.

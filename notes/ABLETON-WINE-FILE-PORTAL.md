@@ -1,49 +1,66 @@
-# Wine file dialogs instead of native desktop dialogs
+# Native desktop file dialogs
 
-## Symptoms
+Patch 0031 sends compatible 64-bit Wine file-dialog calls through XDG Desktop
+Portal. `setup-prefix.sh` sets the policy to `auto` when the prefix has no
+existing choice.
 
-All of Live's open/save/browse dialogs are Wine's built-in chooser rather
-than the desktop's native file dialog.
+## Implementation
 
-## Research
+Stock Wine 11.11 has no comdlg32 portal backend.
+[Patch 0031](../patches/0031-comdlg32-add-XDG-file-dialog-portal.patch)
+ports Wine merge request 10060 v5 to this runtime and adds its responsiveness
+follow-up. It includes merge-request patches 1, 2, 3, and 5. Patch 4 contained
+only a test with Wine 11.0-specific context and was not included.
 
-Wine has no XDG Desktop Portal backend for comdlg32; a draft series exists
-upstream (MR10060).
-[../patches/0031-comdlg32-add-XDG-file-dialog-portal.patch](../patches/0031-comdlg32-add-XDG-file-dialog-portal.patch)
-is the Wine 11.11-compatible delta of MR10060 v5 (patches 1, 2, 3, 5) plus
-its responsiveness follow-up, consolidated into one integration boundary.
-MR10060's patch 4 only adds a test case whose Wine 11.0 context no longer
-applies; excluded.
+The patch covers `GetOpenFileName`, `GetSaveFileName`, `IFileDialog`, and
+`SHBrowseForFolder`. In a tested 64-bit `GetOpenFileNameW` cancellation, the
+portal backend reported `STATUS_CANCELLED`, the API returned `FALSE`, and Wine
+did not open its fallback dialog.
 
-Architecture: a 64-bit `GetOpenFileNameW` test program takes the portal path
-(`WINE_UNIX_CALL`) and returns `STATUS_CANCELLED` directly on cancel; Wine's
-fallback dialog is never created. The same PE32 test reaches the eligibility
-check but cannot load the portal Unix library under new-WoW64, so 32-bit
-callers fall back to Wine's chooser.
+Under new WoW64, a 32-bit caller cannot load this 64-bit portal Unix library.
+It therefore uses Wine's chooser.
 
-## Mitigations
+## Policy
 
-Patch 0031 routes compatible calls (`GetOpenFileName`, `GetSaveFileName`,
-`IFileDialog`, `SHBrowseForFolder`) through XDG Desktop Portal. Prefix policy
-via `bin/set-file-portal-policy` (applied by `setup-prefix.sh`):
+The registry value is:
 
-- `auto` (default): portal for compatible Explorer-style calls; Wine dialogs
-  for hooks, custom templates, and unsupported options.
-- `always`: bypasses some compatibility checks; can break app-specific
-  dialogs. One-launch equivalent: `ABLETON_PORTAL_FORCE=1`.
-- `never`: off.
+```text
+HKCU\Software\Wine\X11 Driver\FileDialogPortal
+```
 
-`bin/ableton-live-portal` / `bin/ableton-wine-portal` pin or test portal
-behavior explicitly.
+Accepted values are:
 
-Patch 0043 reuses this portal plumbing to reveal explorer `/select`
-targets (Live's Show in Explorer) in the host file browser; see
+- `auto`: use the portal for supported calls, and keep Wine dialogs for hooks,
+  custom templates, and unsupported options.
+- `always`: skip some compatibility checks. Application-specific dialogs may
+  fail.
+- `never`: disable portal dialogs.
+
+Set a policy with this project's Wine:
+
+```bash
+WINEPREFIX="$HOME/.wine-ableton" \
+  "$HOME/.local/opt/wine-d2d1-nspa-11.13/bin/wine" reg add \
+  'HKCU\Software\Wine\X11 Driver' \
+  /v FileDialogPortal /t REG_SZ /d auto /f
+```
+
+Replace `auto` with `always` or `never` as needed. Use your
+`ABLETON_WINEPREFIX` and `ABLETON_WINE_ROOT` paths if they differ from the
+defaults.
+
+For one Live launch, `WINE_FORCE_PORTAL=1 "$HOME/.local/bin/ableton-live"`
+requests the `always` behavior. The repository's older `bin/*-portal`
+wrappers target a separate development runtime and are not installed by the
+`.run` package.
+
+Patch 0043 reuses the portal connection to reveal Explorer `/select` targets
+in the host file browser. See
 [ABLETON-WINE-SHOW-IN-EXPLORER.md](ABLETON-WINE-SHOW-IN-EXPLORER.md).
 
-## Caveats
+## Requirements
 
-- 32-bit applications always fall back to Wine's chooser: irrelevant to Live
-  (64-bit), relevant to 32-bit helpers/installers in the shared prefix.
-- The policy value is inert on a pre-portal Wine build.
-- Needs the desktop's `xdg-desktop-portal` backend on the host; without it,
-  dialogs fall back to Wine's chooser.
+The host must provide `xdg-desktop-portal` and a desktop backend. If the
+portal is unavailable, the patched calls fall back to Wine's chooser.
+Thirty-two-bit applications always use that fallback. The registry policy has
+no effect on a Wine build without patch 0031.

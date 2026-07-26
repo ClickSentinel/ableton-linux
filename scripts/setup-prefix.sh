@@ -54,7 +54,7 @@ case "${ABLETON_LIVE_VERSION:-12}" in
 esac
 
 unset WINELOADER WINEDLLPATH WINEDLLOVERRIDES WINEARCH WINEESYNC WINEFSYNC
-WINE_ROOT="${ABLETON_WINE_ROOT:-$HOME/.local/opt/wine-d2d1-nspa-11.11}"
+WINE_ROOT="${ABLETON_WINE_ROOT:-$HOME/.local/opt/wine-d2d1-nspa-11.13}"
 export WINEPREFIX="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}"
 export PATH="$WINE_ROOT/bin:$PATH"
 export WINEDEBUG=-all
@@ -289,7 +289,8 @@ else
     kit_root_or_die
     export W_CACHE_OVERRIDE=""            # unused
     export WINETRICKS_LATEST_VERSION_CHECK=disabled
-    export WINETRICKS_SUPER_QUIET=1
+    # Never set WINETRICKS_SUPER_QUIET: it silences w_die, so a fatal
+    # winetricks error exits with no message at all (issue #28).
     # Use the bundled payload cache if present (mfc42 downloads if not vendored).
     tmpc=""
     if [ -d "$root/vendor/winetricks-cache" ]; then

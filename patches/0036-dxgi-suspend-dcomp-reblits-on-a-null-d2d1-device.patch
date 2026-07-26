@@ -27,10 +27,10 @@ are unaffected.
  2 files changed, 107 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/dcomp/device.c b/dlls/dcomp/device.c
-index 5090a69..6b57938 100644
+index 63e94055..059b3de7 100644
 --- a/dlls/dcomp/device.c
 +++ b/dlls/dcomp/device.c
-@@ -954,6 +954,11 @@ struct dcomp_visual
+@@ -878,6 +878,11 @@ struct dcomp_visual
      IUnknown *content;
      struct dcomp_surface *surface_content; /* non-NULL if content is a DComp surface */
      HWND target_hwnd;
@@ -42,7 +42,7 @@ index 5090a69..6b57938 100644
      /* Visual tree */
      float offset_x;
      float offset_y;
-@@ -1432,6 +1437,9 @@ static const IDCompositionVisual2Vtbl dcomp_visual2_vtbl =
+@@ -1356,6 +1361,9 @@ static const IDCompositionVisual2Vtbl dcomp_visual2_vtbl =
  };
  
  #define WM_WINE_DCOMP_SET_TARGET (WM_USER + 0x100)
@@ -52,7 +52,7 @@ index 5090a69..6b57938 100644
  
  static void dcomp_visual_try_reparent(struct dcomp_visual *visual)
  {
-@@ -1462,8 +1470,11 @@ static void dcomp_visual_try_reparent(struct dcomp_visual *visual)
+@@ -1386,8 +1394,11 @@ static void dcomp_visual_try_reparent(struct dcomp_visual *visual)
      /* Tell dxgi to switch the swapchain's rendering target to target_hwnd.
       * This avoids SetParent which destroys the X11 window and breaks GL rendering.
       * The wndproc in dxgi/factory.c handles this message by calling
@@ -66,7 +66,7 @@ index 5090a69..6b57938 100644
  
      FIXME("Requested swapchain window switch from %p to target %p.\n",
              comp_wnd, visual->target_hwnd);
-@@ -2147,6 +2158,9 @@ static HRESULT STDMETHODCALLTYPE dcomp_device_CreateVisual(IDCompositionDevice *
+@@ -2283,6 +2294,9 @@ static HRESULT STDMETHODCALLTYPE dcomp_device_CreateVisual(IDCompositionDevice *
  
      object->IDCompositionVisual_iface.lpVtbl = &dcomp_visual_vtbl;
      object->refcount = 1;
@@ -77,10 +77,10 @@ index 5090a69..6b57938 100644
      TRACE("Created composition visual %p.\n", object);
  
 diff --git a/dlls/dxgi/factory.c b/dlls/dxgi/factory.c
-index 9906de8..436d588 100644
+index c8357fd7..31ac94ab 100644
 --- a/dlls/dxgi/factory.c
 +++ b/dlls/dxgi/factory.c
-@@ -380,6 +380,9 @@ static void STDMETHODCALLTYPE dxgi_factory_UnregisterOcclusionStatus(IWineDXGIFa
+@@ -389,6 +389,9 @@ static void STDMETHODCALLTYPE dxgi_factory_UnregisterOcclusionStatus(IWineDXGIFa
  
  #define WM_WINE_DCOMP_SET_TARGET (WM_USER + 0x100)
  #define WM_WINE_DCOMP_SET_CHILD_MODE (WM_USER + 0x101)
@@ -90,7 +90,7 @@ index 9906de8..436d588 100644
  
  /* Consecutive idle reblit-timer ticks (200ms each) after which a dcomp target
   * swapchain is considered abandoned: the app stopped presenting and paints the
-@@ -389,6 +392,29 @@ static void STDMETHODCALLTYPE dxgi_factory_UnregisterOcclusionStatus(IWineDXGIFa
+@@ -398,6 +401,29 @@ static void STDMETHODCALLTYPE dxgi_factory_UnregisterOcclusionStatus(IWineDXGIFa
   * Presenting again resets the counter and re-enables the reblit machinery. */
  #define DCOMP_STALE_TICKS 15
  
@@ -120,7 +120,7 @@ index 9906de8..436d588 100644
  static inline struct d3d11_swapchain *d3d11_swapchain_from_IDXGISwapChain4(IDXGISwapChain4 *iface)
  {
      return CONTAINING_RECORD(iface, struct d3d11_swapchain, IDXGISwapChain4_iface);
-@@ -651,6 +677,7 @@ static LRESULT CALLBACK dcomp_popup_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -660,6 +686,7 @@ static LRESULT CALLBACK dcomp_popup_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
              RemovePropW(hwnd, L"__wine_dcomp_swapchain");
              RemovePropW(hwnd, L"__wine_dcomp_comp_dc");
              RemovePropW(hwnd, L"__wine_dcomp_comp_size");
@@ -128,7 +128,7 @@ index 9906de8..436d588 100644
              return result;
          }
      }
-@@ -751,7 +778,41 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -760,7 +787,41 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
                          SetPropW(hwnd, L"__wine_dcomp_idle_ticks", (HANDLE)(LONG_PTR)idle);
                          if (swapchain->frame_latency_event)
                              SetEvent(swapchain->frame_latency_event);
@@ -171,7 +171,7 @@ index 9906de8..436d588 100644
                              dcomp_reblit_comp_buffer(hwnd, "timer-idle");
                          else if (idle == DCOMP_STALE_TICKS)
                              FIXME("DComp: target %p idle for %d ticks, reblit suspended until next present.\n",
-@@ -762,6 +823,13 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -771,6 +832,13 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
                          /* The app is presenting on its own — the window
                           * surface is already fresh, nothing to do. */
                          RemovePropW(hwnd, L"__wine_dcomp_idle_ticks");
@@ -185,7 +185,7 @@ index 9906de8..436d588 100644
                      }
                      SetPropW(hwnd, L"__wine_dcomp_last_present", (HANDLE)(LONG_PTR)count);
                  }
-@@ -824,6 +892,7 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -833,6 +901,7 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
              RemovePropW(hwnd, L"__wine_dcomp_comp_size");
              RemovePropW(hwnd, L"__wine_dcomp_last_present");
              RemovePropW(hwnd, L"__wine_dcomp_idle_ticks");
@@ -193,7 +193,7 @@ index 9906de8..436d588 100644
              return result;
          }
      }
-@@ -918,6 +987,27 @@ static LRESULT CALLBACK dcomp_swapchain_wndproc(HWND hwnd, UINT msg, WPARAM wpar
+@@ -927,6 +996,27 @@ static LRESULT CALLBACK dcomp_swapchain_wndproc(HWND hwnd, UINT msg, WPARAM wpar
                  if (swapchain->alpha_mode == DXGI_ALPHA_MODE_PREMULTIPLIED)
                      wined3d_swapchain_set_premultiplied_alpha(swapchain->wined3d_swapchain, TRUE);
  

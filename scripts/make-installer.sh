@@ -4,14 +4,16 @@
 # Repackaging only; Wine is not rebuilt.
 set -euo pipefail
 # ldd and sha256sum output is parsed below; localised output breaks the checks.
-export LC_ALL=C
+# C.UTF-8, never plain C: wine cannot create non-ASCII filenames under a
+# non-UTF-8 locale (issues #51, #55).
+export LC_ALL=C.UTF-8
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 cd "$root"
 
 ENGINE="${ENGINE:-podman}"
 IMAGE="${IMAGE:-ableton-wine-build:22.04}"
-NAME="wine-d2d1-nspa-11.11"
+NAME="wine-d2d1-nspa-11.13"
 VERSION="$(cat VERSION)"
 # exact-version runtime if present, else the newest built one
 tarball="dist/${NAME}-${VERSION}.tar.zst"
@@ -48,28 +50,9 @@ dist/cabextract-static --version >/dev/null 2>&1 || \
     { echo "!! dist/cabextract-static does not run on this host" >&2; exit 1; }
 echo "   cabextract-static: $(dist/cabextract-static --version 2>&1 | head -1)"
 
-echo "== [2/5] ableton-linkd (Ableton Link session anchor, from the vendored SDK) =="
-( cd vendor && sha256sum -c link.sha256 )
+echo "== [2/5] ableton-linkd (persistent Ableton Link peer, from the vendored SDK) =="
 if [ ! -x dist/ableton-linkd ]; then
-    command -v "$ENGINE" >/dev/null || { echo "!! need $ENGINE to build ableton-linkd" >&2; exit 1; }
-    relabel=""
-    if [ -f /sys/fs/selinux/enforce ]; then relabel=",Z"; fi
-    # Header-only SDK (include/ + asio-standalone); -static-libstdc++ -static-libgcc
-    # keep DT_NEEDED to host C-runtime sonames: install.sh gates exactly that.
-    $ENGINE run --rm \
-        -v "$root:/src:ro$relabel" \
-        -v "$root/dist:/out:rw$relabel" \
-        "$IMAGE" bash -ec '
-            mkdir -p /work/link && cd /work/link
-            tar -I zstd -xf /src/vendor/link-4.0.tar.zst
-            g++ -O2 -std=c++17 -Wall -Wno-multichar \
-                -I include -I modules/asio-standalone/asio/include \
-                -DLINK_PLATFORM_UNIX=1 -DLINK_PLATFORM_LINUX=1 \
-                -static-libstdc++ -static-libgcc \
-                /src/tools/ableton-linkd.cpp -o ableton-linkd \
-                -lpthread -latomic
-            strip ableton-linkd
-            install -m755 ableton-linkd /out/ableton-linkd'
+    ENGINE="$ENGINE" IMAGE="$IMAGE" ./scripts/build-ableton-linkd.sh
 fi
 dist/ableton-linkd --help >/dev/null 2>&1 || \
     { echo "!! dist/ableton-linkd does not run on this host" >&2; exit 1; }

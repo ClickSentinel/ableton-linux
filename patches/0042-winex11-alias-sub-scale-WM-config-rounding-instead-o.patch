@@ -28,10 +28,10 @@ generation counter. Adapted from ENCORE's encore-wine.patch.
  2 files changed, 332 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index a496c35c..4ccd2abf 100644
+index 85161e2f..6a84639b 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -1546,6 +1546,183 @@ static void window_set_net_wm_state( struct x11drv_win_data *data, UINT new_stat
+@@ -1597,6 +1597,183 @@ static void window_set_net_wm_state( struct x11drv_win_data *data, UINT new_stat
      }
  }
  
@@ -215,7 +215,7 @@ index a496c35c..4ccd2abf 100644
  static void window_set_config( struct x11drv_win_data *data, RECT rect, BOOL above )
  {
      UINT style = NtUserGetWindowLongW( data->hwnd, GWL_STYLE ), mask = 0;
-@@ -1576,6 +1753,29 @@ static void window_set_config( struct x11drv_win_data *data, RECT rect, BOOL abo
+@@ -1627,6 +1804,29 @@ static void window_set_config( struct x11drv_win_data *data, RECT rect, BOOL abo
          return;
      }
  
@@ -245,7 +245,7 @@ index a496c35c..4ccd2abf 100644
      if (old_rect->right - old_rect->left != new_rect->right - new_rect->left ||
          old_rect->bottom - old_rect->top != new_rect->bottom - new_rect->top)
      {
-@@ -1614,6 +1814,8 @@ static void window_set_config( struct x11drv_win_data *data, RECT rect, BOOL abo
+@@ -1665,6 +1865,8 @@ static void window_set_config( struct x11drv_win_data *data, RECT rect, BOOL abo
      data->pending_state.rect = *new_rect;
      data->pending_state.above = above;
      data->configure_serial = NextRequest( data->display );
@@ -254,7 +254,7 @@ index a496c35c..4ccd2abf 100644
      TRACE( "window %p/%lx, requesting config %s mask %#x above %u, serial %lu\n", data->hwnd, data->whole_window,
             wine_dbgstr_rect(new_rect), mask, above, data->configure_serial );
      XReconfigureWMWindow( data->display, data->whole_window, data->vis.screen, mask, &changes );
-@@ -2016,6 +2218,29 @@ static UINT window_update_client_config( struct x11drv_win_data *data )
+@@ -2067,6 +2269,29 @@ static UINT window_update_client_config( struct x11drv_win_data *data )
      if (data->mwm_hints_serial) return 0; /* another MWM_HINT update is pending, wait for it to complete */
      if (data->configure_serial) return 0; /* another config update is pending, wait for it to complete */
  
@@ -284,7 +284,7 @@ index a496c35c..4ccd2abf 100644
      /* Ignore fullscreen config changes when it's still on the same monitor. This is needed because
       * adding __NET_WM_STATE_FULLSCREEN will make WMs move the window to cover exactly the monitor
       * rect. If the application sets a visible rect slightly larger than the monitor rect and insists
-@@ -2074,7 +2299,10 @@ BOOL X11DRV_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *swp_flags,
+@@ -2125,7 +2350,10 @@ BOOL X11DRV_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *swp_flags,
      {
          *state_cmd = window_update_client_state( data );
          *swp_flags = window_update_client_config( data );
@@ -296,7 +296,7 @@ index a496c35c..4ccd2abf 100644
          release_win_data( data );
      }
  
-@@ -2214,12 +2442,50 @@ void window_configure_notify( struct x11drv_win_data *data, unsigned long serial
+@@ -2265,12 +2493,50 @@ void window_configure_notify( struct x11drv_win_data *data, unsigned long serial
  {
      RECT *desired = &data->desired_state.rect, *pending = &data->pending_state.rect, *current = &data->current_state.rect;
      unsigned long *expect_serial = &data->configure_serial;
@@ -347,7 +347,7 @@ index a496c35c..4ccd2abf 100644
      /* if we've delayed some config we want to continue with it, make sure handle_state_change doesn't overwrite it */
      if ((*expect_serial || window_needs_config_change_delay( data )) &&
          serial >= *expect_serial && !EqualRect( desired, pending ))
-@@ -2231,10 +2497,38 @@ void window_configure_notify( struct x11drv_win_data *data, unsigned long serial
+@@ -2282,10 +2548,38 @@ void window_configure_notify( struct x11drv_win_data *data, unsigned long serial
      if (!handle_state_change( serial, expect_serial, sizeof(*value), value, desired, pending,
                                current, expected, prefix, received, NULL ))
          return;
@@ -386,7 +386,7 @@ index a496c35c..4ccd2abf 100644
  }
  
  void net_active_window_notify( unsigned long serial, Window value, Time time )
-@@ -2446,6 +2740,18 @@ static void sync_window_position( struct x11drv_win_data *data, UINT swp_flags,
+@@ -2497,6 +2791,18 @@ static void sync_window_position( struct x11drv_win_data *data, UINT swp_flags,
      if (data->is_offscreen) OffsetRect( &new_rect, window_rect.left - old_rects->window.left,
                                          window_rect.top - old_rects->window.top );
  
@@ -405,7 +405,7 @@ index a496c35c..4ccd2abf 100644
      window_set_config( data, new_rect, above );
  }
  
-@@ -2786,6 +3092,8 @@ static void destroy_whole_window( struct x11drv_win_data *data, BOOL already_des
+@@ -2843,6 +3149,8 @@ static void destroy_whole_window( struct x11drv_win_data *data, BOOL already_des
          }
      }
      if (data->whole_colormap) XFreeColormap( data->display, data->whole_colormap );
@@ -414,7 +414,7 @@ index a496c35c..4ccd2abf 100644
      data->whole_window = data->client_window = 0;
      data->whole_colormap = 0;
      data->managed = FALSE;
-@@ -3587,7 +3895,22 @@ void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, HWND owner_hint, UIN
+@@ -3643,7 +3951,22 @@ void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, HWND owner_hint, UIN
  
      old_rects = data->rects;
      was_fullscreen = data->is_fullscreen;
@@ -439,10 +439,10 @@ index a496c35c..4ccd2abf 100644
      data->is_resizable = !!(swp_flags & WINE_SWP_RESIZABLE);
  
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 6f15d022..ba2698ee 100644
+index 4d1aa53c..34b53ce4 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
-@@ -701,6 +701,13 @@ struct x11drv_win_data
+@@ -715,6 +715,13 @@ struct x11drv_win_data
      unsigned long wm_normal_hints_serial;/* serial of last pending WM_NORMAL_HINTS request */
      unsigned long configure_serial;    /* serial of last pending configure request */
      unsigned long net_wm_icon_serial;  /* serial of last pending _NET_WM_ICON request */

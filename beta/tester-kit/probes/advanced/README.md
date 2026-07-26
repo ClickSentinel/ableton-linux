@@ -1,7 +1,8 @@
 # Advanced test tools
 
 These tools are for investigating a specific failure. The normal tester command
-never runs them. Some tools send input, close Live or change audio connections.
+does not run them unless you request the input trace. Some tools send input,
+close Live, resize its window, or change audio connections.
 
 Save the project before using them. Record the exact command in the issue.
 
@@ -10,30 +11,30 @@ Save the project before using them. Record the exact command in the issue.
 From the root of this repository:
 
 ```bash
-./tester-kit/probes/build-native-tools
+./beta/tester-kit/probes/build-native-tools
 ```
 
 The script writes the programs and `build-results.txt` under
-`tester-kit/probes/advanced/native/`. It stops if no C compiler is installed.
-A missing development library marks the affected program `SKIP`. The script
-does not install packages or use `sudo`.
+`beta/tester-kit/probes/advanced/native/`. It stops if no C compiler is
+installed. A missing development library marks the affected program `SKIP`.
+The script does not install packages or use `sudo`.
 
 ## Live input trace
 
-This is the only advanced tool started by `run-session`:
+This is the only advanced workflow that `run-session` can start:
 
 ```bash
-./tester-kit/run-session --live-only \
+./beta/tester-kit/run-session --live-only \
   --advanced-input-trace \
-  --wine "$HOME/.local/opt/wine-d2d1-nspa-11.11/bin/wine"
+  --wine "$HOME/.local/opt/wine-d2d1-nspa-11.13/bin/wine"
 ```
 
 The command asks you to type `TRACE`. It then watches Wine mouse input and JUCE
 plug-in windows for 15 seconds. Use the affected window during those 15
 seconds.
 
-The trace can remain loaded in Live until Live exits. Save first and quit Live
-after the trace.
+The hook DLL can remain loaded until Live exits. Save first, run the trace, and
+then quit Live.
 
 ## Windows tools
 
@@ -44,7 +45,7 @@ after the trace.
 | `wmresize.exe` | Opens a test window and measures whether resizing stops. |
 | `spyhost.exe` and `mousespy.dll` | Install a Wine-wide mouse hook and inspect JUCE plug-in windows. |
 
-Run these files with the same Wine executable and Wine folder used by Live.
+Run these files with the same Wine executable and Wine prefix used by Live.
 
 ## Linux tools
 
@@ -61,6 +62,7 @@ Run these files with the same Wine executable and Wine folder used by Live.
 | `xdmg` | Records redraw events for one X11 window. |
 | `xgrid` and `xsamp` | Measure pixel changes in Learn View and plug-in windows. |
 
-`liveinject.exe`, `showrestore.exe`, `jacklinkd`, `uclick`, `xact` and `xtool`
-change Live, audio connections or input. Use them only for the test named in an
-issue.
+`liveinject.exe`, `showrestore.exe`, `jacklinkd`, `uclick`, `xact`, `xsettle`,
+and `xtool` change Live, audio routing, focus, window geometry, or input.
+`fakectl` creates a temporary MIDI device. Use these tools only for the test
+named in an issue.

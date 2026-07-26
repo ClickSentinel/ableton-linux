@@ -1,152 +1,185 @@
 # Ableton Link support
 
-## Background
+The installer ships the persistent native peer `ableton-linkd`, its systemd
+user unit, and `setup-link.sh`. Run the setup script once as your normal user.
+It requests `sudo` for route and firewall changes, then uses your user session
+to enable `ableton-linkd.service`:
 
-Ableton Link is a peer-to-peer, masterless tempo/beat/phase sync
-protocol: peers exchange UDP multicast datagrams on group
-224.76.78.75 (".76.78.75" spells "LNK"), port 20808, and converge on a
-shared timeline. Discovery rides the multicast group; the
-tempo/timeline measurement between two peers runs over unicast UDP on
-ephemeral ports. Wine forwards WinSock2 multicast to host sockets, so
-whether Live joins a session is decided on the host: the kernel route
-for 224.0.0.0/4, the firewall, and Wine's socket translation.
+```bash
+"$HOME/.local/share/ableton-wine/setup-link.sh"
+```
+
+From a repository checkout, run:
+
+```bash
+./scripts/setup-link.sh
+```
+
+## What the setup changes
+
+The script:
+
+1. Finds the interface on the first IPv4 default route. It rejects interface
+   names beginning with `tun`, `wg`, or `tap`.
+2. Runs `sudo ip route replace 224.0.0.0/4 dev <interface> metric 0`.
+3. Adds UDP port 20808 through `ufw`, or through `firewall-cmd` when `ufw` is
+   absent. If neither tool is installed, it leaves the firewall unchanged and
+   tells you to allow UDP 20808 manually.
+4. When the NetworkManager dispatcher directory exists, installs
+   `/etc/NetworkManager/dispatcher.d/50-link-multicast`.
+5. Copies the user unit to
+   `${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/ableton-linkd.service`
+   and enables it with `systemctl --user enable --now`.
+
+The script can be repeated and refuses to run while Live is open. It replaces
+the route and updates the same firewall rule, hook, and unit. If the daemon or
+unit file is missing, it leaves the network changes in place and reports that
+the daemon setup was skipped.
+
+The current NetworkManager hook applies the multicast route to every
+interface reported as `up`. It does not repeat the default-route or VPN
+check. A later VPN or secondary-interface event can therefore move the route.
+Verify the route after each network or VPN reconnect:
+
+```bash
+ip route show 224.0.0.0/4
+```
+
+The listed device must be the LAN interface used by the other Link peers.
+Network managers other than NetworkManager need an equivalent persistent
+route or another setup run after reconnect.
 
 ## Components
 
-Everything ships in the .run installer; nothing is built by hand.
+### `ableton-linkd`
 
-- `ableton-linkd`: the native session anchor and probe, built from
-  the vendored Ableton Link SDK (Link 4.0, header-only C++; GPLv2 or
-  later). The vendored tarball `vendor/link-4.0.tar.zst` ships in the
-  installer kit as the corresponding source. Installed to
-  `~/.local/share/ableton-wine/ableton-linkd`. It joins the session
-  natively and anchors it: as the always-on peer it holds the shared
-  tempo and timeline across Live restarts (longest-lived-peer rule)
-  and relays Start Stop Sync. It is strictly passive: after founding
-  a session it never sets the tempo or the timeline, per the Ableton
-  Link integration guidelines. It deliberately does no JACK
-  bridging. Modes (`--help` lists them): no arguments runs in the
-  foreground with status lines on stderr (how the user unit runs it);
-  `--daemon` self-backgrounds and logs to `~/.log/ableton-linkd/`
-  (how the launcher runs it); `--probe [secs]` (default 10) joins,
-  waits, prints `peers: N` and `tempo: T.T`, and exits 0 only when
-  N ≥ 1; `--tempo BPM` (default 120) is only the initial tempo when
-  the daemon founds a brand-new session.
-- `linkprobe.exe` (`tools/`): a small Windows tool that runs under
-  this Wine and exercises exactly what Live needs: bind to
-  0.0.0.0:20808 with SO_REUSEADDR, join 224.76.78.75, multicast TX and
-  RX with self/peer discrimination (it parses the `_asdp_v1`
-  datagrams). Output is a verdict: `TX OK`, `RX OK (loopback)`,
-  `RX OK (network)`, `PEERS: n`. It settles whether Wine's multicast
-  path works before and independently of Live. Its alive datagrams
-  carry no session payload, so it never appears in the anchor's peer
-  count. It verifies the Wine multicast data path, not session
-  membership; `--probe` above is the peer-count check.
-- [../scripts/setup-link.sh](../scripts/setup-link.sh): shipped in
-  the installer kit and installed to `~/.local/share/ableton-wine/`.
-  One idempotent sudo run applies the whole host setup below,
-  including the persistent route and the `ableton-linkd.service` user
-  unit.
-- The launchers (`ableton-live`, `max9`, the beta launcher) start the
-  anchor automatically on every Live start: `ableton-linkd --daemon`
-  when the binary is installed and no anchor is running yet, a silent
-  skip otherwise. `ABLETON_LINKD` overrides the binary path.
+The installer ships `ableton-linkd`, built from the vendored Ableton Link 4.0
+SDK, and installs it at:
 
-`tools/jacklinkd.c`, a stale JACK port guardian from the WineASIO era
-whose JACK client name is also `ableton-linkd`, is unrelated despite
-the name; nothing starts it.
+```text
+~/.local/share/ableton-wine/ableton-linkd
+```
 
-## Constraints
+It joins the Link session as a native peer and remains active while Live
+restarts. This is designed to retain the shared tempo and timeline until Live
+rejoins. It enables Start Stop Sync but never calls the SDK methods that set
+tempo or beat position after construction.
 
-- Ableton Link does not work over VPN: the multicast route must point
-  at the physical LAN interface, never a tunnel. setup-link.sh refuses
-  VPN carriers.
-- The router must forward multicast; many do not.
-- UDP 20808 must pass the host firewall. Link's unicast measurement
-  port is ephemeral; outbound-initiated exchanges are covered by
-  conntrack, so no second firewall rule is needed.
-- Bluetooth links are unsupported (Ableton's own requirement).
+Its modes are:
 
-## Setup
+- No arguments: run in the foreground and write status to stderr every ten
+  seconds. The systemd unit uses this mode.
+- `--daemon`: run in the background and write
+  `~/.log/ableton-linkd/ableton-linkd.log`. The launchers use this mode.
+- `--probe [seconds]`: join, wait up to ten seconds by default, print
+  `peers: N` and `tempo: T.T`, and exit zero after seeing at least one other
+  peer.
+- `--tempo BPM`: set only the construction tempo used when this process
+  creates a new session.
 
-Run the shipped script once (idempotent, safe to re-run, refuses to
-run while Live is up):
+The Live, Max, and beta launchers start `ableton-linkd --daemon` when the
+binary exists and no process with that name is running. `ABLETON_LINKD`
+overrides its path. The user unit instead keeps it running from login.
 
-    sudo ~/.local/share/ableton-wine/setup-link.sh
+### `linkprobe.exe`
 
-(from a checkout of this repository: `sudo ./scripts/setup-link.sh`).
-It:
+The repository contains `tools/linkprobe.exe`; the `.run` installer does not
+install it. The program runs under this Wine and tests `SO_REUSEADDR`, a bind
+to `0.0.0.0:20808`, per-interface `IP_ADD_MEMBERSHIP`, multicast transmit,
+and receive.
 
-1. detects the primary LAN interface (carrier of the default route),
-   refusing VPN carriers (tun*/wg*/tap*);
-2. Option A: `ip route replace 224.0.0.0/4 dev <iface> metric 0`. On
-   NetworkManager systems it also installs the dispatcher hook
-   `/etc/NetworkManager/dispatcher.d/50-link-multicast`, so the
-   route survives reconnects and reboots (other network managers: add
-   the equivalent up-hook by hand). Then `ufw allow 20808/udp`, or
-   `firewall-cmd --permanent --add-port=20808/udp` + reload on
-   firewalld systems;
-3. Option B: installs `scripts/ableton-linkd.service` as
-   `~/.config/systemd/user/ableton-linkd.service` and enables it, so
-   the anchor runs from login. The unit runs the daemon in the
-   foreground; its status lines land in
-   `journalctl --user -u ableton-linkd`.
+Its exact verdict lines are:
 
-Even without the unit, the launcher starts the anchor on every Live
-start, so the session is anchored either way.
+```text
+LINKPROBE TX OK
+LINKPROBE RX-LOOPBACK OK
+LINKPROBE RX-NETWORK OK
+LINKPROBE PEERS: N
+```
+
+The process exits zero when transmit and loopback receive succeed.
+`RX-NETWORK OK` requires a datagram whose source is not one of the local
+machine's addresses. The daemon on the same machine is not enough for that
+line, even though it can appear in `PEERS`.
+
+`linkprobe.exe` sends discovery datagrams without a session payload. It tests
+Wine's multicast socket behavior, not full Ableton Link session membership.
+
+`tools/jacklinkd.c` is unrelated. It restores JACK port links and happens to
+register the JACK client name `ableton-linkd`. Current launchers do not start
+it.
 
 ## Verification
 
-- [ ] `ip route show 224.0.0.0/4` lists the route via the physical LAN
-  interface, not a VPN device; with the dispatcher hook installed it
-  comes back by itself after a reconnect
-- [ ] `sudo ufw status | grep 20808` or `firewall-cmd --list-ports`
-  shows `20808/udp`
-- [ ] `pgrep -a ableton-linkd` shows the anchor running, and
-  `~/.log/ableton-linkd/` records session activity when the launcher
-  started it (unit runs log to the journal instead)
-- [ ] the native probe verdict, with any other peer active (Live's
-  Link toggle Enabled, or any Link app on the LAN):
-  `~/.local/share/ableton-wine/ableton-linkd --probe 10` prints
-  `peers: N` and `tempo: T.T` and exits 0 with N ≥ 1
-- [ ] the Wine-side verdict, from a checkout:
-  `WINEPREFIX=~/.wine-ableton ~/.local/opt/wine-d2d1-nspa-11.11/bin/wine tools/linkprobe.exe`
-  reports `TX OK` and `RX OK (network)` while the anchor runs
-- [ ] Live's Control-Bar Link indicator (Preferences → Link/Tempo/MIDI
-  → "Show Link Toggle") is Enabled and reports a peer count ≥ 1
-- [ ] a tempo change on any peer propagates to all others; a peer
-  leaving drops the count cleanly; the shared tempo is still there
-  after a full Live restart (the anchor holds it)
-- [ ] raw-packet fallback when the verdicts above disagree:
-  `sudo tcpdump -i <iface> -n udp port 20808` shows datagrams to
-  `224.76.78.75.20808` once any peer is active; the Wireshark filter
-  `ip.dst == 224.76.78.75 || ip.dst == 224.0.0.22` adds the IGMPv3
-  membership reports
+Check the host setup:
 
-Triage: the native probe is the fork in the road. If it exits 1 (no
-peers) and tcpdump shows no datagrams either, the problem is host
-networking: the route, the firewall, or a router that does not
-forward multicast. If the native probe sees peers but Live's count
-stays zero, and linkprobe.exe shows `TX OK` without
-`RX OK (network)`, Wine's multicast receive path is failing: that is a
-Wine socket-layer bug, not a setup problem. The anchor holds and
-monitors the session either way.
+```bash
+ip route show 224.0.0.0/4
+pgrep -a ableton-linkd
+systemctl --user status ableton-linkd.service
+```
 
-## Caveats
+For `ufw`, run `sudo ufw status` and look for `20808/udp`. For firewalld, run
+`firewall-cmd --list-ports`.
 
-- The anchor never sets Live's tempo, by design (it is passive) and
-  by construction: PipeASIO is a native PipeWire client with no JACK
-  transport layer, so nothing on the host can drive Live's transport
-  (WineASIO had such a layer; it went with the PipeASIO switch). Live
-  joins the session as its own peer via the Option A networking and
-  follows the shared timeline itself.
-- Native Link-enabled Linux apps (Bitwig, Ardour, SuperCollider, Sonic
-  Pi, VCV Rack) join the same session over the network directly; no
-  bridge is involved. For JACK-transport apps, upstream
-  [jack_link](https://github.com/rncbc/jack_link) remains usable
-  alongside; it is a separate project, built and installed by hand,
-  and no longer part of this setup.
-- Ableton Link is Ableton's technology; this integration follows the
-  Ableton Link guidelines (two words, capital A/L; enablement language
-  is Enabled/Disabled). This project is not affiliated with or
-  endorsed by Ableton.
+With the service or launcher daemon active, the native probe should see at
+least that peer:
+
+```bash
+"$HOME/.local/share/ableton-wine/ableton-linkd" --probe 10
+```
+
+This confirms that two native SDK instances can join. It does not identify
+Live as the peer.
+
+From a checkout, test Wine's local multicast socket behavior:
+
+```bash
+WINEPREFIX="$HOME/.wine-ableton" \
+  "$HOME/.local/opt/wine-d2d1-nspa-11.13/bin/wine" tools/linkprobe.exe
+```
+
+Require `LINKPROBE TX OK` and `LINKPROBE RX-LOOPBACK OK`. To require
+`LINKPROBE RX-NETWORK OK`, run another Link peer on a second LAN host during
+the test.
+
+In Live, open Preferences, select Link, Tempo & MIDI, enable Show Link
+Toggle, then enable Link in the control bar. Confirm that its peer count is
+at least one. Change tempo from each peer in turn, check beat and phase
+alignment, and restart Live. Confirm that the restarted Live instance rejoins
+the same tempo and phase.
+
+For packet-level checks:
+
+```bash
+sudo tcpdump -i <interface> -n udp port 20808
+```
+
+Discovery uses `224.76.78.75:20808`. The Wireshark filter
+`ip.dst == 224.76.78.75 || ip.dst == 224.0.0.22` also includes IGMPv3
+membership reports.
+
+If a known remote peer is active but neither the native probe nor tcpdump
+sees it, check the selected interface, firewall, access point, and multicast
+route. If native tools see the remote peer but Live does not, compare the
+linkprobe verdicts and packet capture before treating the result as a Wine
+socket fault.
+
+## Protocol and scope
+
+Ableton Link discovers peers with UDP multicast on
+`224.76.78.75:20808`. Pairwise timeline measurements use unicast UDP on
+ephemeral ports. Host connection tracking covers replies to those outbound
+exchanges, so the setup opens only UDP 20808.
+
+Peers must share a LAN that carries multicast. Native Linux applications
+with Ableton Link support join the session directly. JACK-only applications
+may use the separate upstream
+[`jack_link`](https://github.com/rncbc/jack_link) project.
+
+PipeASIO has no JACK transport layer. The persistent native peer therefore
+cannot synchronize Live through JACK. Live joins the Link session as its own
+Wine peer and follows the shared timeline itself.
+
+Ableton Link is Ableton's technology. This project follows its naming and
+enablement guidelines and is not affiliated with or endorsed by Ableton.

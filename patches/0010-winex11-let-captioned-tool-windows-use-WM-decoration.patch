@@ -8,7 +8,7 @@ draws their frame. Caption-less tool windows are unaffected.
  1 file changed, 7 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 20dae46f..33f9e3cb 100644
+index 92e611fa..109b1067 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -500,7 +500,13 @@ static unsigned long get_mwm_decorations_for_style( DWORD style, DWORD ex_style

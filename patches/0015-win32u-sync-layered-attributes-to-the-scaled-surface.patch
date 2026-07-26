@@ -8,7 +8,7 @@ flush, not only when the window shape changes; unchanged values cost nothing.
  1 file changed, 8 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/win32u/dce.c b/dlls/win32u/dce.c
-index 2a999b83..6755e41c 100644
+index c972544f..71db6ec6 100644
 --- a/dlls/win32u/dce.c
 +++ b/dlls/win32u/dce.c
 @@ -201,11 +201,16 @@ static BOOL scaled_surface_flush( struct window_surface *window_surface, const R

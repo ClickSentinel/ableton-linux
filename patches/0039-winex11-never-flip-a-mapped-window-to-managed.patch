@@ -33,10 +33,10 @@ is why patch 0038's focus gate alone did not resolve the issue.
  1 file changed, 14 insertions(+)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 9d1697d6..a92506e2 100644
+index 8bd2c7e3..85161e2f 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -1890,6 +1890,20 @@ static void window_set_managed( struct x11drv_win_data *data, BOOL new_managed )
+@@ -1948,6 +1948,20 @@ static void window_set_managed( struct x11drv_win_data *data, BOOL new_managed )
          return;
      }
  

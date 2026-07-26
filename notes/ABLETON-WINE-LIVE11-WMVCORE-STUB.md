@@ -1,114 +1,103 @@
-# Live 11: media playback crash (wmvcore EXCEPTION_WINE_STUB)
+# Live 11 media playback crash in `wmvcore`
 
-## Symptoms
+Status: Live 11 support remains experimental. Previewing or importing a WMA
+or video file can crash Live 11 because Wine raises
+`EXCEPTION_WINE_STUB` from `wmvcore.dll`. Live 12 does not use this path.
+Avoid these files until the missing export is identified and patched.
 
-Live 11 (any edition) dies ~0.5 s into playing or browser-previewing a WMA or
-video file; VSTs loaded from the browser can crash the same way via preview.
-Every sampled crash dump shares one signature: exception code `0x80000100`
-(Wine's `EXCEPTION_WINE_STUB`), raised from `kernelbase.dll`
-(`RaiseException`) with both exception strings pointing into `wmvcore.dll`.
-Live 12 is unaffected — it never reaches these exports.
+## Evidence
 
-## Research
+Every sampled dump has exception code `0x80000100`
+(`EXCEPTION_WINE_STUB`). `kernelbase.dll` raises the exception, and both
+exception strings identify `wmvcore.dll`.
 
-`wmvcore.dll` is the Windows Media Format (WMF) runtime Live 11 loads for
-media import and browser preview (`VideoExportMMF.dll` is loaded too). The
-`@ stub` entries in `dlls/wmvcore/wmvcore.spec` compile to thunks that print a
-`fixme:wmvcore:<function> stub!` line and then raise `0x80000100` with the
-module and function names as exception strings — exactly the dump signature.
-Live 11 decodes WMA and video soundtracks through WMF; Live 12 uses a
-different decode path.
+Live 11 loads the Windows Media Format runtime for media import and browser
+preview. Wine compiles each `@ stub` entry in `dlls/wmvcore/wmvcore.spec`
+into a thunk that logs `fixme:wmvcore:<function> stub!` and raises
+`0x80000100`. This matches the dumps. The dumps do not identify which export
+Live called.
 
-Name the missing export before writing any patch. The launcher forces
-`WINEDEBUG=-all` (fixme spam stalls Live's UI thread), so the capture must
-invoke the runtime directly; trigger the crash by previewing a WMA or video
-file:
+## Capture the missing export
+
+Set `WINEDEBUG` before using the launcher, then trigger the crash by
+previewing a WMA or video file:
 
 ```bash
-export WINEPREFIX="$HOME/.wine-ableton"
-WINE="$HOME/.local/opt/wine-d2d1-nspa-11.11/bin/wine"
-WINEDEBUG=-all,+fixme "$WINE" \
-  "C:\ProgramData\Ableton\Live 11 Suite\Program\Ableton Live 11 Suite.exe" \
+ABLETON_LIVE_VERSION=11 WINEDEBUG=-all,fixme+wmvcore ableton-live \
   2>&1 | tee "$HOME/live11-wmvcore.log"
 grep -E 'fixme:wmvcore:[A-Za-z0-9_]+ stub' "$HOME/live11-wmvcore.log" | sort -u
 ```
 
-## Mitigations
+## Planned fix
 
-Until a Wine patch ships, Live 11 is **installable but unsupported**: avoid
-browser preview and import of WMA/video files. The planned fix is
-`patches/0035-wmvcore-fail-gracefully-when-wmf-reader-unavailable.patch` (the
-series runs 0001–0034, 0027 retired): convert the called stub(s) — expected at
-the `WMCreateReader`/`WMCreateSyncReader` level, confirmed by the capture
-above — from fatal stubs into real exports that return a decoder-unavailable
-`HRESULT` (`*reader = NULL; return NS_E_INVALID_REQUEST;`), so media import
-degrades to "file not decodable" instead of raising. The contract is "return,
-don't raise"; spec arities must match the SDK prototypes exactly (a wrong
-count corrupts the stack for 32-bit callers in this WoW64 build). Rebuild
-through the normal gate (`scripts/build-audit.sh --freeze` extends
-`patches/SERIES.sha256`; add a fingerprint row for the FIXME literal), then
-retest: expect a logged import failure, continued operation, and zero
-`0x80000100` in fresh dumps; regression-check Live 12.
+No patch exists yet. The trace must identify the stub before implementation.
+Match the confirmed export's SDK signature and documented failure behavior. A
+wrong argument count can corrupt a 32-bit caller's stack in this WoW64 build.
 
-## Installing Live 11 manually
+Add the patch to `patches/SERIES.sha256` with
+`./scripts/build-audit.sh --freeze`, then add an artifact fingerprint to the
+build audit. Retest Live 11 and Live 12. Live 11 should report an import
+failure and continue running, with no new `0x80000100` dump.
 
-- Pin **Live 11.2.11** as the supported target. 11.3.3+ installers add a Push 3
-  driver component (`tlsetupfx.exe`, Ableton's kernel USB-driver installer)
-  that faults under Wine — expect exactly two such errors; they are cosmetic,
-  the installer completes anyway (the same fault appears on Live 12; see the
-  `tlsetupfx.exe` comment in `scripts/setup-prefix.sh`).
-- Create the prefix with the Live 11 recipe (selects
-  `corefonts vcrun2019 gdiplus` + `win10` instead of the Live 12 verbs):
+## Install Live 11 manually
 
-  ```bash
-  ABLETON_LIVE_MAJOR=11 ./scripts/setup-prefix.sh
-  ```
+These notes were tested with Live 11.2.11. Create the prefix with the Live 11
+support files:
 
-  The `vcrun2019`/`gdiplus` payloads are not vendored yet, so this first run
-  needs network access.
-- Install through this Wine (plain wine reads `WINEPREFIX`, not the `ABLETON_*`
-  launcher variables):
+```bash
+ABLETON_LIVE_VERSION=11 ./scripts/setup-prefix.sh
+```
 
-  ```bash
-  WINEPREFIX="$HOME/.wine-ableton" \
-    "$HOME/.local/opt/wine-d2d1-nspa-11.11/bin/wine" \
-    "/path/to/Ableton Live 11 Suite Installer.exe"
-  ```
+The `vcrun2019` and `gdiplus` payloads are not vendored, so this step needs
+network access on its first run.
 
-- With both majors installed, the launcher picks the newest; pin the major (or
-  an exact install) explicitly:
+Install Live with the packaged Wine:
 
-  ```bash
-  ABLETON_LIVE_MAJOR=11 ableton-live
-  ```
+```bash
+WINEPREFIX="$HOME/.wine-ableton" \
+  "$HOME/.local/opt/wine-d2d1-nspa-11.13/bin/wine" \
+  "/path/to/Ableton Live 11 Suite Installer.exe"
+```
 
-- Authorize with your own account. Offline `.auz` activation works as-is —
-  the launcher passes file arguments through `wine start "$@"`:
-  `ableton-live 'C:\path\to\ableton_live_11.auz'`. Online activation rides the
-  `ableton://authorize?...` URI (`desktop/wine-protocol-ableton.desktop.in`);
-  if the association is lost:
-  `xdg-mime default wine-protocol-ableton.desktop x-scheme-handler/ableton`.
-  Never regenerate the prefix casually — authorization binds to its
-  `MachineGuid`.
-- Max for Live 8 ships with Live 11 and crashes on its *second* start unless
-  its preferences file is removed. After Live's first run:
+Live 11.3.3 and later installers include `tlsetupfx.exe`, Ableton's USB
+driver installer. It can fault under Wine and open a debugger dialog. This is
+a known limitation documented in `scripts/setup-prefix.sh`.
 
-  ```bash
-  ./scripts/setup-prefix.sh --post-first-run
-  ```
+When Live 11 and Live 12 share a prefix, select Live 11 explicitly:
 
-  This moves `maxpreferences.maxpref` aside (timestamped backup, never a
-  delete); Max regenerates it on the next start.
-- Audio: PipeASIO opens on Live 11 (48 kHz, fixed 256-frame buffers) but issue
-  #14 reports distorted output while MME/DirectX works — mechanism unproven.
-  If it crackles, raise `PIPEASIO_PREFERRED_BUFFERSIZE=512` per the launcher
-  comments and check `scripts/check-live-audio.sh`.
+```bash
+ABLETON_LIVE_VERSION=11 ableton-live
+```
 
-## Caveats
+Authorize with your own account. For an offline response file, pass its Unix
+path to the launcher:
 
-- The crash signature is confirmed from the issue #14 dumps; which exact
-  export Live 11 calls is not — run the capture before touching the spec file.
-- The two `tlsetupfx.exe` installer errors are expected, not a regression.
-- Live's in-app networking can fail under Wine, causing repeated
-  re-authorization prompts and failing pack downloads; offline `.auz`
-  activation sidesteps it.
+```bash
+ableton-live "$HOME/Downloads/ableton_live_11.auz"
+```
+
+The launcher uses `wine start /unix` for an existing `.auz` file. Online
+authorization uses the `ableton:` handler installed from
+`desktop/wine-protocol-ableton.desktop.in`. Authorization is bound to the
+prefix's `MachineGuid`, so keep the prefix.
+
+After Live's first run, move Max for Live 8's incompatible preferences aside:
+
+```bash
+./scripts/setup-prefix.sh --post-first-run
+```
+
+The command keeps a timestamped backup. Max creates a new preferences file on
+its next start.
+
+PipeASIO opens in the tested Live 11 setup at 48 kHz with a fixed 256-frame
+buffer. Issue #14 reports distorted output while MME/DirectX works; the cause
+is unknown. If audio crackles, try
+`PIPEASIO_PREFERRED_BUFFERSIZE=512 ABLETON_LIVE_VERSION=11 ableton-live` and
+run `./scripts/check-live-audio.sh`.
+
+## Limits
+
+- The issue #14 dumps confirm the crash signature, not the exact export.
+- Live's in-app network access can fail under Wine. An offline `.auz` file
+  avoids the online authorization path.

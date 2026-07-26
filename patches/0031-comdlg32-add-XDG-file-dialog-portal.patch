@@ -3218,10 +3218,10 @@ index ebaf01e7..8510b1d8 100644
      info.pidlRet = NULL;
      info.lpBrowseInfo = lpbi;
 diff --git a/include/Makefile.in b/include/Makefile.in
-index 47df75fb..9c7cfb5a 100644
+index 72a8d439..f5a4487e 100644
 --- a/include/Makefile.in
 +++ b/include/Makefile.in
-@@ -1109,6 +1109,7 @@ SOURCES = \
+@@ -1110,6 +1110,7 @@ SOURCES = \
  	windowscontracts.idl \
  	windowsx.h \
  	wine/afd.h \
