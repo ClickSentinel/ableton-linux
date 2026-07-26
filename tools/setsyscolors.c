@@ -109,6 +109,5 @@ int mainCRTStartup( void )
     }
 
     if (!n) return 1;
-    if (!SetSysColors( n, idx, val )) return 2;
-    return 0;
+    return SetSysColors( n, idx, val ) ? 0 : 2;
 }

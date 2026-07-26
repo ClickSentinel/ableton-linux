@@ -283,6 +283,23 @@ if ! pgrep -af "Ableton Live.*\.exe" 2>/dev/null | grep "ProgramData" >/dev/null
     fi
 fi
 
+# GrayText (disabled menu items, e.g. Options when no track is selected) has no
+# per-theme source: Live's own TextDisabled token is calibrated for its layered
+# Skia surfaces (borders, icons, spacing), and copying it verbatim onto a flat
+# win32u menu fill tests worse than doing nothing (checked against the active
+# theme: TextDisabled sits closer to Menu than even wine's compiled-in default
+# does). Derive it instead: blend 45% of the way from Menu towards MenuText, per
+# channel. That tracks whatever Menu/MenuText resolve to (theme, dark/light,
+# live-follow) with no extra parsing, and lands near Windows' own classic
+# GrayText (128,128,128) on the hardcoded dark/light fallbacks. Shared by
+# sync_win32_colors and theme_watch_loop below.
+blend_gray_text() {   # <menu "R G B"> <menutext "R G B"> -> "R G B"
+    local mr mg mb tr tg tb
+    read -r mr mg mb <<< "$1"
+    read -r tr tg tb <<< "$2"
+    printf '%d %d %d' $(( mr + (tr - mr) * 45 / 100 )) $(( mg + (tg - mg) * 45 / 100 )) $(( mb + (tb - mb) * 45 / 100 ))
+}
+
 # win32u-drawn menus: Live's menu bar and dropdowns: take their colours from the
 # [Control Panel\Colors] table, which neither the prefix setup nor the theme sync below
 # has ever written, so the bar keeps stock light colours in dark mode. Sync the entries
@@ -308,19 +325,7 @@ sync_win32_colors() {   # dark|light [bar-bg bar-fg [menu-bg sel-bg sel-fg]]  ("
         pairs+=("ActiveTitle=$bar_bg" "GradientActiveTitle=$bar_bg" "TitleText=$bar_fg")
     fi
     [ -n "$menu_bg" ] && menu="$menu_bg"
-    # GrayText (disabled menu items, e.g. Options when no track is selected) has no
-    # per-theme source: Live's own TextDisabled token is calibrated for its layered
-    # Skia surfaces (borders, icons, spacing), and copying it verbatim onto a flat
-    # win32u menu fill tests worse than doing nothing (checked against the active
-    # theme: TextDisabled sits closer to Menu than even wine's compiled-in default
-    # does). Derive it instead: blend 45% of the way from Menu towards MenuText, per
-    # channel. That tracks whatever Menu/MenuText resolve to (theme, dark/light,
-    # live-follow) with no extra parsing, and lands near Windows' own classic
-    # GrayText (128,128,128) on the hardcoded dark/light fallbacks above.
-    local mr mg mb tr tg tb
-    read -r mr mg mb <<< "$menu"
-    read -r tr tg tb <<< "$menutext"
-    pairs+=("GrayText=$(( mr + (tr - mr) * 45 / 100 )) $(( mg + (tg - mg) * 45 / 100 )) $(( mb + (tb - mb) * 45 / 100 ))")
+    pairs+=("GrayText=$(blend_gray_text "$menu" "$menutext")")
     # Selected-item colours only ever move as a set: the menu highlight fill
     # (MenuHilight), the general selection fill (Hilight) and the selection text
     # (HilightText): win32u draws selected menu text with HilightText, so a themed
@@ -425,24 +430,13 @@ detect_system_topbar() {   # sets topbar from the host titlebar colors
 # colors for the next session. One watcher per prefix (own lock, fd 8); exits
 # when Live does.
 theme_watch_prefs_cfg() {
-    # Not sort -V | tail -1: version-sorting the *path* (not just the version
-    # number) has a real gotcha here. "Live 12.4/Preferences/..." sorts AFTER
-    # "Live 12.4.3/Preferences/..." because the two strings diverge right
-    # after "12.4" - one continues with "/" (0x2F), the other with "." (0x2E)
-    # starting a new version segment - and strverscmp falls back to a plain
-    # byte compare at that point, where '/' > '.'. That silently picked a
-    # 5-day-old, dead "Live 12.4" prefs file over the live "Live 12.4.3" one
-    # every time (see ableton_live_theme_file in detect-theme.sh for the same
-    # bug). mtime of the actual file is both simpler and semantically what we
-    # want: whichever Preferences.cfg was really written to most recently.
-    local major f newest="" newest_t=0 t
+    # Newest Preferences.cfg across installed "Live <major>.*" editions: see
+    # ableton_newest_prefs_dir in detect-theme.sh (sourced above) for why this
+    # isn't sort -V on the path.
+    local major dir
     major="$(printf '%s\n' "$exe_base" | awk '{print $3}')"
-    for f in "$WINEPREFIX"/drive_c/users/*/AppData/Roaming/Ableton/"Live ${major:-}"*/Preferences/Preferences.cfg; do
-        [ -f "$f" ] || continue
-        t="$(stat -c %Y "$f" 2>/dev/null)" || continue
-        if [ "$t" -gt "$newest_t" ]; then newest_t="$t"; newest="$f"; fi
-    done
-    [ -n "$newest" ] && printf '%s\n' "$newest"
+    dir="$(ableton_newest_prefs_dir "$WINEPREFIX" "$major")"
+    [ -n "$dir" ] && printf '%s\n' "$dir/Preferences.cfg"
 }
 theme_watch_loop() {
     local apply="$HOME/.local/share/ableton-wine/setsyscolors.exe"
@@ -495,13 +489,8 @@ theme_watch_loop() {
         last="$cur"
         topbar=""; menu_bg=""; sel_bg=""; sel_fg=""
         resolve_live_topbar || continue
-        # GrayText: same 45%-towards-MenuText blend as sync_win32_colors, kept in
-        # sync here since Live's own theme has no usable disabled-text source (see
-        # sync_win32_colors for why).
-        local mr mg mb tr tg tb gray
-        read -r mr mg mb <<< "$menu_bg"
-        read -r tr tg tb <<< "${topbar##*|}"
-        gray="$(( mr + (tr - mr) * 45 / 100 )),$(( mg + (tg - mg) * 45 / 100 )),$(( mb + (tb - mb) * 45 / 100 ))"
+        local gray
+        gray="$(blend_gray_text "$menu_bg" "${topbar##*|}")"; gray="${gray// /,}"
         bar_bg="${topbar%%|*}"; bar_bg="${bar_bg// /,}"
         bar_fg="${topbar##*|}"; bar_fg="${bar_fg// /,}"
         set -- "MenuBar=$bar_bg" "MenuText=$bar_fg" "ActiveTitle=$bar_bg" \
