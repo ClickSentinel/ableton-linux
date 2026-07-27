@@ -1,0 +1,41 @@
+Subject: win32u: include the non-client area in SetSysColors's forced
+ repaint
+
+NtUserSetSysColors already tries to force affected windows to repaint after
+a color change (NtUserRedrawWindow with RDW_INVALIDATE|RDW_ERASE|
+RDW_UPDATENOW|RDW_ALLCHILDREN), matching real Windows' documented behavior
+of refreshing any window displaying an affected color - but RDW_ALLCHILDREN
+alone only reaches client areas. RDW_FRAME was missing, so the non-client
+area (menu bars, captions) never got included. Confirmed missing in
+practice: an external SetSysColors call never repainted a window's native
+menu bar at all, requiring a caller to separately enumerate every window
+and call DrawMenuBar on each one, entirely outside this function, to get
+the same effect this one-flag fix now gives for free to any caller.
+---
+ dlls/win32u/sysparams.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
+index bb4f9d71..18cc50c6 100644
+--- a/dlls/win32u/sysparams.c
++++ b/dlls/win32u/sysparams.c
+@@ -7427,8 +7427,14 @@ BOOL WINAPI NtUserSetSysColors( INT count, const INT *colors, const COLORREF *va
+     /* Send WM_SYSCOLORCHANGE message to all windows */
+     send_message_timeout( HWND_BROADCAST, WM_SYSCOLORCHANGE, 0, 0,
+                           SMTO_ABORTIFHUNG, 2000, FALSE );
+-    /* Repaint affected portions of all visible windows */
+-    NtUserRedrawWindow( 0, NULL, 0, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN );
++    /* Repaint affected portions of all visible windows. RDW_FRAME too: real
++     * Windows' SetSysColors is documented to refresh any window displaying an
++     * affected color, and that includes the non-client area (menu bars,
++     * captions) - RDW_ALLCHILDREN alone only reaches client areas. Confirmed
++     * missing in practice: an external SetSysColors call never repainted a
++     * window's native menu bar at all without a caller separately forcing
++     * DrawMenuBar on every window afterward, entirely outside this function. */
++    NtUserRedrawWindow( 0, NULL, 0, RDW_INVALIDATE | RDW_FRAME | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN );
+     return TRUE;
+ }
+ 
+-- 
+2.43.0
+

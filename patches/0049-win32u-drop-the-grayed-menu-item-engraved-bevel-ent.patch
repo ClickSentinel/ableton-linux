@@ -1,0 +1,66 @@
+Subject: win32u: drop the grayed-menu-item engraved bevel entirely
+
+Second attempt after routing the bevel's two colors through get_sys_color()
+made no visible difference: COLOR_3DHILIGHT is unset in this prefix (falls
+back to Wine's compiled-in default, effectively still white), so the
+highlight pass rendered identically to the old hardcoded RGB(0xff,0xff,0xff)
+either way -- the part of the bevel that actually looked wrong never
+changed. Rather than guess at a better highlight color with no reliable
+source of truth for it, drop the two-pass bevel entirely for the
+non-hilite grayed case and always single-draw in COLOR_GRAYTEXT, matching
+what the MF_HILITE-grayed case a few lines below already does successfully.
+---
+ dlls/win32u/menu.c | 30 ++++++++++++------------------
+ 1 file changed, 12 insertions(+), 18 deletions(-)
+
+diff --git a/dlls/win32u/menu.c b/dlls/win32u/menu.c
+index a700f44a..17679bed 100644
+--- a/dlls/win32u/menu.c
++++ b/dlls/win32u/menu.c
+@@ -2690,14 +2690,17 @@ static void draw_menu_item( HWND hwnd, struct menu *menu, HWND owner, HDC hdc,
+ 
+         if (item->fState & MF_GRAYED)
+         {
+-            if (!(item->fState & MF_HILITE) )
+-            {
+-                ++rect.left; ++rect.top; ++rect.right; ++rect.bottom;
+-                NtGdiGetAndSetDCDword( hdc, NtGdiSetTextColor, RGB(0xff, 0xff, 0xff), NULL );
+-                DrawTextW( hdc, item->text, i, &rect, format );
+-                --rect.left; --rect.top; --rect.right; --rect.bottom;
+-            }
+-            NtGdiGetAndSetDCDword( hdc, NtGdiSetTextColor, RGB(0x80, 0x80, 0x80), NULL );
++            /* Dropped the classic Win95 engraved bevel (white +1,+1 highlight
++             * pass, then a gray shadow pass at the original position): it
++             * assumes COLOR_3DHILIGHT is a light color close to the menu
++             * background, which is only true for a stock light theme. Apps
++             * that theme the menu dark (SetSysColors on Menu/MenuText/GrayText)
++             * commonly leave 3DHilight/3DShadow at their Windows defaults
++             * (white), so the highlight pass renders as a glaring white ghost
++             * offset from the real text instead of a subtle bevel. Match the
++             * MF_HILITE grayed case just below, which already does a plain
++             * single-color draw with no bevel. */
++            NtGdiGetAndSetDCDword( hdc, NtGdiSetTextColor, get_sys_color( COLOR_GRAYTEXT ), NULL );
+         }
+ 
+         DrawTextW( hdc, item->text, i, &rect, format );
+@@ -2717,16 +2720,7 @@ static void draw_menu_item( HWND hwnd, struct menu *menu, HWND owner, HDC hdc,
+             }
+ 
+             if (item->fState & MF_GRAYED)
+-            {
+-                if (!(item->fState & MF_HILITE) )
+-                {
+-                    ++rect.left; ++rect.top; ++rect.right; ++rect.bottom;
+-                    NtGdiGetAndSetDCDword( hdc, NtGdiSetTextColor, RGB(0xff, 0xff, 0xff), NULL );
+-                    DrawTextW( hdc, item->text + i + 1, -1, &rect, format );
+-                    --rect.left; --rect.top; --rect.right; --rect.bottom;
+-                }
+-                NtGdiGetAndSetDCDword( hdc, NtGdiSetTextColor, RGB(0x80, 0x80, 0x80), NULL );
+-            }
++                NtGdiGetAndSetDCDword( hdc, NtGdiSetTextColor, get_sys_color( COLOR_GRAYTEXT ), NULL );
+             DrawTextW( hdc, item->text + i + 1, -1, &rect, format );
+         }
+ 
+-- 
+2.43.0
+

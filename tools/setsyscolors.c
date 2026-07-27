@@ -1,8 +1,17 @@
 /* setsyscolors.c — apply win32 system colors from the command line, for the
- * launcher's unified-top-bar watcher (issue #32). SetSysColors persists the
- * entries to the registry AND broadcasts WM_SYSCOLORCHANGE with a full redraw,
- * so a RUNNING Live repaints with the new colors — a plain registry write only
+ * launcher's unified-top-bar watcher (issue #32). SetSysColors updates the
+ * live in-memory color table and broadcasts WM_SYSCOLORCHANGE, so a running
+ * Live picks up the values on its next repaint; a plain registry write only
  * reaches processes started afterwards, which is why this must run in-prefix.
+ *
+ * No longer needs its own EnumWindows + DrawMenuBar pass: Wine's own
+ * SetSysColors used to repaint client areas only (RDW_ALLCHILDREN), missing
+ * the non-client area where a native menu bar lives. Fixed upstream instead
+ * (patches/0051-win32u-include-the-non-client-area-in-setsyscolors.patch:
+ * adds RDW_FRAME), so any caller gets the repaint for free now. Remaining
+ * apply-delay is on Live's side, not this repaint - see
+ * notes/FINDINGS-LIVE-THEME-PREVIEW-SIGNAL-2026-07-26.md.
+ *
  * usage:  setsyscolors.exe Name=R,G,B [Name=R,G,B ...]
  * Names mirror the [Control Panel\Colors] value names the launcher syncs.
  * build:  tools/build_setsyscolors.sh (real PE via clang, wine headers, no CRT) */
@@ -24,6 +33,7 @@ static const struct { const char *name; int index; } color_map[] = {
     { "TitleText",           COLOR_CAPTIONTEXT },
     { "ButtonFace",          COLOR_BTNFACE },
     { "ButtonText",          COLOR_BTNTEXT },
+    { "GrayText",            COLOR_GRAYTEXT },
 };
 
 /* no CRT: the few string helpers needed, spelled out */

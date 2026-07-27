@@ -164,6 +164,10 @@ STAMP_ONLY='
 0046|logic-only (frame-latency-as-semaphore fix; no new string literal)
 0047|logic-only (round_dpi() wrap; no new string literal)
 0048|configure/build-gate fix only; effect verified structurally (libusb-1.0.dll presence) and by 0032 fingerprint, not by a literal of its own
+0049|logic-only (grayed-menu-item bevel dropped entirely; no new string literal)
+0050|logic-only (per-process sys-color cache reset on WM_SYSCOLORCHANGE; no new string literal)
+0051|logic-only (RDW_FRAME added to the SetSysColors redraw flags; no new string literal)
+0052|logic-only (DT_HIDEPREFIX on the menu bar DrawTextW call; no new string literal)
 '
 wide_pattern() {  # ascii string -> PCRE matching its UTF-16LE bytes
     printf '%s' "$1" | od -An -v -tx1 | tr -d '\n' | tr -s ' ' ' ' \

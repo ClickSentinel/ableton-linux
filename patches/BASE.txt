@@ -11,7 +11,7 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 46 files, numbered 0001 through 0048.
+The current Wine series contains 50 files, numbered 0001 through 0052.
 Patches 0027 and 0044 are intentionally absent.
 
 ## Applying the series
@@ -112,3 +112,37 @@ Apply them in sequence with the rest of the series.
   Patch 0032's Push2 bridge gate checked a cache variable only
   `AC_CHECK_LIB` sets; fixes both the generated `configure` script and
   `configure.ac`. Renumbered from 0045 alongside 0046/0047.
+- `0049`: drop the engraved-bevel double-draw for grayed native menu
+  items. The highlight pass assumed `COLOR_3DHILIGHT` sits close to the
+  menu background, true for the stock light theme but not once an app
+  themes the menu bar dark via `SetSysColors`; both draw paths now do a
+  single plain draw with `COLOR_GRAYTEXT`, matching what the `MF_HILITE`
+  case already did. This code has zero diff from stock Wine, so the bug
+  is upstream, not fork-specific.
+- `0050`: invalidate each process's per-process system-color cache -
+  including any already-created brush/pen - when `WM_SYSCOLORCHANGE`
+  arrives. Wine reads and caches every system color once
+  (`get_rgb_entry`'s `loaded` flag) and never re-reads it; a
+  `SetSysColors` from another process was otherwise invisible to an
+  already-running window forever. Together with `theme_watch_loop`
+  (`scripts/ableton-live`) and 0051 below, this is the practical
+  ceiling for issue 35 point 4 (real-time theme switching): Live emits
+  no observable signal at all - no file, no registry write, nothing -
+  while its Preferences dialog is open, only on close. See
+  `notes/FINDINGS-LIVE-THEME-PREVIEW-SIGNAL-2026-07-26.md`.
+- `0051`: add `RDW_FRAME` to `NtUserSetSysColors`'s forced repaint so the
+  redraw reaches the non-client area, where a native menu bar actually
+  lives. Removes the need for `setsyscolors.exe`'s old `EnumWindows` +
+  `DrawMenuBar` workaround, which is deleted; it now just calls
+  `SetSysColors`.
+- `0052`: hide the menu bar's alt-key mnemonic underlines (issue 35).
+  Real Windows only shows these once Alt is pressed
+  (`WM_UPDATEUISTATE`/`UISF_HIDEACCEL`), which this Wine tree never
+  implements; the bar always drew them instead. Adds `DT_HIDEPREFIX` to
+  the menu bar's `DrawTextW` call (bar only - dropdown items keep
+  theirs, where Alt-key navigation is still used). `DT_HIDEPREFIX` was
+  a dead flag in this tree - defined but never checked by
+  `dlls/user32/text.c`'s underline-drawing site, which only looked at
+  `DT_NOPREFIX` (not equivalent: that shows a literal `&` instead of
+  just hiding the underline) - fixed by gating the underscore draw on
+  `DT_HIDEPREFIX` too.
