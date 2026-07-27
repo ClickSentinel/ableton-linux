@@ -17,7 +17,7 @@ bystanders: Live hardcodes `--disable-gpu --disable-gpu-compositing
 `/proc/<pid>/cmdline`. The maintainer confirmed the result in use, with
 idle CPU at 1-2%. Shipped on branch `fix/interface-drawing-on-gpu`
 together with Wine patch 0053 for the below-minimum resize fight the
-GPU renderer exposed. See `notes/ABLETON-WINE-GPU-RENDERER.md`.
+GPU renderer exposed. See `ABLETON-WINE-GPU-RENDERER.md` (this directory).
 
 The diagnosis and plan below are preserved as written; steps 1 and 2 of
 the plan were executed and produced the finding above. The remaining
@@ -46,8 +46,8 @@ re-render so both writers hold identical content. On the production
 setup (2x scale, WebView2 149) the frames never converge, so the mask
 fails and the race stays visible.
 
-`notes/ABLETON-WINE-LEARNVIEW-FLICKER.md` records the mechanism.
-`notes/ABLETON-WINE-WEBVIEW2-COMPOSITOR.md` states the conclusion: no
+`ABLETON-WINE-LEARNVIEW-FLICKER.md` records the mechanism.
+`ABLETON-WINE-WEBVIEW2-COMPOSITOR.md` states the conclusion: no
 timer or gate tuning escapes a two-writer conflict on one window.
 
 ## History of prior claims
@@ -205,8 +205,8 @@ name the exact paths exercised.
 
 ## References
 
-- `notes/ABLETON-WINE-LEARNVIEW-FLICKER.md` (0041 mechanism and cause)
-- `notes/ABLETON-WINE-WEBVIEW2-COMPOSITOR.md` (backport and protocol,
+- `ABLETON-WINE-LEARNVIEW-FLICKER.md` (0041 mechanism and cause)
+- `ABLETON-WINE-WEBVIEW2-COMPOSITOR.md` (backport and protocol,
   in the `fix/d2d1-dcomp-giang17-webview2-compositor` worktree)
 - Issue 57 (close-path flicker, still open, accurate)
 - https://github.com/giang17/wine/issues/8

@@ -61,6 +61,7 @@ panes across scale factors other than 200%.
 
 ## Related
 
+- [Diagnosis narrative](ABLETON-WINE-GPU-RENDERER-WEBVIEW2-DIAGNOSIS.md)
 - [Learn View flicker mechanism](ABLETON-WINE-LEARNVIEW-FLICKER.md)
 - [Patch 0053](../patches/0053-winex11-export-the-app-minimum-tracking-size-as-PMin.patch)
 - Resize trace from the diagnosis session:
