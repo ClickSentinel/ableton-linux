@@ -11,6 +11,9 @@
   as the X11 `PMinSize` hint, and the window manager stops the drag at
   the minimum.
 
+- The README now covers installation and ordinary use. Troubleshooting, source
+  builds, configuration overrides, and maintainer material have dedicated
+  documents.
 - Fixed a Live crash when closing WebView2 plugin editors (issue 52, Wine
   patch 0045). `RevokeDragDrop` now rejects windows owned by another process,
   matching `RegisterDragDrop`. Fix by Giang Nguyen. See
