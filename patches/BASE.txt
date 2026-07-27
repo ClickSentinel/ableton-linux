@@ -11,7 +11,7 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 50 files, numbered 0001 through 0052.
+The current Wine series contains 51 files, numbered 0001 through 0053.
 Patches 0027 and 0044 are intentionally absent.
 
 ## Applying the series
@@ -146,3 +146,11 @@ Apply them in sequence with the rest of the series.
   `DT_NOPREFIX` (not equivalent: that shows a literal `&` instead of
   just hiding the underline) - fixed by gating the underscore draw on
   `DT_HIDEPREFIX` too.
+- `0053`: export the app's `WM_GETMINMAXINFO` tracking minimum as the
+  X11 `PMinSize` size hint for resizable managed windows. The window
+  manager then clamps interactive resizes at the app minimum, as USER
+  does on Windows. Without the hint, a grab below Live's minimum made
+  Live counter mid-drag and the window fought the drag (growth at the
+  opposite edge, occasional spurious maximize). Found 2026-07-27 while
+  enabling Live's GPU renderer. See
+  `notes/ABLETON-WINE-GPU-RENDERER.md`.

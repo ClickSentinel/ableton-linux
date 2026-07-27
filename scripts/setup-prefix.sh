@@ -183,7 +183,7 @@ check_mutter_knob() {  # warn when mutter's xwayland-native-scaling disagrees wi
 # advertised it. The idle CPU cost is back until the Wine-side fix lands; see
 # notes/ABLETON-WINE-APC-COALESCING.md.
 strip_options_txt() {
-    local line="-DontCombineAPCs" prefs f tmp
+    local line="$1" prefs f tmp
     shopt -s nullglob
     for prefs in "$WINEPREFIX"/drive_c/users/*/AppData/Roaming/Ableton/Live*/Preferences; do
         f="$prefs/Options.txt"
@@ -517,7 +517,14 @@ update-desktop-database "${XDG_DATA_HOME:-$HOME/.local/share}/applications" 2>/d
 "$WINESERVER" -w
 
 echo "== [5b/5] remove the 2026.07.18.1 Options.txt seed (issue #29) =="
-strip_options_txt
+strip_options_txt "-DontCombineAPCs"
+
+# -_ForceGdiBackend disables Live's GPU renderer. Early prefixes carried it
+# (inherited from pre-repo setups); with the d2d1 base fork Live's GPU
+# renderer works, removes the WebView2 pane flicker, and drops idle CPU.
+# See notes/ABLETON-WINE-GPU-RENDERER.md.
+echo "== [5c/5] remove -_ForceGdiBackend so Live uses its GPU renderer =="
+strip_options_txt "-_ForceGdiBackend"
 
 echo
 echo "OK: prefix ready at $WINEPREFIX"

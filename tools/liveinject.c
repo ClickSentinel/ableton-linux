@@ -14,6 +14,7 @@
  *   newmidi              fg + Ctrl+Shift+T (insert MIDI track)
  *   ctrlf                Ctrl+F (focus browser search)
  *   ctrlaltp             Ctrl+Alt+P (toggle plug-in windows)
+ *   ctrlalt7             Ctrl+Alt+7 (toggle Learn View)
  *   ctrlq                Ctrl+Q (quit)
  *   type <text>          type ascii text (unicode events)
  *   key <enter|down|up|left|right|esc|tab|f1>
@@ -41,6 +42,21 @@ static void send_vk( WORD vk, BOOL up )
     Sleep( 40 );
 }
 static void tap( WORD vk ) { send_vk( vk, FALSE ); send_vk( vk, TRUE ); }
+
+/* Scancode variant: Live's shortcut handling ignores plain-VK synthetic
+ * input for some chords (Ctrl+Alt+7); hardware scancodes get through. */
+static void send_sc( WORD vk, BOOL up )
+{
+    INPUT in;
+    memset( &in, 0, sizeof(in) );
+    in.type = INPUT_KEYBOARD;
+    in.ki.wScan = MapVirtualKeyA( vk, MAPVK_VK_TO_VSC );
+    in.ki.dwFlags = KEYEVENTF_SCANCODE | (up ? KEYEVENTF_KEYUP : 0);
+    SendInput( 1, &in, sizeof(in) );
+    Sleep( 40 );
+}
+
+static void tap_sc( WORD vk ) { send_sc( vk, FALSE ); send_sc( vk, TRUE ); }
 
 static void type_text( const char *s )
 {
@@ -182,6 +198,14 @@ void mainCRTStartup( void )
         tap( 'P' );
         send_vk( VK_MENU, TRUE );
         send_vk( VK_CONTROL, TRUE );
+    }
+    else if (!lstrcmpA( a1, "ctrlalt7" ))
+    {
+        send_sc( VK_CONTROL, FALSE );
+        send_sc( VK_MENU, FALSE );
+        tap_sc( '7' );
+        send_sc( VK_MENU, TRUE );
+        send_sc( VK_CONTROL, TRUE );
     }
     else if (!lstrcmpA( a1, "clearmods" ))
     {   /* release possibly-stuck modifiers */
