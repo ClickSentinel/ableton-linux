@@ -1,9 +1,9 @@
 # Ableton Link support
 
-The installer ships the persistent native peer `ableton-linkd`, its systemd
-user unit, and `setup-link.sh`. Run the setup script once as your normal user.
-It requests `sudo` for route and firewall changes, then uses your user session
-to enable `ableton-linkd.service`:
+The installer ships the persistent native peer `ableton-linkd` and configures
+Link networking by default during installation. The network step requests
+`sudo` to add the multicast route and firewall allowance. If that step was
+skipped or could not complete, close Live and retry it as your normal user:
 
 ```bash
 "$HOME/.local/share/ableton-wine/setup-link.sh"
@@ -36,10 +36,10 @@ the route and updates the same firewall rule, hook, and unit. If the daemon or
 unit file is missing, it leaves the network changes in place and reports that
 the daemon setup was skipped.
 
-The current NetworkManager hook applies the multicast route to every
-interface reported as `up`. It does not repeat the default-route or VPN
-check. A later VPN or secondary-interface event can therefore move the route.
-Verify the route after each network or VPN reconnect:
+The NetworkManager hook resolves the current IPv4 default route whenever an
+interface comes up. It ignores `tun`, `wg`, and `tap` defaults so a VPN cannot
+move Link multicast traffic onto its tunnel. Verify the selected route after
+changing network connections:
 
 ```bash
 ip route show 224.0.0.0/4

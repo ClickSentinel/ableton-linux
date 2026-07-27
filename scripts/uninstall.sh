@@ -41,10 +41,20 @@ echo "removed desktop entries, icons and MIME registrations"
 
 if [ "${1:-}" = "--prefix" ]; then
     pfx="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}"
-    read -rp "Also delete $pfx? This removes your Live installation AND its authorisation. [y/N] " a
+    # No terminal means no answer; keep the prefix rather than delete it blind.
+    read -rp "Also delete $pfx? This removes your Live installation AND its authorisation. [y/N] " a || a=n
     case "$a" in
         [yY]|[yY][eE][sS]) rm -rf "$pfx" && echo "removed $pfx" ;;
         *) echo "kept $pfx" ;;
     esac
+fi
+
+# setup-link.sh writes these as root, so this script cannot remove them.
+hook=/etc/NetworkManager/dispatcher.d/50-link-multicast
+if [ -e "$hook" ]; then
+    echo ""
+    echo "Ableton Link left two system changes behind. To remove them:"
+    echo "  sudo rm $hook"
+    echo "  and close UDP port 20808 in your firewall"
 fi
 echo "done."

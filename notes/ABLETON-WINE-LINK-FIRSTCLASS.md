@@ -90,12 +90,13 @@ the systemd user unit, and `setup-link.sh` under
 
 ## Host and launcher integration
 
-`scripts/setup-link.sh` configures the multicast route, adds a UDP 20808
-allowance when UFW or firewalld is installed, and enables the user unit when
-its files are present. The script must run as the user because it calls
-`systemctl --user`; it requests `sudo` only for host network changes. The
-current NetworkManager dispatcher hook is not interface-filtered, so the route
-must be checked after VPN and network reconnects.
+The `.run` installer calls `scripts/setup-link.sh` after installing the Link
+files unless `--no-link` is set. The script configures the multicast route,
+adds a UDP 20808 allowance when UFW or firewalld is installed, and enables the
+user unit when systemd is available. It runs as the user because it calls
+`systemctl --user` and requests `sudo` only for host network changes. The
+NetworkManager dispatcher hook resolves the current default LAN interface and
+ignores `tun`, `wg`, and `tap` defaults.
 
 The Live, Max, and beta launchers start `ableton-linkd --daemon` when the
 binary is installed and no process with that name is running.
@@ -133,7 +134,8 @@ was corrected during probe development.
 - Measure beat and phase alignment under audio load.
 - Verify Start Stop Sync from Live and another peer.
 - Confirm session continuity across a full Live restart.
-- Run the assembled `.run` installer and Link setup on a fresh machine.
+- Run the assembled `.run` installer and its integrated Link setup on a fresh
+  machine.
 
 LinkAudio and a bundled JACK transport bridge remain outside this
 implementation.

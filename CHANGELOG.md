@@ -11,6 +11,10 @@
   as the X11 `PMinSize` hint, and the window manager stops the drag at
   the minimum.
 
+- The installer now configures Ableton Link networking during installation.
+  Pass `--no-link` to skip the privileged multicast-route and firewall step.
+  The NetworkManager hook now keeps the route on the current non-VPN default
+  interface.
 - Fixed a Live crash when closing WebView2 plugin editors (issue 52, Wine
   patch 0045). `RevokeDragDrop` now rejects windows owned by another process,
   matching `RegisterDragDrop`. Fix by Giang Nguyen. See

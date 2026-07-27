@@ -3,10 +3,12 @@
 # Usage:  sh ableton-wine-setup-@VERSION@.run [options]
 # Options:
 #   --runtime-only   install the patched Wine only; skip making the Wine prefix
-#   --update         update an existing installation in place (Live, settings, license kept)
+#   --update         update compatibility files; keep Live, authorization, and projects
 #   --no-launch      never run the Ableton installer (zip/exe) automatically
+#   --no-link        skip Ableton Link network configuration
 #   --extract DIR    unpack this installer's files into DIR and exit
 #   --uninstall      remove the installed Wine, launcher, and menu entries
+#   --prefix         with --uninstall: also delete the Wine prefix and Live
 #   --help           this text
 # Environment:
 #   ABLETON_DPI_MODE    auto|preserve|100|fractional|dpi<N> (overrides scale auto-detection)
@@ -34,41 +36,50 @@ fail() { printf '!! %s\n' "$*" >&2; exit 1; }
 
 mode=install
 do_launch=1
+do_link_setup=1
 extract_dir=""
+drop_prefix=0
 while [ $# -gt 0 ]; do
     case "$1" in
-        --help|-h)      head -15 "$self" | sed -n '2,15{s/^# \{0,1\}//;p}'; exit 0 ;;
+        --help|-h)      head -17 "$self" | sed -n '2,17{s/^# \{0,1\}//;p}'; exit 0 ;;
         --runtime-only) mode=runtime ;;
         --update)       mode=update ;;
         --no-launch)    do_launch=0 ;;
+        --no-link)      do_link_setup=0 ;;
         --uninstall)    mode=uninstall ;;
+        --prefix)       drop_prefix=1 ;;
         --extract)      mode=extract; extract_dir="${2:?--extract needs a directory}"; shift ;;
         *)              fail "unknown option: $1 (try --help)" ;;
     esac
     shift
 done
 
+if [ "$drop_prefix" = 1 ] && [ "$mode" != uninstall ]; then
+    fail "--prefix only applies with --uninstall"
+fi
+
 say "== Ableton-on-Wine installer $VERSION =="
 
 # --- offer an in-place update when an installation is already here ------------
 # Rerunning the full install always worked (dated rollbacks throughout), but it
 # demands an Ableton download and walks every prompt again; update mode brings
-# runtime, launcher, and prefix policy to this kit's version and touches
-# nothing else: not Live, not settings, not the license.
+# runtime, launcher, and prefix policy to this kit's version. It preserves the
+# Live installation, authorization, and projects; compatibility settings may
+# change.
 if [ "$mode" = install ] && [ -x "$HOME/.local/opt/$RUNTIME_NAME/bin/wine" ] \
    && [ -f "${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}/system.reg" ]; then
     installed_ver="$(cat "$HOME/.local/share/ableton-wine/VERSION" 2>/dev/null || true)"
     say ""
     say "An existing installation was found${installed_ver:+ (version $installed_ver)}."
     if [ -t 0 ]; then
-        printf 'Update it to %s? Ableton Live, your settings, and the license are kept. [Y/n] ' "$VERSION"
+        printf 'Update it to %s? Live, authorization, and projects are kept; compatibility settings may change. [Y/n] ' "$VERSION"
         read -r ans || ans=""
         case "$ans" in
             [Nn]*) say "-- full install it is; the existing runtime gets a dated rollback" ;;
             *)     mode=update ;;
         esac
     else
-        say "-- updating it to $VERSION (Ableton Live, settings, and the license are kept)"
+        say "-- updating it to $VERSION (Live, authorization, and projects are kept; compatibility settings may change)"
         mode=update
     fi
 fi
@@ -162,6 +173,29 @@ mkdir -p "$kit"
 tar -xf "$workdir/payload.tar" -C "$kit"
 rm -f "$workdir/payload.tar"
 
+configure_link() {
+    local marker="$HOME/.local/share/ableton-wine/link-configured"
+
+    if [ "$do_link_setup" -eq 0 ]; then
+        say "-- Ableton Link network setup skipped (--no-link)"
+        return 0
+    fi
+    if [ -f "$marker" ]; then
+        say "-- Ableton Link networking is already configured"
+        return 0
+    fi
+
+    say "-- configuring Ableton Link networking"
+    say "   This may request sudo to add a multicast route and firewall allowance."
+    if bash "$kit/scripts/setup-link.sh"; then
+        return 0
+    fi
+
+    say "!! Ableton Link networking was not configured; Live installation will continue."
+    say "!! Close Live and run ~/.local/share/ableton-wine/setup-link.sh to retry."
+    return 0
+}
+
 if [ "$mode" = extract ]; then
     mkdir -p "$extract_dir"
     cp -a "$kit/." "$extract_dir/"
@@ -169,7 +203,11 @@ if [ "$mode" = extract ]; then
     exit 0
 fi
 if [ "$mode" = uninstall ]; then
-    bash "$kit/scripts/uninstall.sh" "$@"
+    if [ "$drop_prefix" = 1 ]; then
+        bash "$kit/scripts/uninstall.sh" --prefix
+    else
+        bash "$kit/scripts/uninstall.sh"
+    fi
     exit 0
 fi
 
@@ -202,7 +240,8 @@ export PATH="$kit/bin:$PATH"
 if [ "$mode" = update ]; then
     say "-- updating the patched Wine (a dated rollback of the old runtime is kept)"
     bash "$kit/scripts/install.sh"
-    say "-- refreshing the Wine prefix (registry policy + runtime DLL healing; Live untouched)"
+    configure_link
+    say "-- refreshing the Wine prefix (registry policy + runtime DLL healing; compatibility settings may change)"
     bash "$kit/scripts/setup-prefix.sh" --refresh
     say ""
     say "================================================================"
@@ -216,6 +255,7 @@ fi
 say "-- installing the patched Wine (goes to ~/.local/opt, touches nothing else)"
 bash "$kit/scripts/install.sh"
 [ "$mode" = runtime ] && { say "OK: the patched Wine is installed (--runtime-only: stopped before creating the Wine prefix)"; exit 0; }
+configure_link
 
 # --- create the prefix --------------------------------------------------------
 # Seed ABLETON_DPI_MODE from the detected display scale; the launcher re-detects on every start.
@@ -291,9 +331,8 @@ else
     say "           ~/.local/opt/$RUNTIME_NAME/bin/wine ./*.exe"
 fi
 say "Launch Live:   ~/.local/bin/ableton-live"
-say "Then, inside Live (both matter):"
-say "  * Options menu -> untick 'Auto-Scale Plugin Window'"
-say "  * Preferences -> Audio -> Driver Type: ASIO -> Device: PipeASIO"
+say "Then, inside Live:"
+say "  * Settings/Preferences -> Audio -> Driver Type: ASIO -> Audio Device: PipeASIO"
 say "================================================================"
 exit 0
 __PAYLOAD_BELOW__
