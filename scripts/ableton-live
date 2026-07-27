@@ -467,6 +467,11 @@ theme_watch_loop() {
                 # timeout keeps the pgrep liveness check above from stalling
                 # indefinitely if Live exits without ever touching the file again
                 inotifywait -q -e close_write,modify -t 30 "${watch_files[@]}" >/dev/null 2>&1
+                # exit 2 is a plain timeout and exit 0 is a real event - both
+                # already waited. exit 1 means inotifywait itself failed (bad
+                # path, inotify watch limit, ...); without a fallback sleep
+                # here the loop would spin with no delay at all until Live exits.
+                [ $? -eq 1 ] && sleep 2
             else
                 sleep 2
             fi
