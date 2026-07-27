@@ -1,0 +1,63 @@
+Subject: winex11: export the app minimum tracking size as PMinSize
+ hints
+
+USER on Windows clamps an interactive resize at the size a window
+returns through WM_GETMINMAXINFO, so a drag stops at the app minimum.
+winex11 exported no PMinSize hint for resizable windows, so the window
+manager granted below-minimum sizes during a grab, the app countered
+with its minimum mid-drag, and the window manager re-applied each
+counter anchored at the grabbed edge. On Live 12 with the GPU renderer
+this produced a visible fight below the 1610x1346 minimum: the window
+grew away from the drag, and the configure storm could race the
+_NET_WM_STATE rewrite into a spurious maximize (trace
+live-resize-trace-gpu-20260727.log, t=36821.7). Patch 0042's
+config-rounding alias absorbs the app's one-pixel band counters by
+design and cannot absorb below-minimum clamps.
+
+set_size_hints now sends WM_GETMINMAXINFO to resizable managed windows
+and exports ptMinTrackSize as PMinSize. The window manager then clamps
+the grab at the app minimum and the below-minimum regime is
+unreachable. A zeroed MINMAXINFO is passed; an app that does not
+handle the message leaves it untouched and no PMinSize is exported,
+which preserves the previous behaviour for such windows. set_size_hints
+runs at window creation and on every configure sync, so a minimum that
+changes with the app layout is re-exported, and the pending-state
+deduplication in window_set_wm_normal_hints keeps identical hints from
+being resent.
+
+Verified on Live 12.4.5b7, GNOME/Xwayland at 200% scale: xprop reports
+"program specified minimum size: 1610 by 1346" on the Live toplevel, a
+below-minimum client resize request comes back clamped to the minimum
+width, and an interactive shrink stops at the minimum without a
+counter storm.
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 4ccd2abf..fa7db89a 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -988,6 +988,25 @@ static void set_size_hints( struct x11drv_win_data *data, DWORD style )
+             size_hints->min_height = size_hints->max_height;
+             size_hints->flags |= PMinSize | PMaxSize;
+         }
++        else if (data->managed)
++        {
++            /* Resizable windows: export the app's WM_GETMINMAXINFO tracking
++             * minimum so the window manager clamps interactive resizes at it,
++             * as USER does on Windows.  Without this the WM grants below-min
++             * sizes during a grab, the app counters with its minimum mid-drag,
++             * and the two fight (Live's below-min resize storm).  A zeroed
++             * MINMAXINFO is passed; apps that don't handle the message leave
++             * it untouched and no PMinSize is exported. */
++            MINMAXINFO mmi;
++            memset( &mmi, 0, sizeof(mmi) );
++            send_message( data->hwnd, WM_GETMINMAXINFO, 0, (LPARAM)&mmi );
++            if (mmi.ptMinTrackSize.x > 0 && mmi.ptMinTrackSize.y > 0)
++            {
++                size_hints->min_width = mmi.ptMinTrackSize.x;
++                size_hints->min_height = mmi.ptMinTrackSize.y;
++                size_hints->flags |= PMinSize;
++            }
++        }
+     }
+ 
+     window_set_wm_normal_hints( data, size_hints );

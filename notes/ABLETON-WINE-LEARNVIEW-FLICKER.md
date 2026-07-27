@@ -1,5 +1,10 @@
 # Learn View stale rendering and automatic refresh
 
+Superseded 2026-07-27: enabling Live's GPU renderer removes the visible
+pane flicker described here. The mechanism analysis below remains
+accurate for the GDI renderer. See
+[the GPU renderer note](ABLETON-WINE-GPU-RENDERER.md).
+
 [`Patch 0041`](../patches/0041-dxgi-make-dcomp-presents-visible-on-webview2-s-unat.patch)
 makes WebView2 frames visible and keeps the latest frame on screen.
 `learnheal.exe`, added in release 2026.07.21.2, refreshes each settled Learn
