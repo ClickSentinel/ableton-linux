@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Live now uses its GPU renderer. Prefix setup removes the legacy
+  `-_ForceGdiBackend` line from `Options.txt` (step 5c). This removes the
+  Learn View and Splice view flicker and drops idle CPU to 1-2%. See
+  [the GPU renderer note](notes/ABLETON-WINE-GPU-RENDERER.md).
+- Fixed windows fighting an interactive resize below the app minimum
+  (Wine patch 0053). winex11 now exports the `WM_GETMINMAXINFO` minimum
+  as the X11 `PMinSize` hint, and the window manager stops the drag at
+  the minimum.
+
 - Fixed a Live crash when closing WebView2 plugin editors (issue 52, Wine
   patch 0045). `RevokeDragDrop` now rejects windows owned by another process,
   matching `RegisterDragDrop`. Fix by Giang Nguyen. See
