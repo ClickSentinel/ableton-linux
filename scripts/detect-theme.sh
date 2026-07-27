@@ -113,15 +113,35 @@ ableton_ask_color() {   # <ask-file> <key> -> "R G B"
     printf '%d %d %d\n' $(( 16#${hex:0:2} )) $(( 16#${hex:2:2} )) $(( 16#${hex:4:2} ))
 }
 
+# ableton_newest_prefs_dir <wineprefix> <live-major> -> the Preferences dir
+# whose Preferences.cfg was written to most recently, for whichever installed
+# "Live <major>.*" edition has one. Not sort -V | tail -1 on the path: that has
+# a real gotcha - "Live 12.4/Preferences" sorts AFTER "Live 12.4.3/Preferences"
+# because the strings diverge right after "12.4" into "/" (0x2F) vs "." (0x2E),
+# and strverscmp falls back to a plain byte compare there, where '/' > '.'.
+# That silently read a stale, long-dead "Live 12.4" prefs dir instead of the
+# live "Live 12.4.3" one every time - always resolving whatever was active
+# back when that older dir was last written, never the actual current
+# selection. mtime of the real prefs file is both simpler and semantically
+# correct: whichever was written most recently is the one Live actually
+# renders with. Shared by ableton_live_theme_file below and
+# theme_watch_prefs_cfg in scripts/ableton-live, which both hit this same bug.
+ableton_newest_prefs_dir() {
+    local prefix="$1" major="$2" d t newest_t=0 newest=""
+    for d in "$prefix"/drive_c/users/*/AppData/Roaming/Ableton/"Live ${major:-}"*/Preferences; do
+        [ -f "$d/Preferences.cfg" ] || continue
+        t="$(stat -c %Y "$d/Preferences.cfg" 2>/dev/null)" || continue
+        if [ "$t" -gt "$newest_t" ]; then newest_t="$t"; newest="$d"; fi
+    done
+    [ -n "$newest" ] && printf '%s\n' "$newest"
+}
+
 # ableton_live_theme_file <wineprefix> <install-themes-dir> <live-major> <dark|light>
-# prints the .ask Live renders with. Preferences.cfg is an opaque binary whose
-# values are not anchored to their tags, but a picked theme is stored as its plain
-# name ("Catppuccin Auto"), so the newest cfg's UTF-16 strings (via `strings`,
-# binutils) are matched against the themes actually installed: the factory Themes
-# dir and the User Library: and the last match wins. No match (the stock Default
-# theme, or no binutils) falls back to the follow-system default pair; the Tone and
-# Contrast variant enums are not recoverable from the binary, so default-theme
-# users get Neutral Medium. ABLETON_TOPBAR_MODE=system or a hex pair overrides.
+# prints the .ask Live renders with, resolved by grepping Preferences.cfg's
+# UTF-16 strings for an installed theme's name (factory dir + User Library,
+# last match wins) since the binary has no tag-anchored values. Falls back
+# to the follow-system default (Neutral Medium) when there's no match or no
+# binutils. ABLETON_TOPBAR_MODE=system or a hex pair overrides.
 ableton_live_theme_file() {
     local prefix="$1" themes="$2" major="$3" scheme="$4" prefs line drive cand d file=""
     local -a dirs
@@ -129,7 +149,7 @@ ableton_live_theme_file() {
     for d in "$prefix"/drive_c/users/*/Documents/Ableton/"User Library"/Themes; do
         [ -d "$d" ] && dirs+=("$d")
     done
-    prefs="$(ls -d "$prefix"/drive_c/users/*/AppData/Roaming/Ableton/"Live ${major:-}"*/Preferences 2>/dev/null | sort -V | tail -n 1)"
+    prefs="$(ableton_newest_prefs_dir "$prefix" "$major")"
     if [ -n "$prefs" ] && [ -r "$prefs/Preferences.cfg" ] && command -v strings >/dev/null 2>&1; then
         while IFS= read -r line; do
             case "$line" in
