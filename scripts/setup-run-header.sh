@@ -5,7 +5,7 @@
 #   --runtime-only   install the patched Wine only; skip making the Wine prefix
 #   --update         update compatibility files; keep Live, authorization, and projects
 #   --no-launch      never run the Ableton installer (zip/exe) automatically
-#   --no-link        skip Ableton Link network configuration
+#   --no-link        skip Ableton Link setup (remembered on later runs)
 #   --link           configure Ableton Link even if previously skipped or declined
 #   --extract DIR    unpack this installer's files into DIR and exit
 #   --uninstall      remove the installed Wine, launcher, and menu entries
@@ -176,14 +176,32 @@ mkdir -p "$kit"
 tar -xf "$workdir/payload.tar" -C "$kit"
 rm -f "$workdir/payload.tar"
 
+# Setup versions 1 and 2 installed this hook as root. Declined installs
+# never run setup-link.sh, which would remove it, and --no-link promises no
+# sudo prompt, so on those paths only point at the leftover.
+warn_stale_link_hook() {
+    local hook=/etc/NetworkManager/dispatcher.d/50-link-multicast
+    if [ -e "$hook" ]; then
+        say "   note: an earlier Link setup installed $hook"
+        say "   it is no longer used; remove it with: sudo rm $hook"
+    fi
+}
+
 configure_link() {
     local marker="$HOME/.local/share/ableton-wine/link-configured"
-    local required_version=2   # keep in sync with setup-link.sh's LINK_SETUP_VERSION
+    # The version is owned by setup-link.sh; a marker recording anything else
+    # forces one re-run so existing installs pick up changed behavior.
+    local required_version
+    required_version="$(sed -n 's/^LINK_SETUP_VERSION=//p' "$kit/scripts/setup-link.sh")"
 
     if [ "$do_link_setup" -eq 0 ]; then
-        say "-- Ableton Link network setup skipped (--no-link)"
+        say "-- Ableton Link setup skipped (--no-link)"
+        # The decline is sticky, even over an earlier configured state: later
+        # updates stay quiet until --link opts back in, which re-runs the
+        # idempotent setup in full, so nothing is lost by recording it.
         mkdir -p "$(dirname "$marker")" 2>/dev/null || true
         printf 'declined\n%s\n' "$required_version" > "$marker" 2>/dev/null || true
+        warn_stale_link_hook
         return 0
     fi
 
@@ -192,22 +210,24 @@ configure_link() {
         state="$(sed -n 1p "$marker")"
         ver="$(sed -n 2p "$marker")"
         if [ "$state" = declined ]; then
-            say "-- Ableton Link networking was previously declined (--no-link); pass --link to configure it now"
+            say "-- Ableton Link setup was previously declined (--no-link); pass --link to configure it now"
+            warn_stale_link_hook
             return 0
         fi
-        if [ "$ver" = "$required_version" ]; then
-            say "-- Ableton Link networking is already configured"
+        if [ -n "$required_version" ] && [ "$ver" = "$required_version" ]; then
+            say "-- Ableton Link is already configured"
             return 0
         fi
     fi
 
-    say "-- configuring Ableton Link networking"
-    say "   This may request sudo to add a multicast route and firewall allowance."
+    say "-- configuring Ableton Link"
+    say "   This asks for sudo only to open UDP port 20808 in an active firewall"
+    say "   and to remove what earlier setup versions installed under /etc."
     if bash "$kit/scripts/setup-link.sh"; then
         return 0
     fi
 
-    say "!! Ableton Link networking was not configured; Live installation will continue."
+    say "!! Ableton Link was not configured; Live installation will continue."
     say "!! Close Live and run ~/.local/share/ableton-wine/setup-link.sh to retry."
     return 0
 }

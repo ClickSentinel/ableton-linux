@@ -49,12 +49,27 @@ if [ "${1:-}" = "--prefix" ]; then
     esac
 fi
 
-# setup-link.sh writes these as root, so this script cannot remove them.
+# Link setup wrote these as root, so this script cannot remove them. The
+# hook only comes from setups older than version 3.
 hook=/etc/NetworkManager/dispatcher.d/50-link-multicast
 if [ -e "$hook" ]; then
     echo ""
-    echo "Ableton Link left two system changes behind. To remove them:"
+    echo "An earlier Ableton Link setup left a NetworkManager hook behind:"
     echo "  sudo rm $hook"
-    echo "  and close UDP port 20808 in your firewall"
+fi
+# The port allowance persists even while the firewall is disabled, so key
+# this on the tool being installed, not on it being active right now. Both
+# tools can coexist and setup may have used either; mention each.
+if command -v ufw >/dev/null 2>&1; then
+    echo ""
+    echo "If Ableton Link opened UDP port 20808 in ufw, close it with:"
+    echo "  sudo ufw delete allow 20808/udp"
+fi
+if command -v firewall-cmd >/dev/null 2>&1; then
+    echo ""
+    echo "If Ableton Link opened UDP port 20808 in firewalld, close it with:"
+    echo "  sudo firewall-cmd --permanent --remove-port=20808/udp && sudo firewall-cmd --reload"
+    echo "or, while firewalld is stopped:"
+    echo "  sudo firewall-offline-cmd --remove-port=20808/udp"
 fi
 echo "done."

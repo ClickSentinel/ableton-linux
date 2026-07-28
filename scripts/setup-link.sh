@@ -1,93 +1,76 @@
 #!/usr/bin/env bash
-# Ableton Link setup: host multicast networking plus the ableton-linkd session
+# Ableton Link setup: firewall allowance plus the ableton-linkd session
 # anchor. The main installer runs this once. It remains safe to re-run.
 # The daemon ships in the .run installer (installed to
 # ~/.local/share/ableton-wine/ableton-linkd); this script never builds software.
+#
+# Link needs no multicast route: the Link SDK binds every discovery socket to
+# its interface with IP_MULTICAST_IF, which bypasses the routing-table lookup
+# that makes routeless multicast sends fail with ENETUNREACH. Versions 1 and 2
+# of this script added a 224.0.0.0/4 route and a NetworkManager hook to keep
+# it alive; version 3 removed both. sudo is used only to open the firewall
+# port when a firewall is active and to remove the old hook where one exists.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
-# Bump whenever this script's system-level effects change (hook body, firewall
-# rule, unit handling): forces one re-run on hosts with a stale marker so an
-# existing install picks up the fix instead of silently keeping old behavior.
-LINK_SETUP_VERSION=2
+# Bump whenever this script's system-level effects change (firewall rule, unit
+# handling): forces one re-run on hosts with a stale marker so an existing
+# install picks up the fix instead of silently keeping old behavior.
+LINK_SETUP_VERSION=3
 
 if pgrep -f "Ableton Live.*\.exe" >/dev/null 2>&1; then
     echo "!! Live is running: close it before changing Link networking" >&2
     exit 1
 fi
 
-echo "== [1/4] primary LAN interface =="
-# Link speaks UDP multicast (group 224.76.78.75, port 20808) and does not
-# work over VPN: the multicast route must land on the physical LAN device
-# carrying the default route, never on a tunnel.
-iface="$(ip -4 route show default | awk '/^default/ {for (i=1; i<NF; i++) if ($i=="dev") {print $(i+1); exit}}')"
-if [ -z "$iface" ]; then
-    echo "!! no IPv4 default route found: connect to your LAN and re-run" >&2
-    exit 1
-fi
-case "$iface" in
-    tun*|wg*|tap*)
-        echo "!! the default route is a VPN interface ($iface); Link needs a physical LAN interface" >&2
-        echo "!! disconnect the VPN (or give the LAN default route priority) and re-run" >&2
-        exit 1 ;;
-esac
-echo "   primary LAN interface: $iface"
-
-echo "== [2/4] multicast route and firewall =="
-# Many kernels ship no route for 224.0.0.0/4, so multicast traffic from Wine
-# apps never leaves the host. 'replace' is add-or-overwrite: idempotent by
-# construction, and it evicts a conflicting route for the same prefix (e.g. a
-# default 'dev lo' route) so multicast leaves via the physical LAN device.
-sudo ip route replace 224.0.0.0/4 dev "$iface" metric 0
-echo "   multicast route 224.0.0.0/4 via $iface"
-# Discovery rides the fixed UDP port 20808; unicast measurement uses ephemeral
-# ports, which conntrack already covers for outbound-initiated exchanges, so
-# 20808/udp is the only firewall rule Link needs.
-if command -v ufw >/dev/null 2>&1; then
+echo "== [1/3] firewall =="
+# Discovery rides the fixed UDP port 20808 (multicast group 224.76.78.75);
+# unicast measurement uses ephemeral ports, which conntrack already covers for
+# outbound-initiated exchanges, so 20808/udp is the only firewall rule Link
+# needs. Only an active firewall warrants a sudo prompt. Neither activity
+# check needs privileges: the ufw check reads its world-readable config, and
+# firewall-cmd --state asks the daemon itself, which also works without
+# systemd as the init.
+if command -v ufw >/dev/null 2>&1 \
+   && grep -qsi '^ENABLED=yes' /etc/ufw/ufw.conf; then
+    echo "   ufw is active: allowing UDP port 20808 (this asks for sudo)"
     sudo ufw allow 20808/udp
-elif command -v firewall-cmd >/dev/null 2>&1; then
+elif command -v firewall-cmd >/dev/null 2>&1 \
+     && firewall-cmd --state >/dev/null 2>&1; then
+    echo "   firewalld is active: allowing UDP port 20808 (this asks for sudo)"
     sudo firewall-cmd --permanent --add-port=20808/udp
     sudo firewall-cmd --reload
 else
-    echo "   no ufw/firewalld found: skipping; if you run another firewall, allow UDP 20808 yourself"
+    echo "   no active ufw/firewalld: nothing to open; if you run another firewall, allow UDP 20808 yourself"
 fi
 
-echo "== [3/4] persistent multicast route =="
-# The route above dies with the interface. On NetworkManager systems a
-# dispatcher hook resolves the current default LAN interface whenever an
-# interface comes up. It ignores tunnel defaults instead of moving multicast
-# onto a VPN.
+echo "== [2/3] leftovers from earlier setups =="
+# Versions 1 and 2 installed a multicast route and a NetworkManager hook as
+# root, so removing the hook needs sudo. Version 1's hook could move the
+# route onto a VPN tunnel; without it the stale route is harmless to Link
+# and clears on reboot, so a route alone does not warrant a sudo prompt.
 hook=/etc/NetworkManager/dispatcher.d/50-link-multicast
-hook_body='#!/bin/sh
-[ "$2" = "up" ] || exit 0
-iface=
-set -- $(ip -4 route show default | head -n 1)
-while [ "$#" -gt 1 ]; do
-    if [ "$1" = "dev" ]; then
-        iface="$2"
-        break
-    fi
-    shift
-done
-case "$iface" in
-    ""|tun*|wg*|tap*) exit 0 ;;
-esac
-ip route replace 224.0.0.0/4 dev "$iface" metric 0'
-if [ -d /etc/NetworkManager/dispatcher.d ]; then
-    if [ -f "$hook" ] && [ "$(cat "$hook")" = "$hook_body" ]; then
-        echo "   $hook already in place"
+if [ -e "$hook" ]; then
+    echo "   an earlier setup installed $hook; removing it (this asks for sudo)"
+    if sudo rm -f "$hook"; then
+        echo "   removed $hook"
+        sudo ip route del 224.0.0.0/4 2>/dev/null || true
     else
-        printf '%s\n' "$hook_body" | sudo tee "$hook" >/dev/null
-        sudo chmod 755 "$hook"
-        echo "   installed $hook (re-installs the route on every interface-up)"
+        # Do not mark this version configured with the hook still in place:
+        # the marker would stop every later update from retrying the removal.
+        echo "!! could not remove it; remove it yourself with: sudo rm $hook" >&2
+        echo "!! then re-run this script" >&2
+        exit 1
     fi
+elif ip -4 route show 224.0.0.0/4 2>/dev/null | grep -q .; then
+    echo "   a 224.0.0.0/4 route from an earlier setup is still present; it is harmless"
+    echo "   and clears on reboot, or remove it now with: sudo ip route del 224.0.0.0/4"
 else
-    echo "   NetworkManager not found: the route will not survive a reconnect"
-    echo "   persist 224.0.0.0/4 dev $iface with your network manager, or re-run this script"
+    echo "   none found"
 fi
 
-echo "== [4/4] Ableton Link service =="
+echo "== [3/3] Ableton Link service =="
 # The daemon and its unit ship in the .run installer; a missing binary is a
-# skip, not a failure because the networking setup above stands on its own.
+# skip, not a failure because the firewall setup above stands on its own.
 linkd="${ABLETON_LINKD:-$HOME/.local/share/ableton-wine/ableton-linkd}"
 anchor=skipped
 if [ ! -x "$linkd" ]; then
@@ -117,11 +100,11 @@ fi
 
 echo
 if [ "$anchor" = enabled ]; then
-    echo "OK: Link networking via $iface; ableton-linkd.service enabled"
+    echo "OK: Link setup complete; ableton-linkd.service enabled"
 elif [ "$anchor" = launcher ]; then
-    echo "OK: Link networking via $iface; the Live launcher will start ableton-linkd"
+    echo "OK: Link setup complete; the Live launcher will start ableton-linkd"
 else
-    echo "OK: Link networking via $iface; ableton-linkd anchor skipped"
+    echo "OK: Link setup complete; ableton-linkd anchor skipped"
 fi
 mkdir -p "$HOME/.local/share/ableton-wine"
-printf '%s\n%s\n' "$iface" "$LINK_SETUP_VERSION" > "$HOME/.local/share/ableton-wine/link-configured"
+printf 'configured\n%s\n' "$LINK_SETUP_VERSION" > "$HOME/.local/share/ableton-wine/link-configured"

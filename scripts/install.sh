@@ -180,8 +180,8 @@ done
 # this install; repository installs may call the staged script directly.
 install -m755 "$linkd" "$HOME/.local/share/ableton-wine/ableton-linkd"
 install -m644 "$linkd_unit" "$HOME/.local/share/ableton-wine/ableton-linkd.service"
-# Keep the setup command installed for retries after a VPN, firewall, or
-# network-manager failure.
+# Keep the setup command installed for retries after a firewall or
+# hook-removal failure.
 install -m755 "$here/setup-link.sh" "$HOME/.local/share/ableton-wine/setup-link.sh"
 
 # Record the kit version so a later installer can tell what it is updating

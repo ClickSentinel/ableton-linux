@@ -96,6 +96,9 @@ The first two commands install the newer package and restore the previous one.
 The uninstaller keeps the Wine prefix. The final command reinstalls the newer
 package without starting Ableton's installer.
 
+The installer remembers `--no-link`. To configure Ableton Link after this
+sequence, run the installer again with `--link`.
+
 ### Audio tests
 
 Run every audio test at 48 kHz and 256 frames. On suitable machines, also cover
