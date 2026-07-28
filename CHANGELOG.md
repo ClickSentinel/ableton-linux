@@ -17,6 +17,9 @@
   firewalld is active, and on existing installs to remove the old hook and
   route during one setup re-run. `--no-link` skips the step and is
   remembered on later runs; `--link` opts back in.
+- The README now covers installation and ordinary use. Troubleshooting, source
+  builds, configuration overrides, and maintainer material have dedicated
+  documents.
 - Fixed a Live crash when closing WebView2 plugin editors (issue 52, Wine
   patch 0045). `RevokeDragDrop` now rejects windows owned by another process,
   matching `RegisterDragDrop`. Fix by Giang Nguyen. See

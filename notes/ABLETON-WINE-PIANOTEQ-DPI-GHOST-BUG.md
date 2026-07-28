@@ -1,7 +1,8 @@
 # Pianoteq editor resize loop
 
-Disable **Auto-Scale Plugin Window** in Live, then reopen Pianoteq. This stops
-the half-size ghost image and restores modal input. No Wine patch is required.
+Right-click Pianoteq in Live's device rack, disable **Auto-Scale Plugin
+Window**, then reopen the plugin. This stops the half-size ghost image and
+restores modal input. No Wine patch is required.
 
 ## Cause
 
