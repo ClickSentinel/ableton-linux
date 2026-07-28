@@ -6,6 +6,7 @@
 #   --update         update compatibility files; keep Live, authorization, and projects
 #   --no-launch      never run the Ableton installer (zip/exe) automatically
 #   --no-link        skip Ableton Link network configuration
+#   --link           configure Ableton Link even if previously skipped or declined
 #   --extract DIR    unpack this installer's files into DIR and exit
 #   --uninstall      remove the installed Wine, launcher, and menu entries
 #   --prefix         with --uninstall: also delete the Wine prefix and Live
@@ -37,15 +38,17 @@ fail() { printf '!! %s\n' "$*" >&2; exit 1; }
 mode=install
 do_launch=1
 do_link_setup=1
+do_link_force=0
 extract_dir=""
 drop_prefix=0
 while [ $# -gt 0 ]; do
     case "$1" in
-        --help|-h)      head -17 "$self" | sed -n '2,17{s/^# \{0,1\}//;p}'; exit 0 ;;
+        --help|-h)      head -18 "$self" | sed -n '2,18{s/^# \{0,1\}//;p}'; exit 0 ;;
         --runtime-only) mode=runtime ;;
         --update)       mode=update ;;
         --no-launch)    do_launch=0 ;;
         --no-link)      do_link_setup=0 ;;
+        --link)         do_link_setup=1; do_link_force=1 ;;
         --uninstall)    mode=uninstall ;;
         --prefix)       drop_prefix=1 ;;
         --extract)      mode=extract; extract_dir="${2:?--extract needs a directory}"; shift ;;
@@ -175,14 +178,27 @@ rm -f "$workdir/payload.tar"
 
 configure_link() {
     local marker="$HOME/.local/share/ableton-wine/link-configured"
+    local required_version=2   # keep in sync with setup-link.sh's LINK_SETUP_VERSION
 
     if [ "$do_link_setup" -eq 0 ]; then
         say "-- Ableton Link network setup skipped (--no-link)"
+        mkdir -p "$(dirname "$marker")" 2>/dev/null || true
+        printf 'declined\n%s\n' "$required_version" > "$marker" 2>/dev/null || true
         return 0
     fi
-    if [ -f "$marker" ]; then
-        say "-- Ableton Link networking is already configured"
-        return 0
+
+    if [ -f "$marker" ] && [ "$do_link_force" -ne 1 ]; then
+        local state ver
+        state="$(sed -n 1p "$marker")"
+        ver="$(sed -n 2p "$marker")"
+        if [ "$state" = declined ]; then
+            say "-- Ableton Link networking was previously declined (--no-link); pass --link to configure it now"
+            return 0
+        fi
+        if [ "$ver" = "$required_version" ]; then
+            say "-- Ableton Link networking is already configured"
+            return 0
+        fi
     fi
 
     say "-- configuring Ableton Link networking"

@@ -5,6 +5,10 @@
 # ~/.local/share/ableton-wine/ableton-linkd); this script never builds software.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
+# Bump whenever this script's system-level effects change (hook body, firewall
+# rule, unit handling): forces one re-run on hosts with a stale marker so an
+# existing install picks up the fix instead of silently keeping old behavior.
+LINK_SETUP_VERSION=2
 
 if pgrep -f "Ableton Live.*\.exe" >/dev/null 2>&1; then
     echo "!! Live is running: close it before changing Link networking" >&2
@@ -120,4 +124,4 @@ else
     echo "OK: Link networking via $iface; ableton-linkd anchor skipped"
 fi
 mkdir -p "$HOME/.local/share/ableton-wine"
-printf '%s\n' "$iface" > "$HOME/.local/share/ableton-wine/link-configured"
+printf '%s\n%s\n' "$iface" "$LINK_SETUP_VERSION" > "$HOME/.local/share/ableton-wine/link-configured"
