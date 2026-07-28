@@ -1,29 +1,16 @@
-# On-demand Wine build for checking a specific PR or branch actually
-# compiles, without requiring a local build. Manual-trigger only, by
-# design: an earlier version of this workflow ran automatically on every
-# pull_request/push touching the paths below, but that means every PR from
-# every contributor - including first-time, external ones - silently costs
-# a full Wine compile the moment it's opened, with no way to opt out per-PR.
-# This version gives the same speed and the same artifact, but only when a
-# maintainer actually asks for it:
+# On-demand Wine build: check that a specific PR/branch compiles without a
+# local build. Manual-trigger only - an automatic pull_request/push version
+# would compile on every PR from every contributor the moment it's opened,
+# with no per-PR opt-out:
 #
-#   gh workflow run ci-pr-build.yml --repo <owner>/ableton-linux --ref <branch-or-PR-head>
+#   gh workflow run ci-pr-build.yml --repo <owner>/ableton-linux --ref <branch>
 #
-# Companion to ci-build-matrix.yml (also on-demand, but builds a whole list
-# of refs as separate matrix jobs in one run - useful for comparing several
-# branches at once). Use this one for a quick single-ref check.
+# ccache (actions/cache) and a Docker Buildx layer cache (GHA backend) keep
+# repeat runs fast - compiled objects and the image's apt/toolchain install,
+# respectively. Both keyed loosely (OS-scoped, not ref-scoped), so a new
+# branch still reuses whatever any prior run already compiled.
 #
-# Two caches keep repeat runs quick: actions/cache warms ccache's object
-# cache across runs (per-file hit/miss, so a key mismatch just means a cold
-# start, never a wrong result), and docker/build-push-action's GHA cache
-# keeps the container image's apt/toolchain layers from being rebuilt from
-# scratch on every fresh runner. Restore-keys are OS-scoped, not ref-scoped:
-# the first run against a new branch still gets to reuse whatever the last
-# run on any branch already compiled.
-#
-# The resulting tarball is attached to the run as a downloadable artifact
-# (Actions tab -> this run -> Artifacts), so a reviewer can sanity-check a
-# patch-series change without building it locally:
+# Tarball is attached as a downloadable artifact:
 #
 #   gh run download <run-id> --repo <owner>/ableton-linux --name wine-build
 name: ci-pr-build
