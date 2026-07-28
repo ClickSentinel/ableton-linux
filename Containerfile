@@ -40,6 +40,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       clang-${LLVM_VERSION}=${LLVM_PKG_VERSION} \
       lld-${LLVM_VERSION}=${LLVM_PKG_VERSION} \
       llvm-${LLVM_VERSION}=${LLVM_PKG_VERSION} \
+      ccache \
       flex bison perl gettext pkg-config \
       git xz-utils zstd python3 \
       # X11 / GL / Vulkan (the d2d1-dcomp + winex11 stack the fixes live in)
@@ -63,8 +64,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ln -sf "$t-${LLVM_VERSION}" "/usr/bin/$t"; \
     done \
  && clang --version | head -1 \
+ # ccache masquerade: CI wants a warm build cache across runs (see build.sh's
+ # /ccache mount). Ubuntu's ccache package only ships gcc/g++ shims in
+ # /usr/lib/ccache/; configure finds both gcc and clang by plain PATH lookup
+ # (see above), so a symlink-per-compiler-name directory ahead of /usr/bin on
+ # PATH (below) covers clang/clang++ too. ccache itself resolves the *real*
+ # compiler by searching PATH past its own directory — no wrapper scripts or
+ # --cc-cmd changes needed. A local build with nothing mounted at /ccache
+ # just gets an empty, container-local cache: harmless, no behavior change.
+ && mkdir -p /usr/lib/ccache-shims \
+ && for t in gcc g++ clang clang++; do \
+        ln -sf "$(command -v ccache)" "/usr/lib/ccache-shims/$t"; \
+    done \
  # Record the full build-environment package set for BUILD-INFO / drift diffing.
  && dpkg-query -W -f '${Package} ${Version}\n' | sort > /opt/build-env-packages.txt
+
+# ccache's shim directory must come before the real compilers on PATH.
+# CCACHE_DIR is a fixed mountpoint build.sh binds a persistent host directory
+# onto — /ccache with nothing mounted (a plain local `podman build`, not CI)
+# just means an empty, container-local cache each run.
+ENV PATH="/usr/lib/ccache-shims:${PATH}"
+ENV CCACHE_DIR=/ccache
+ENV CCACHE_MAXSIZE=5G
 
 # 3. ntsync UAPI header: jammy's linux-libc-dev is 5.15, but Wine needs
 # linux/ntsync.h (kernel >= 6.14) or configure silently drops ntsync and every
