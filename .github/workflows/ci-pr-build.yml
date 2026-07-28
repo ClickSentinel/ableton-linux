@@ -1,9 +1,13 @@
-# On-demand Wine build: check that a specific PR/branch compiles without a
-# local build. Manual-trigger only - an automatic pull_request/push version
-# would compile on every PR from every contributor the moment it's opened,
-# with no per-PR opt-out:
+# Wine build for PRs/pushes that touch the Wine build itself, plus a manual
+# trigger for checking any other ref on demand:
 #
 #   gh workflow run ci-pr-build.yml --repo <owner>/ableton-linux --ref <branch>
+#
+# Relies on this repo's existing "require approval for first-time
+# contributors" setting (Settings -> Actions -> General) to gate runs from
+# unfamiliar forks - a maintainer approves before it executes, same as any
+# other workflow here. Runs with the default pull_request token (read-only,
+# no secrets) regardless.
 #
 # ccache (actions/cache) and a Docker Buildx layer cache (GHA backend) keep
 # repeat runs fast - compiled objects and the image's apt/toolchain install,
@@ -15,13 +19,38 @@
 #   gh run download <run-id> --repo <owner>/ableton-linux --name wine-build
 name: ci-pr-build
 
+# The same path list appears twice (pull_request and push) rather than via a
+# YAML anchor: GitHub's workflow parser doesn't support them, so this stays
+# boring and duplicated on purpose.
 on:
+  pull_request:
+    paths:
+      - patches/**
+      - Containerfile
+      - build.sh
+      - scripts/container-build.sh
+      - scripts/build-ableton-linkd.sh
+      - tools/**
+      - vendor/**
+      - .github/workflows/ci-pr-build.yml
+  push:
+    branches: [main]
+    paths:
+      - patches/**
+      - Containerfile
+      - build.sh
+      - scripts/container-build.sh
+      - scripts/build-ableton-linkd.sh
+      - tools/**
+      - vendor/**
+      - .github/workflows/ci-pr-build.yml
   workflow_dispatch: {}
 
-# Only matters if the same ref gets dispatched again before a run finishes;
-# cancels the stale one rather than burning runner minutes on both.
+# A new push to the same PR (or a re-run against main) makes the previous,
+# now-stale build pointless; cancel it instead of burning runner minutes on
+# both.
 concurrency:
-  group: ci-pr-build-${{ github.workflow }}-${{ github.ref }}
+  group: ci-pr-build-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
