@@ -71,7 +71,7 @@ jobs:
             ccache-${{ runner.os }}-
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # Builds and loads the same image build.sh builds next (same tag), so
       # build.sh's own `docker build` sees a fully cached, no-op rebuild.
@@ -80,7 +80,7 @@ jobs:
       # things: this one on Containerfile, that one on Containerfile *and*
       # patches/**.
       - name: Build container image (Buildx, GHA layer cache)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Containerfile
