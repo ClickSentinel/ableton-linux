@@ -540,9 +540,8 @@ Remaining steps (you supply Ableton + your own license):
 
   2. Launch:            ableton-live
   3. Authorize Live with your own account (binds to this prefix's MachineGuid).
-  4. In Live: Options > uncheck "Auto-Scale Plugin Window"
-     (prevents a plugin-window resize loop with DPI-unaware plugin UIs).
-  5. Audio: Preferences > Audio > Driver Type: ASIO > Device: PipeASIO.
+  4. Audio: Settings/Preferences > Audio > Driver Type: ASIO >
+     Audio Device: PipeASIO.
      PipeASIO is a native PipeWire client: no JACK layer involved.
 ────────────────────────────────────────────────────────────────────────
 EOF

@@ -1,279 +1,266 @@
 # Ableton Live on Linux
 
-This project runs Ableton Live 12 on x86-64 Linux with a patched Wine build.
-Live 11, Max for Live, Ableton Link, and Push support are experimental.
+![Ableton Live running on Linux](screenshot.png)
 
-This project is not affiliated with or endorsed by Ableton.
+Compose, perform, and produce with Ableton Live on a self-sovereign, open-source
+stack. This project aims to make this popular Berlin-based DAW and its ecosystem
+of products a first-class Linux citizen, with zero compromises.
+
+It is also absolutely **not affiliated with or endorsed in any way by Ableton
+GmbH** and respects the Ableton terms of service.
 
 [Download the latest installer](https://github.com/shibco/ableton-linux/releases/latest/download/install-ableton-latest.run)
-
-![Ableton Live running on Linux](screenshot.png)
 
 ## Features
 
 - Live 12 Intro, Standard, Suite, Lite, Trial, and beta support
 - Experimental Live 11, Max for Live, and Max 9 support
-- Push 1 and Push 2 support
-- Ableton Link over the local network
-- Audio reconnection through WirePlumber
-- MIDI reconnection after replugging a controller that Live detected at startup
-- PipeASIO audio through PipeWire
-- Host open and save dialogs when the XDG portal is available
-- Host file manager for Show in Explorer when the portal accepts the request
-- Desktop light and dark theme detection
-- Live-themed or system-themed menus
-- Desktop font support
-- Automatic display scaling from 100% to 250%
-- Fixes for VST3, JUCE, and OpenGL plugin windows
-- Pinned build inputs and patch checksums
+- Push 1 and Push 2 support (Push 3 and Move support coming soon!)
+- Local-network Ableton Link support
+- Compatibility with Ableton's Splice integration
+- Automatic recovery when in-use audio hardware or startup-detected MIDI
+  controllers briefly disconnect
+- Low-latency PipeASIO audio for live performance
+- Linux desktop integration with native file types and dialogs
+- Automatic light and dark desktop theme detection
+- No-fuss support for desktop resolutions, HiDPI displays, and fractional scaling
+- Fixes for VST-specific display, audio, and stability problems
+- Dozens of nice-to-haves, quality-of-life fixes, and other polish
+- Auditable builds with pinned inputs, checksum verification, and public documentation
 
-## Install
+## Installation
 
-You need:
+### Requirements
 
-- an x86-64 Linux system with glibc 2.35 or newer
-- PipeWire 0.3.56 or newer
-- an `ableton_live*.zip` installer from Ableton
+You need an x86-64 Linux system that meets Ableton Live's hardware requirements.
 
-PipeWire 1.6 or newer is recommended for low-latency audio. Run the installer
-outside Flatpak, `steam-run`, and other sandboxes.
+Additionally, you need:
 
-1. Download the Ableton Live ZIP from Ableton.
-2. Download
-   [install-ableton-latest.run](https://github.com/shibco/ableton-linux/releases/latest/download/install-ableton-latest.run).
-3. Put both files in the same directory.
-4. Run the installer:
+- glibc 2.35 or newer
+- PipeWire 0.3.56 or newer (we recommend 1.6 or newer for audio performance)
+- `tar` and `zstd`
+- your installation files and activation details from Ableton
+
+For most people, a modern and up-to-date Linux distribution, such as SteamOS,
+Ubuntu, CachyOS, Pop!_OS, Debian, or Arch, will already fulfil these
+requirements.
+
+### Getting started
+
+1. Download the Ableton Live installation ZIP from Ableton.com.
+2. Download [the latest version of our installer](https://github.com/shibco/ableton-linux/releases/latest/download/install-ableton-latest.run).
+3. Put both files in the same directory (such as `~/Downloads`).
+4. From a terminal, run the installer:
 
    ```bash
    sh ~/Downloads/install-ableton-latest.run
    ```
 
-The installer checks the host, installs Wine under `~/.local/opt`, creates
-`~/.wine-ableton`, and starts the Ableton installer. It makes no persistent
-changes outside your home directory.
+That's it!
 
-Start Live from the applications menu or run:
+The installer also sets up Ableton Link and may ask for `sudo` to enable
+local-network discovery. Pass `--no-link` if you do not use Link.
+
+### Running Live
+
+This installer will add the necessary files to integrate Ableton Live into your
+OS. You can start Live from the applications menu or via the command line:
 
 ```bash
 ableton-live
 ```
 
+You can also specify a Live Set to quickly open on launch:
+
+```bash
+ableton-live "/path/to/Your Set.als"
+```
+
 For Live 11, follow the [Live 11 instructions](#live-11).
 
-## First launch
+### First launch
 
-Set these options in Live:
+When you first start Live, you'll need to set up your audio. Go to
+**Settings > Audio**, set **Driver Type** to **ASIO**, and set
+**Audio Device** to **PipeASIO**.
 
-1. In the Options menu, disable **Auto-Scale Plugin Window**.
-2. Under **Audio**, set **Driver Type** to **ASIO** and **Device** to
-   **PipeASIO**.
+### Updates
 
-Report problems with the
-[GitHub issue form](https://github.com/shibco/ableton-linux/issues/new/choose).
-The scripts in [`beta/scripts`](beta/scripts/) collect diagnostic reports.
+Ableton Live handles its own application updates.
 
-## Update
+This project does not update itself by choice. We only connect to the internet
+when absolutely necessary.
 
-Download the current installer, then run:
+To update this project's Wine runtime, launchers, and compatibility fixes,
+download the latest release and run:
 
 ```bash
 sh ~/Downloads/install-ableton-latest.run --update
 ```
 
-This updates Wine, the launchers, and prefix policy. It keeps Live, its
-settings, and its authorization. Running the installer without `--update`
-offers the same update when it finds an existing installation.
+This will bring the new fixes and features listed in the release notes to your
+Live Linux environment. Your Live installation, authorization, and projects are
+preserved. Compatibility-related Wine and Live settings may be updated.
 
-Updates from 2026.07.18.1 also remove `-DontCombineAPCs` from Live's
-`Options.txt`. That option caused stuttering and slowed playback in issue 29.
+Running the installer without `--update` offers the same compatibility update
+when it finds an existing installation.
 
-## Live 11
+### Uninstalling
 
-Live 11 support is experimental.
+To remove this project's runtime and desktop integration while keeping Live and
+its authorization:
 
-1. Prepare the prefix for Live 11:
+```bash
+sh ~/Downloads/install-ableton-latest.run --uninstall
+```
+
+To remove Live and its authorization too:
+
+```bash
+sh ~/Downloads/install-ableton-latest.run --uninstall --prefix
+```
+
+The second command asks for confirmation. Neither command touches your Live
+Sets.
+
+## Running different versions of Ableton Live on the same computer
+
+This installer brings Linux compatibility to every edition of Live 11 and 12.
+We worked hard on this! You can install one Live 11 edition and one Live 12
+edition together.
+
+### Live 12
+
+When you run the installer normally, we assume you are installing Live 12. The
+directions above will complete that installation for you.
+
+### Live 11
+
+We support Live 11, but with limited resources, we are choosing to focus on
+Live 12 for now. Live 11 works well in most cases, but has seen less testing
+than Live 12.
+
+To install Live 11:
+
+1. In your terminal window, tell the installer you want to install Live 11:
 
    ```bash
    ABLETON_LIVE_VERSION=11 sh ~/Downloads/install-ableton-latest.run
    ```
 
-   Setup downloads the Live 11 support files, so it needs network access.
+   The first setup downloads extra Live 11 support files, so it needs internet
+   access.
 
-2. After the first Live 11 launch, run the Max for Live repair once:
+2. After the first launch, complete the
+   [one-time Max for Live repair](TROUBLESHOOTING.md#live-11-max-for-live-fails-after-the-first-launch).
+
+3. Before importing WMA or video files, read the
+   [Live 11 media limitation](TROUBLESHOOTING.md#live-11-media-files-can-crash-live).
+
+When you run Live from the command line, the launcher will automatically detect
+Live 11 if it is the only version installed. If Live 11 and Live 12 are both
+installed, the launcher defaults to the newest major version.
+
+Use `ABLETON_LIVE_VERSION=11 ableton-live` to select Live 11. If you install
+multiple editions of the same major version, follow the
+[launcher troubleshooting](TROUBLESHOOTING.md#the-launcher-finds-more-than-one-live-installation).
+
+## Instruments and Effects
+
+We are working on ensuring compatibility with as many VSTs as possible.
+
+There are two common ways to install Windows plugins:
+
+### If you have a Windows installer
+
+1. Download your VST's installer.
+2. Open a terminal window and run:
 
    ```bash
-   sh ~/Downloads/install-ableton-latest.run --extract /tmp/ableton-kit
-   bash /tmp/ableton-kit/scripts/setup-prefix.sh --post-first-run
+   WINEPREFIX="$HOME/.wine-ableton" \
+     "$HOME/.local/opt/wine-d2d1-nspa-11.13/bin/wine" \
+     "/path/to/PluginInstaller.exe"
    ```
 
-   The repair moves a stale Max 8 preferences file aside. Max recreates it on
-   its next start.
+3. Your installer should install directly into your Ableton environment. By
+   default, this is `~/.wine-ableton`.
 
-3. Avoid previewing or importing WMA or video files because Wine's
-   `wmvcore.dll` stubs can crash Live 11. See
-   [the WMVCore investigation](notes/ABLETON-WINE-LIVE11-WMVCORE-STUB.md).
+You can also use the command in step 2 to run patches, software updaters, and
+copy-protection tools.
 
-The launcher detects Live 11. If the prefix contains Live 11 and 12, it starts
-the newest version. Use `ABLETON_LIVE_VERSION=11 ableton-live` to select Live
-11, or set `ABLETON_LIVE_EXE` to select an exact installation.
+### If you have a VST3 file
 
-## Plugins
-
-Run a Windows plugin installer in Live's prefix:
-
-```bash
-WINEPREFIX=~/.wine-ableton ~/.local/opt/wine-d2d1-nspa-11.13/bin/wine \
-  "/path/to/PluginInstaller.exe"
-```
-
-You can also copy `.vst3` bundles to:
+You can install Windows `.vst3` bundles by copying them directly into:
 
 ```text
 ~/.wine-ableton/drive_c/Program Files/Common Files/VST3/
 ```
 
-An untested option is to run Linux-native plugins in Carla beside Live and
-route audio and MIDI through PipeWire. See
-[Linux-native plugin bridging](notes/ABLETON-WINE-PLUGIN-BRIDGING.md).
+### If you have a Linux VST or CLAP instrument or effect
 
-## Push 2 setup
+We are working on proper Linux VST and CLAP support, but it is not implemented
+in this project yet. For now, an
+[experimental Carla workflow](TROUBLESHOOTING.md#using-linux-native-plugins)
+can route Linux-native plugins through PipeWire.
 
-Under **Preferences > Link, Tempo & MIDI**, configure exactly one `Push2`
-control-surface row. Select **Ableton Push 2 Live Port** for its input and
-output, then enable the Remote switches.
+## Hardware
+
+This project supports Ableton Push alongside common audio interfaces and MIDI
+controllers.
+
+### Ableton Push 1 and 2 setup
+
+1. Connect your Ableton Push.
+2. Launch Ableton Live.
+
+Live detects Push 1 automatically.
+
+For Push 2, configure exactly one control-surface row under
+**Settings/Preferences > Link, Tempo & MIDI**:
+
+- **Control Surface:** Push2
+- **Input:** Ableton Push 2 Live Port
+- **Output:** Ableton Push 2 Live Port
+
+Enable the input and output **Remote** switches. See
+[Push troubleshooting](TROUBLESHOOTING.md#push-2-does-not-connect) if its
+display does not start.
 
 ## Ableton Link
 
-Ableton Link syncs tempo, beat, and phase between devices on the local network.
-The installer includes `ableton-linkd`, a passive native peer that remains in
-the session while Live restarts. After construction, it does not call the Link
-methods that set tempo or beat position.
+The installer sets up Ableton Link for you. In Live, enable
+**Show Link Toggle** under
+**Settings/Preferences > Link, Tempo & MIDI**, then enable Link in the control
+bar. Devices on the same local network should appear automatically.
 
-Run the host setup once as your normal user. It asks for `sudo` when it changes
-the route or firewall:
+See [Link troubleshooting](TROUBLESHOOTING.md#ableton-link-does-not-find-peers)
+if no peers appear.
 
-```bash
-~/.local/share/ableton-wine/setup-link.sh
-```
+## Getting help
 
-From a repository checkout, run `./scripts/setup-link.sh`. The script:
+Start with the [common troubleshooting steps](TROUBLESHOOTING.md).
 
-- routes multicast traffic through the selected LAN interface
-- allows UDP port 20808 when UFW or firewalld is installed
-- installs a NetworkManager hook when its dispatcher directory exists
-- enables `ableton-linkd.service` when the daemon and unit files are present
+If you're still stuck, file an issue [on GitHub](https://github.com/shibco/ableton-linux/issues/new/choose)
+or in the `#issues` forum in the
+[Ableton on Linux Discord](https://discord.gg/SZ2cQgV7U). A bot syncs Discord
+reports to GitHub, so you can report a problem there without a GitHub account.
 
-Initial setup refuses `tun`, `wg`, and `tap` default routes. The NetworkManager
-hook does not repeat this check, so verify `ip route show 224.0.0.0/4` after a
-network or VPN reconnect. This project does not support Link over a VPN.
+## Development and contributing
 
-In Live, enable **Show Link Toggle** under **Preferences > Link, Tempo & MIDI**.
-Then enable the Link control-bar indicator.
+We welcome all kinds of contributions. If you've found a fix for a niche VST
+or a workaround for a particular environment, please tell us!
 
-Test the connection while another Link peer is active:
+Start with:
 
-```bash
-~/.local/share/ableton-wine/ableton-linkd --probe 10
-```
+- [Build from source](BUILDING.md)
+- [Implementation notes](notes/)
 
-Success prints a peer count and tempo, then exits with status 0. For diagnosis,
-see [Ableton Link support](notes/ABLETON-WINE-LINK.md).
-
-## Lower latency
-
-From a repository checkout, the optional host tuning script grants realtime
-scheduling, lowers swappiness, and configures the performance CPU governor:
-
-```bash
-./scripts/setup-realtime.sh
-```
-
-It uses `sudo` and prints each persistent configuration file it writes. It
-applies swappiness and the CPU governor immediately. It recommends
-kernel-package and bootloader changes without applying them.
-
-Log out and back in after it finishes. `ulimit -r` should then print `95`. Some
-distributions already grant realtime permission. The launcher uses realtime
-scheduling when `chrt` is installed and `chrt -r 10 true` succeeds.
-
-Use `ABLETON_RT=off ableton-live` to compare normal scheduling or to avoid
-realtime scheduling on a low-core system.
-
-## Build from source
-
-The build requires Podman and about 10 GB of free space. `install.sh` requires
-`zstd`, and `setup-prefix.sh` requires `cabextract`. `make-installer.sh`
-requires both `zstd` and `binutils`.
-
-```bash
-./build.sh
-./scripts/install.sh
-./scripts/setup-prefix.sh
-WINEPREFIX=~/.wine-ableton ~/.local/opt/wine-d2d1-nspa-11.13/bin/wine \
-  "/path/to/Ableton Live 12 Suite Installer.exe"
-ableton-live
-```
-
-`build.sh` creates the Wine runtime and `dist/ableton-linkd` with the pinned
-Podman image. `install.sh` installs both.
-
-Build the single-file installer with:
-
-```bash
-./scripts/make-installer.sh
-```
-
-The result is `dist/ableton-wine-setup-<version>.run`.
-
-### Display scale
-
-`setup-prefix.sh` and the launcher detect display scale on GNOME, KDE, COSMIC,
-sway, Hyprland, and X11. The launcher recalibrates the prefix at each start.
-Live must restart after moving between monitors with different DPI values.
-
-Use `ABLETON_DPI_MODE` to override detection.
-
-### Common environment variables
-
-- `ABLETON_WINE_ROOT` selects the Wine runtime. The default is
-  `~/.local/opt/wine-d2d1-nspa-11.13`.
-- `ABLETON_WINEPREFIX` selects the Wine prefix. The default is
-  `~/.wine-ableton`.
-- `ABLETON_LIVE_VERSION=11|12` selects a Live major version.
-- `ABLETON_LIVE_EXE` selects one Live executable inside the prefix.
-- `ABLETON_DPI_MODE=auto|preserve|100|fractional|dpi<N>|fractional<N>`
-  overrides display-scale detection.
-- `ABLETON_THEME_MODE=auto|dark|light|preserve` controls desktop theme sync.
-- `ABLETON_TOPBAR_MODE=live|system|preserve|'#RRGGBB #RRGGBB'` controls menu
-  colors.
-- `ABLETON_UI_FONT=auto|preserve|off|<family>` controls the Wine UI font.
-- `ABLETON_DCOMP=off` disables DirectComposition for one launch.
-- `ABLETON_RT=off` disables realtime scheduling for one launch.
-- `PIPEASIO_*` variables override driver settings for one launch. For example,
-  set `PIPEASIO_PREFERRED_BUFFERSIZE=512` to increase the buffer.
-- `ENGINE` overrides the `podman` command used by the build scripts.
-
-### Steam Deck
-
-Use Desktop Mode.
-
-## Repository layout
-
-- [`patches`](patches/): Wine and PipeASIO patches
-- [`scripts`](scripts/): build, install, setup, and launch scripts
-- [`vendor`](vendor/): pinned build inputs
-- [`notes`](notes/): implementation notes and investigations
-- [`tools`](tools/): diagnostic and build tools
-- [`bin`](bin/): installed launchers
-- [`dist`](dist/): build output
-- [`beta`](beta/): beta test kit
-
-The patch list and provenance are in [`patches/BASE.txt`](patches/BASE.txt).
+Contributors must follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Credits
 
-Maintained by [Cade "shibco" Diehm](https://shiba.computer/about), with work
-from [ClickSentinel](https://github.com/ClickSentinel),
+Maintained by [Cade "shibco" Diehm](https://shiba.computer/about) and
+[ClickSentinel](https://github.com/ClickSentinel), with help from
 [jackson-57](https://github.com/jackson-57),
 [jttdev](https://github.com/jttdev),
 [astrazds](https://github.com/astrazds),
@@ -284,7 +271,9 @@ patches.
 
 Questions: [cade@parare.al](mailto:cade@parare.al)
 
-## AI disclosure
+## AI Disclosure
 
-Qwen 3.6, Claude Opus, and Codex (GPT-5) assisted with QA, documentation
-review, and build scripts.
+This project uses open-source local models Qwen 3.5, Qwen 3.6, and
+Gemma 4 and Kimi K3 to assist with diagnosis, research, QA, documentation
+review, and build scripts. We will not accept fully-vibecoded contributions
+as the risk of regression is too high.

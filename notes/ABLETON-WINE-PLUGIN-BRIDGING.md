@@ -43,12 +43,19 @@ shell.
 Save the connections as a qpwgraph patchbay profile if they should return with
 the session.
 
+## In-host integration
+
+Carla's
+[Wine-native bridge](https://kx.studio/News/?action=view&url=carla-21-rc1-is-here)
+loads Linux binaries inside Windows applications running under Wine.
+[Winesulin](https://github.com/falkTX/winesulin) uses the same general model:
+a Windows plugin shim loads a Linux plugin inside the host.
+
+This project has not integrated or tested either approach yet.
+
 ## Limits
 
 - Carla port names depend on the installed build. Confirm them before saving a
   profile.
 - The plugin chain shares PipeWire's graph quantum with Live. Watch `pw-top`
   for xruns under load.
-- [Winesulin](https://github.com/falkTX/winesulin) embeds a Linux plugin host
-  inside a Windows VST host process. This project does not ship or test that
-  path.
