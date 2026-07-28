@@ -11,7 +11,7 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 52 files, numbered 0001 through 0055.
+The current Wine series contains 54 files, numbered 0001 through 0057.
 Patches 0027, 0044, and 0054 are intentionally absent.
 
 ## Applying the series
@@ -171,3 +171,8 @@ Apply them in sequence with the rest of the series.
   measurements:
   Lucas Gillingham (ClickSentinel). See
   `notes/ABLETON-WINE-GPU-RENDERER.md`.
+- `0057`: let the launcher keep one exact top-level Windows class on
+  winex11's offscreen-composited path. The Live launcher selects
+  `Ableton Live Window Class`, preventing M4L child visibility from
+  unmapping and reparenting the full Live client when track selection
+  changes. See `notes/ABLETON-WINE-M4L-SELECTION-FLICKER.md`.

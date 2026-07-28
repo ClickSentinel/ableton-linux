@@ -24,6 +24,10 @@
   pane's area at timer cadence. DirectComposition re-blits now stop while the
   target window's ancestor chain is hidden. Reported by jttdev, reviewed by
   Giang Nguyen.
+- Fixed the whole Live window flashing when selecting away from or back to a
+  Max for Live track (Wine patch 0057). The launcher now keeps Live's client
+  surface on winex11's offscreen-composited path instead of letting M4L child
+  visibility unmap and reparent the full client.
 - Menu colors now follow the desktop theme correctly (issue 35, Wine patches
   0049 to 0052). The menu bar takes the darker chrome color and dropdowns take
   the lighter content color, grayed items lose the engraved bevel,

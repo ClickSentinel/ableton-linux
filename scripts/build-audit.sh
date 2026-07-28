@@ -129,6 +129,7 @@ FINGERPRINTS='
 0043|ascii|lib/wine/x86_64-windows/shell32.dll|__wine_portal_show_item
 0045|ascii|lib/wine/x86_64-windows/ole32.dll|revoke for another process windows is disabled
 0055|wide|lib/wine/x86_64-windows/dxgi.dll|WINE_DISABLE_GL_PRESENT
+0057|ascii|lib/wine/x86_64-unix/winex11.so|WINE_X11_FORCE_OFFSCREEN_CLASS
 pipeasio/0001|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-clamp-sample-rate
 pipeasio/0002|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-midi-timebase
 '
