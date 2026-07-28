@@ -90,12 +90,31 @@ the systemd user unit, and `setup-link.sh` under
 
 ## Host and launcher integration
 
-`scripts/setup-link.sh` configures the multicast route, adds a UDP 20808
-allowance when UFW or firewalld is installed, and enables the user unit when
-its files are present. The script must run as the user because it calls
-`systemctl --user`; it requests `sudo` only for host network changes. The
-current NetworkManager dispatcher hook is not interface-filtered, so the route
-must be checked after VPN and network reconnects.
+The `.run` installer calls `scripts/setup-link.sh` after installing the Link
+files unless `--no-link` is set. Setup version 1, shipped in 2026.07.23.1,
+configured the multicast route, added a UDP 20808 allowance when UFW or
+firewalld was installed, and enabled the user unit when systemd was
+available. It ran as the user because it called `systemctl --user`, and it
+requested `sudo` only for host network changes. Its dispatcher hook re-pinned
+the route to whichever interface came up, including VPN tunnels. Setup
+version 2 (pull request 80, unreleased) made the hook resolve the current
+default LAN interface instead and ignore `tun`, `wg`, and `tap` defaults.
+
+Setup version 3 (2026-07-28, unreleased) removed the multicast route and the
+NetworkManager hook. The Link SDK sets `IP_MULTICAST_IF` on every discovery
+socket, so its multicast sends never consult the routing table; the recorded
+system-call trace below showed that translation from both Live under Wine and
+the native daemon. A check in a network namespace with an empty routing table
+confirmed the kernel behavior: a multicast send without `IP_MULTICAST_IF`
+fails with `ENETUNREACH`, and the same send with it succeeds. Version 3 also
+removed the interface selection and the VPN default-route refusal: Link binds
+each interface itself, so a VPN default route no longer affects LAN
+discovery. `sudo` keeps two uses: the UDP 20808 firewall rule when UFW or
+firewalld is active, and removing the hook that versions 1 and 2 installed.
+Setup records version 3 as configured only after that hook is gone, so a
+failed removal is retried on the next update. Installs that declined with
+`--no-link` never run the setup; the installer prints the hook path and the
+removal command on each run until the hook is removed.
 
 The Live, Max, and beta launchers start `ableton-linkd --daemon` when the
 binary is installed and no process with that name is running.
@@ -128,12 +147,16 @@ was corrected during probe development.
 
 ## Tests still needed
 
+- Confirm discovery with setup version 3's host state: no `224.0.0.0/4`
+  route and no dispatcher hook. Run `linkprobe.exe` under the installed Wine
+  and `ableton-linkd --probe` after `sudo ip route del 224.0.0.0/4`.
 - Confirm `LINKPROBE RX-NETWORK OK` with a second LAN host.
 - Verify Live's peer count and two-way tempo changes.
 - Measure beat and phase alignment under audio load.
 - Verify Start Stop Sync from Live and another peer.
 - Confirm session continuity across a full Live restart.
-- Run the assembled `.run` installer and Link setup on a fresh machine.
+- Run the assembled `.run` installer and its integrated Link setup on a fresh
+  machine.
 
 LinkAudio and a bundled JACK transport bridge remain outside this
 implementation.

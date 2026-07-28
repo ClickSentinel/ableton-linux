@@ -59,7 +59,8 @@ requirements.
 That's it!
 
 The installer also sets up Ableton Link and may ask for `sudo` to enable
-local-network discovery. Pass `--no-link` if you do not use Link.
+local-network discovery. Pass `--no-link` if you do not use Link; the
+installer remembers this choice, and `--link` turns Link setup back on.
 
 ### Running Live
 

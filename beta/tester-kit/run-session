@@ -205,7 +205,8 @@ if [[ $SKIP_INSTALLER == 0 ]]; then
 
     subsection "Run installer"
     printf 'The installer receives ABLETON_WINEPREFIX and WINEPREFIX set to the prepared directory.\n'
-    ABLETON_WINEPREFIX="$PREFIX" WINEPREFIX="$PREFIX" ABLETON_BETA_SESSION=1 bash "$INSTALLER_PATH"
+    ABLETON_WINEPREFIX="$PREFIX" WINEPREFIX="$PREFIX" ABLETON_BETA_SESSION=1 \
+        bash "$INSTALLER_PATH" --no-link
     installer_rc=$?
     if [[ $installer_rc -ne 0 ]]; then
         record_result INSTALLER-RUN FAIL "Installer completed" "exit $installer_rc"

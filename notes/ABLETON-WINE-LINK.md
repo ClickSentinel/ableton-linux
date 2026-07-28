@@ -1,9 +1,11 @@
 # Ableton Link support
 
-The installer ships the persistent native peer `ableton-linkd`, its systemd
-user unit, and `setup-link.sh`. Run the setup script once as your normal user.
-It requests `sudo` for route and firewall changes, then uses your user session
-to enable `ableton-linkd.service`:
+The installer ships the persistent native peer `ableton-linkd` and configures
+Link during installation. The installer flag `--no-link` skips the setup and
+is remembered on later runs; `--link` opts back in. The setup requests `sudo`
+to open UDP port 20808 when UFW or firewalld is active, and to remove the
+NetworkManager hook that earlier setup versions installed. If the step was
+skipped or could not complete, close Live and retry it as your normal user:
 
 ```bash
 "$HOME/.local/share/ableton-wine/setup-link.sh"
@@ -19,35 +21,31 @@ From a repository checkout, run:
 
 The script:
 
-1. Finds the interface on the first IPv4 default route. It rejects interface
-   names beginning with `tun`, `wg`, or `tap`.
-2. Runs `sudo ip route replace 224.0.0.0/4 dev <interface> metric 0`.
-3. Adds UDP port 20808 through `ufw`, or through `firewall-cmd` when `ufw` is
-   absent. If neither tool is installed, it leaves the firewall unchanged and
-   tells you to allow UDP 20808 manually.
-4. When the NetworkManager dispatcher directory exists, installs
-   `/etc/NetworkManager/dispatcher.d/50-link-multicast`.
-5. Copies the user unit to
+1. Opens UDP port 20808 through `ufw` when UFW is enabled, or through
+   `firewall-cmd` when firewalld is running. Without an active firewall it
+   changes nothing and, if you run another firewall, tells you to allow
+   UDP 20808 manually.
+2. Removes the NetworkManager dispatcher hook that setup versions 1 and 2
+   installed, using `sudo`, and drops the old `224.0.0.0/4` route with it.
+   If the removal fails, the script prints the removal command and exits
+   without recording the setup as complete, so the next update retries. A
+   stale route without the hook is only reported: it is harmless to Link
+   and clears on reboot.
+3. Copies the user unit to
    `${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/ableton-linkd.service`
    and enables it with `systemctl --user enable --now`.
 
-The script can be repeated and refuses to run while Live is open. It replaces
-the route and updates the same firewall rule, hook, and unit. If the daemon or
-unit file is missing, it leaves the network changes in place and reports that
+The script can be repeated and refuses to run while Live is open. If the
+daemon or unit file is missing, it keeps the firewall change and reports that
 the daemon setup was skipped.
 
-The current NetworkManager hook applies the multicast route to every
-interface reported as `up`. It does not repeat the default-route or VPN
-check. A later VPN or secondary-interface event can therefore move the route.
-Verify the route after each network or VPN reconnect:
-
-```bash
-ip route show 224.0.0.0/4
-```
-
-The listed device must be the LAN interface used by the other Link peers.
-Network managers other than NetworkManager need an equivalent persistent
-route or another setup run after reconnect.
+Setup versions 1 and 2 added a `224.0.0.0/4` route on the LAN interface and
+a NetworkManager hook to maintain it. Version 3 removed both. The Link SDK
+sets `IP_MULTICAST_IF` on every discovery socket, which selects the outgoing
+interface directly instead of through a routing-table lookup, so the route
+was never consulted for Link traffic. Live under Wine and `ableton-linkd`
+both set that option per interface; see the recorded trace in
+[ABLETON-WINE-LINK-FIRSTCLASS.md](ABLETON-WINE-LINK-FIRSTCLASS.md).
 
 ## Components
 
@@ -114,13 +112,15 @@ it.
 Check the host setup:
 
 ```bash
-ip route show 224.0.0.0/4
 pgrep -a ableton-linkd
 systemctl --user status ableton-linkd.service
 ```
 
 For `ufw`, run `sudo ufw status` and look for `20808/udp`. For firewalld, run
 `firewall-cmd --list-ports`.
+
+The setup runs once per version and does not notice a firewall enabled after
+it. In that case, allow UDP 20808 yourself or re-run the setup script.
 
 With the service or launcher daemon active, the native probe should see at
 least that peer:
@@ -160,10 +160,10 @@ Discovery uses `224.76.78.75:20808`. The Wireshark filter
 membership reports.
 
 If a known remote peer is active but neither the native probe nor tcpdump
-sees it, check the selected interface, firewall, access point, and multicast
-route. If native tools see the remote peer but Live does not, compare the
-linkprobe verdicts and packet capture before treating the result as a Wine
-socket fault.
+sees it, check the firewall, the access point (many block or filter
+multicast), and that both hosts sit on the same LAN segment. If native tools
+see the remote peer but Live does not, compare the linkprobe verdicts and
+packet capture before treating the result as a Wine socket fault.
 
 ## Protocol and scope
 
