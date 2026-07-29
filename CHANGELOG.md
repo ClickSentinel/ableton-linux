@@ -10,7 +10,23 @@
   (Wine patch 0053). winex11 now exports the `WM_GETMINMAXINFO` minimum
   as the X11 `PMinSize` hint, and the window manager stops the drag at
   the minimum.
+- Fixed high CPU use and display traffic with the GPU renderer (issue 91,
+  Wine patch 0055). Wine copied every finished frame of Live's main window
+  from the graphics card back into main memory and sent it to the display
+  server as a full image, about 650 MB per second during continuous UI
+  activity such as mouse movement. Wine now shows finished frames directly
+  from the graphics card. Set `WINE_DISABLE_GL_PRESENT=1` to restore the
+  previous behaviour. Diagnosis and measurements by Lucas Gillingham.
 
+- The installer now configures Ableton Link during installation. Setup no
+  longer adds a multicast route or NetworkManager hook: the Link SDK selects
+  its interfaces itself. `sudo` is used to open UDP port 20808 when UFW or
+  firewalld is active, and on existing installs to remove the old hook and
+  route during one setup re-run. `--no-link` skips the step and is
+  remembered on later runs; `--link` opts back in.
+- The README now covers installation and ordinary use. Troubleshooting, source
+  builds, configuration overrides, and maintainer material have dedicated
+  documents.
 - Fixed a Live crash when closing WebView2 plugin editors (issue 52, Wine
   patch 0045). `RevokeDragDrop` now rejects windows owned by another process,
   matching `RegisterDragDrop`. Fix by Giang Nguyen. See

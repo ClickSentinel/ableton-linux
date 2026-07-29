@@ -11,8 +11,8 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 51 files, numbered 0001 through 0053.
-Patches 0027 and 0044 are intentionally absent.
+The current Wine series contains 52 files, numbered 0001 through 0055.
+Patches 0027, 0044, and 0054 are intentionally absent.
 
 ## Applying the series
 
@@ -153,4 +153,21 @@ Apply them in sequence with the rest of the series.
   Live counter mid-drag and the window fought the drag (growth at the
   opposite edge, occasional spurious maximize). Found 2026-07-27 while
   enabling Live's GPU renderer. See
+  `notes/ABLETON-WINE-GPU-RENDERER.md`.
+- `0054`: reserved for the language-fallback font work on PR 77. No
+  patch file is shipped.
+- `0055`: set `WINED3D_SWAPCHAIN_PREFER_GL_PRESENT` for top-level D3D11
+  swapchain windows. Without the flag, wined3d displayed every frame of
+  Live's main window through GDI: it copied the finished frame from the
+  graphics card into main memory and sent it to the display server as a
+  full-window image, about 650 MB per second and more than one CPU core
+  while the mouse moves across the window (issue 91). With the flag,
+  wined3d shows each frame directly from the graphics card with
+  `glXSwapBuffers`. Windows with the `WS_CHILD` or `WS_POPUP` style
+  keep the GDI path: child windows have no X11 window of their own, and
+  popup windows show black content on the direct path until the first
+  interaction. Setting `WINE_DISABLE_GL_PRESENT=1` restores the GDI
+  path for every window; the value `0` is ignored. Diagnosis and
+  measurements:
+  Lucas Gillingham (ClickSentinel). See
   `notes/ABLETON-WINE-GPU-RENDERER.md`.

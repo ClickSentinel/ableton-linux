@@ -75,7 +75,7 @@ install -m644 tools/setsyscolors.exe "$kit/scripts/setsyscolors.exe"
 install -m644 tools/learnheal.exe "$kit/scripts/learnheal.exe"
 cp -a desktop "$kit/desktop"
 cp -a vendor/winetricks vendor/winetricks-cache "$kit/vendor/"
-cp -a VERSION README.md "$kit/"
+cp -a VERSION README.md TROUBLESHOOTING.md BUILDING.md "$kit/"
 install -m755 dist/cabextract-static "$kit/bin/cabextract"
 install -m755 dist/ableton-linkd "$kit/bin/ableton-linkd"
 # Ableton Link is GPLv2+ with no linking exception, so the built daemon's
