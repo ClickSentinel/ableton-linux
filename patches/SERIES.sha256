@@ -50,5 +50,6 @@ cc83e5242ce47f4e0eab85d70bb63749edf3c02eeb20ab5bc00e4e018424f4d4  0051-win32u-in
 486a1699012bef3ce8b0bee6f8f302555ea2b921c6ef3a3f746b85c7bc1919ca  0053-winex11-export-the-app-minimum-tracking-size-as-PMin.patch
 9e1209c110ee7b4c6bda42389c42f90cafb6aa942847ac5a4557f2b22eb72e84  0054-dxgi-gate-parked-dcomp-reblits-on-window-visibility.patch
 5e1cb80d7bfe21bfa8ffd8ea219ab616e5878ea7455741872d99758759327389  0055-dxgi-prefer-GL-present-for-top-level-swapchain-windo.patch
+d1a013467b5248cc28bdaa1ce55aca672c4e1995b3c389e866c7693251791bbf  0056-dxgi-keep-painting-composition-targets-from-the-comp.patch
 b2d30d77078263b8141199195ea16b0e6df7eac04b939b9e56cd53552cfb9175  pipeasio/0001-asio-keep-graph-sample-rate-instead-of-ASE_NoClock.patch
 f25d5b4c3ee71b7e9491f91c462e2b7ddaca377b8b94c7bd95df7734f0a4b563  pipeasio/0002-asio-report-timeGetTime-in-ASIO-systemTime.patch

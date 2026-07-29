@@ -1,0 +1,97 @@
+Subject: dxgi: keep painting composition targets from the comp buffer
+
+Restores patch 0041's WM_PAINT behaviour on top of the d2d1-dcomp-11.14 base,
+which replaced that block with "forward to the app's original wndproc first,
+then re-blit the comp buffer afterwards".
+
+Upstream's version exists to fix paint-driven plugins (an EPROM WebView2 loader
+that only re-renders on WM_SIZE/WM_PAINT), and the trailing re-blit is meant to
+restore the composed content the app's paint just erased. On Live that does not
+hold: the erase is visible before the re-blit lands, so the sibling software
+frame shows through on every paint and the pane flickers continuously. The same
+configuration on the 11.13 base, where 0041's block is in place, does not
+flicker - confirmed by A/B on one prefix and one set.
+
+Painting straight from the comp buffer keeps the published DComp visual on
+screen, which is what the DWM would show on Windows. When the buffer fails
+0030's currency check the window is validated without blitting rather than
+forwarded, so a stale-sized buffer is never stretched over the window.
+
+This trades away upstream's paint-driven-plugin fix. If that turns out to
+matter for a plugin we care about, the shape of a proper fix is to re-blit
+synchronously within the same paint cycle rather than after EndPaint - but
+that needs a repro of the plugin case to develop against.
+
+diff --git a/dlls/dxgi/factory.c b/dlls/dxgi/factory.c
+index 9c60a65bb9..5a9db821e9 100644
+--- a/dlls/dxgi/factory.c
++++ b/dlls/dxgi/factory.c
+@@ -766,37 +766,39 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+ 
+         case WM_PAINT:
+         {
+-            /* Forward WM_PAINT to the app's original wndproc FIRST.  DComp
+-             * plugins whose UI is paint-driven (EPROM's WebView2 loader only
+-             * re-renders on WM_SIZE/WM_PAINT, not on a timer) otherwise never
+-             * get their invalidation callback: hover/click state changes call
+-             * InvalidateRect, the generated WM_PAINT was swallowed here, and
+-             * the UI stayed frozen until the next resize forced a WM_SIZE
+-             * redraw.  The app's paint may trigger a re-render + Present,
+-             * which updates the comp buffer as a side effect.  Its own
+-             * BeginPaint sends WM_ERASEBKGND, which this subclass still
+-             * suppresses (returns 1), so no background erase happens.
+-             *
+-             * Afterwards re-blit the comp buffer via GetDC (NOT BeginPaint:
+-             * the app's EndPaint already validated the update region, so a
+-             * second BeginPaint would return an empty clip region and eat
+-             * our blit) so the swapchain content stays on top of whatever
+-             * the app painted. */
+-            if (orig)
+-                CallWindowProcW(orig, hwnd, msg, wparam, lparam);
+-            else
+-                DefWindowProcW(hwnd, msg, wparam, lparam);
+-
++            /* Patch 0041: always paint from the comp buffer, however long
++             * the app has been idle.  It is the published DComp visual
++             * (Windows parity), and forwarding to the orig wndproc erases the
++             * surface and lets the sibling software frame show through - the
++             * Learn View revert ~3s after the last present, and a visible
++             * flicker on every paint on the 11.14 base.  Upstream forwards
++             * first and re-blits afterwards, which is meant to cover this, but
++             * measured on Live the erase wins often enough to flicker.  When
++             * the buffer fails the 0030 currency check, validate without
++             * blitting rather than forward. */
+             {
+-                static unsigned int paint_count;
+-                ++paint_count;
+-                if (paint_count <= 5 || !(paint_count % 200))
+-                    FIXME("WM_PAINT #%u (forwarded): hwnd %p, comp_dc=%p.\n",
+-                            paint_count, hwnd,
+-                            (HDC)GetPropW(hwnd, L"__wine_dcomp_comp_dc"));
++                PAINTSTRUCT ps;
++                HDC comp_dc = (HDC)GetPropW(hwnd, L"__wine_dcomp_comp_dc");
++                LPARAM dims = (LPARAM)GetPropW(hwnd, L"__wine_dcomp_comp_size");
++
++                BeginPaint(hwnd, &ps);
++                if (comp_dc && dims
++                        && dcomp_comp_buffer_current(hwnd, LOWORD(dims), HIWORD(dims)))
++                {
++                    unsigned int w = LOWORD(dims);
++                    unsigned int h = HIWORD(dims);
++
++                    BitBlt(ps.hdc, 0, 0, w, h, comp_dc, 0, 0, SRCCOPY);
++                    {
++                        static unsigned int paint_count;
++                        ++paint_count;
++                        if (paint_count <= 5 || !(paint_count % 200))
++                            FIXME("WM_PAINT #%u: hwnd %p %ux%u, comp_dc=%p.\n",
++                                    paint_count, hwnd, w, h, comp_dc);
++                    }
++                }
++                EndPaint(hwnd, &ps);
+             }
+-            dcomp_reblit_comp_buffer(hwnd, "paint");
+-            ValidateRect(hwnd, NULL);
+             return 0;
+         }
+ 

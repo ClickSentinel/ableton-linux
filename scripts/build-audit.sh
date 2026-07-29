@@ -170,6 +170,7 @@ STAMP_ONLY='
 0052|logic-only (DT_HIDEPREFIX on the menu bar DrawTextW call; no new string literal)
 0054|ascii|lib/wine/x86_64-windows/dxgi.dll|Re-blit skipped (hidden ancestry)
 0055|logic-only (PREFER_GL_PRESENT for top-level non-WS_CHILD/non-WS_POPUP device windows; only literal is a temporary FIXME)
+0056|logic-only (restores the comp-buffer WM_PAINT of patch 0041 over the upstream forward-then-reblit)
 0053|logic-only (WM_GETMINMAXINFO minimum exported as PMinSize hints; no new string literal)
 '
 wide_pattern() {  # ascii string -> PCRE matching its UTF-16LE bytes
