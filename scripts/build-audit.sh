@@ -170,8 +170,7 @@ STAMP_ONLY='
 0051|logic-only (RDW_FRAME added to the SetSysColors redraw flags; no new string literal)
 0052|logic-only (DT_HIDEPREFIX on the menu bar DrawTextW call; no new string literal)
 0053|logic-only (WM_GETMINMAXINFO minimum exported as PMinSize hints; no new string literal)
-0055|logic-only (PREFER_GL_PRESENT set for top-level non-WS_POPUP device windows; literal is TRACE-only)
-0056|DIAGNOSTIC ONLY (dcomp black-hole ERRs; not for merge)
+0055|logic-only (PREFER_GL_PRESENT for top-level non-WS_CHILD/non-WS_POPUP device windows; literal is TRACE-only)
 '
 wide_pattern() {  # ascii string -> PCRE matching its UTF-16LE bytes
     printf '%s' "$1" | od -An -v -tx1 | tr -d '\n' | tr -s ' ' ' ' \

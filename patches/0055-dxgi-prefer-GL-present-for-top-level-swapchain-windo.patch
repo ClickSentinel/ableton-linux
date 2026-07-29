@@ -97,7 +97,7 @@ index b4ed824..ce226b0 100644
 +
 +            GetClassNameW(desc->device_window, cls, ARRAY_SIZE(cls));
 +            if (++flagged <= 8)
-+                FIXME("GL present for device window %p class %s style %08lx.\n",
++                TRACE("GL present for device window %p class %s style %08lx.\n",
 +                        desc->device_window, debugstr_w(cls), style);
 +            wined3d_swapchain_set_prefer_gl_present(swapchain->wined3d_swapchain, TRUE);
 +        }

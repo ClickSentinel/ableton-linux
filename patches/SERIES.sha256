@@ -50,7 +50,6 @@ f4d4f0cecbc8a39bbaeb6faaf416d032ee934e7ed8420aa168b39b3c42f9dd58  0049-win32u-dr
 f278d870c0424748a9d7a7cd5a6e9feb0837900e6382f4ee9d7cfe214c0b9fd5  0052-win32u-hide-the-menu-bar-alt-key-mnemonic-underline.patch
 d32ac8ca55853e5488292d015e35a31d23744150e04af476742e781b58abc186  0053-winex11-export-the-app-minimum-tracking-size-as-PMin.patch
 11dbb4c36378fc274e8eaa281e9bfbe43835bd0fae2682924d19aee318b673bb  0054-dxgi-gate-parked-dcomp-reblits-on-window-visibility.patch
-75f0277449d43027f89a8598b05d21704ba37c09cbca9c2e65cc111fd73542bd  0055-dxgi-prefer-GL-present-for-top-level-swapchain-windo.patch
-d787565e532f24021c7f5e9440a9c3dbcebb49cd3d47939ef1bed183554e6563  0056-DIAGNOSTIC-log-dcomp-subclass-DefWindowProc-black-ho.patch
+a9b0b1b0509c1e5d4cabac521faca18f31f9b45b534c991093f37f579d310bfa  0055-dxgi-prefer-GL-present-for-top-level-swapchain-windo.patch
 b2d30d77078263b8141199195ea16b0e6df7eac04b939b9e56cd53552cfb9175  pipeasio/0001-asio-keep-graph-sample-rate-instead-of-ASE_NoClock.patch
 f25d5b4c3ee71b7e9491f91c462e2b7ddaca377b8b94c7bd95df7734f0a4b563  pipeasio/0002-asio-report-timeGetTime-in-ASIO-systemTime.patch
