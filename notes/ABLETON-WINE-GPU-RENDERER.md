@@ -59,11 +59,48 @@ Checks that still need a pass after longer real-world use: file dialogs
 under sustained work, plugin editor open/close (JUCE, SWAM), and both
 panes across scale factors other than 200%.
 
+## Present path (added 2026-07-29, issue 91)
+
+A present is the step where Live hands a finished frame to Wine for
+display. With the GPU renderer on, Wine handled every present of Live's
+main window on its GDI path: it copied the finished frame from the
+graphics card into main memory and sent it to the display server as a
+full-window image, about 14 MB per frame at 2560x1350. An idle window
+presents nothing, so the idle figures above stay correct. Continuous UI
+activity, including mouse movement over the window, produced about
+650 MB per second of display-server traffic and used more than one CPU
+core. Lucas Gillingham (ClickSentinel) reported and measured this in
+issue 91.
+
+Wine patch 0055 marks the main window's frame buffers at creation with
+`WINED3D_SWAPCHAIN_PREFER_GL_PRESENT`. Wine then shows each finished
+frame directly from the graphics card with `glXSwapBuffers` and skips
+the copy. The patch applies this to top-level windows only. Windows
+with the `WS_CHILD` style (composition targets, embedded plugin
+editors) keep the GDI path because they have no X11 window of their
+own. Windows with the `WS_POPUP` style (Settings, the authorisation
+dialog, context menus) also keep the GDI path because they show black
+content on the direct path until the first click or keypress. Set
+`WINE_DISABLE_GL_PRESENT=1` in the environment to restore the GDI path
+for every window; a rebuild is unnecessary.
+
+To confirm which path a build uses, start Live with
+`WINEDEBUG=fixme+all,err+all` and count the message `Using GDI present`
+in the log. One occurrence means the copy path. Zero means the direct
+path. The launcher sets `WINEDEBUG=-all` by default, so pass
+`WINEDEBUG` explicitly. Turn tracing off when measuring bandwidth,
+because the log's own writes count toward `/proc/<pid>/io`.
+
+These measurements come from one machine (AMD Navi 31, COSMIC/Wayland
+via XWayland). Confirmation on Intel or NVIDIA hardware and on a
+non-Wayland session is still open.
+
 ## Related
 
 - [Diagnosis narrative](ABLETON-WINE-GPU-RENDERER-WEBVIEW2-DIAGNOSIS.md)
 - [Learn View flicker mechanism](ABLETON-WINE-LEARNVIEW-FLICKER.md)
 - [Patch 0053](../patches/0053-winex11-export-the-app-minimum-tracking-size-as-PMin.patch)
+- [Patch 0055](../patches/0055-dxgi-prefer-GL-present-for-top-level-swapchain-devic.patch)
 - Resize trace from the diagnosis session:
   `~/Projects/Code/ableton/live-resize-trace-gpu-20260727.log`
   (machine-local)
