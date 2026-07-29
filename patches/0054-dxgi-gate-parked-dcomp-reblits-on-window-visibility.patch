@@ -1,0 +1,61 @@
+Subject: dxgi: gate parked dcomp reblits on window visibility (issue 57)
+
+Closing a WebView2 pane (e.g. Live's Learn View) does not tear the
+WebView2 stack down — Live parks it for reuse by reparenting the pane
+chain under a hidden helper toplevel. The composition target window
+this file subclasses stays alive too: still WS_VISIBLE, still the old
+pane size, swapchain and comp buffer untouched. Neither of
+dcomp_reblit_comp_buffer's liveness signals fires for a parked target
+— it never receives WM_NCDESTROY, and dcomp_comp_buffer_current()
+still reports the buffer current since nothing ever resizes it — so
+the steady reblit patch 0041 relies on to pin the composite above the
+sibling Chrome_RenderWidgetHostHWND software frame keeps stamping the
+last frame into the now-dead pane rect at the timer cadence, fighting
+whatever Live's own UI paints there instead. The result is a
+persistent flicker in the closed pane's rectangle that outlives the
+close and needs a Live restart to clear (issue 57).
+
+IsWindowVisible() walks the ancestor chain, so it is the right
+discriminator: a parked pane (hidden ancestors) reports FALSE while an
+open pane (whole chain WS_VISIBLE) keeps the always-reblit behaviour
+0041 needs. Minimized host windows keep WS_VISIBLE — iconizing a
+window does not clear it — so minimize/restore is unaffected. No
+re-arm is needed either: the timer keeps running, and reblits resume
+by themselves once Live reparents the pane chain back into a visible
+ancestor on reopen.
+
+diff --git a/dlls/dxgi/factory.c b/dlls/dxgi/factory.c
+index 2ef9ba3..9c60a65 100644
+--- a/dlls/dxgi/factory.c
++++ b/dlls/dxgi/factory.c
+@@ -495,6 +495,30 @@ static void dcomp_reblit_comp_buffer(HWND hwnd, const char *reason)
+     HDC comp_dc = (HDC)GetPropW(hwnd, L"__wine_dcomp_comp_dc");
+     LPARAM dims = (LPARAM)GetPropW(hwnd, L"__wine_dcomp_comp_size");
+ 
++    /* Parked targets must not be re-blitted (issue 57). A closed-but-parked
++     * WebView2 pane keeps its whole browser stack alive for reuse: Live
++     * reparents the pane chain under a hidden helper toplevel, but this
++     * target window stays WS_VISIBLE at the old pane size, and neither
++     * liveness signal above fires (no WM_NCDESTROY, buffer still "current"
++     * since nothing resizes it) — so without this gate the reblit below
++     * keeps stamping the last frame into the dead pane rect at the timer
++     * cadence forever, fighting the app's own repaints (XDamage-verified
++     * 5 Hz flicker that outlives the close). IsWindowVisible() walks the
++     * ancestor chain, so a parked pane (hidden ancestors) reports FALSE
++     * while an open pane (whole chain WS_VISIBLE) keeps the always-reblit
++     * 0041 needs. Minimized host windows keep WS_VISIBLE (iconizing does
++     * not clear it), so minimize/restore is unaffected; reblits resume by
++     * themselves, no re-arm needed, once Live reparents the pane back into
++     * a visible ancestor on reopen. */
++    if (!IsWindowVisible(hwnd))
++    {
++        static unsigned int hidden_count;
++        ++hidden_count;
++        if (hidden_count <= 3 || !(hidden_count % 500))
++            FIXME("Re-blit skipped (hidden ancestry): hwnd %p reason=%s.\n", hwnd, reason);
++        return;
++    }
++
+     if (comp_dc && dims)
+     {
+         unsigned int w = LOWORD(dims);

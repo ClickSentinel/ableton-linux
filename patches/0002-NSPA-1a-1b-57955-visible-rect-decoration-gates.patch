@@ -1,12 +1,9 @@
 Subject: NSPA 1a+1b (57955 visible-rect + decoration gates)
 
 ---
- dlls/win32u/window.c      | 7 ++++++-
- dlls/winex11.drv/window.c | 7 +++++--
- 2 files changed, 11 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index fd76942b..919f6bb7 100644
+index fd76942..919f6bb 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -2060,8 +2060,13 @@ static RECT get_visible_rect( HWND hwnd, BOOL shaped, UINT style, UINT ex_style,
@@ -25,7 +22,7 @@ index fd76942b..919f6bb7 100644
  
      visible_rect = rects->window;
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 225f0f05..64e4961d 100644
+index 225f0f0..64e4961 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -501,7 +501,6 @@ static unsigned long get_mwm_decorations_for_style( DWORD style, DWORD ex_style

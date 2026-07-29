@@ -4,7 +4,7 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
-NAME="wine-d2d1-nspa-11.13"
+NAME="wine-d2d1-nspa-11.14"
 SERIES="$root/patches/SERIES.sha256"
 
 say()  { printf '%s\n' "$*"; }
@@ -70,7 +70,8 @@ extras="$(cd "$root/patches" && ls 00*.patch pipeasio/*.patch 2>/dev/null | grep
 # titles and notes/); a gap is fine if documented here, a dropped patch is not.
 declare -A SERIES_GAPS=(
     [0027]="retired 2026-07-14 — gitignore housekeeping, no artifact effect"
-    [0044]="reserved 2026-07-24 for the issue 57 parked-pane reblit gate; entry harmless once 0044 lands"
+    [0044]="reserved 2026-07-24 for the issue 57 parked-pane reblit gate; shipped as 0054 instead"
+    [0045]="retired 2026-07-28 — the RevokeDragDrop cross-process guard is already in dlls/ole32/ole2.c on the d2d1-dcomp-11.14 base"
 )
 seq_expect=1
 for f in $(awk '{print $2}' "$SERIES" | grep -v '^pipeasio/' | sort); do
@@ -113,7 +114,7 @@ fi
 FINGERPRINTS='
 0001|ascii|lib/wine/x86_64-windows/wined3d.dll|WINED3D_DCOMP_FORCE_FULL_REDRAW
 0003|ascii|lib/wine/x86_64-unix/winex11.so|_NET_FRAME_EXTENTS
-0016|wide|lib/wine/x86_64-windows/dcomp.dll|__wine_dcomp_origproc
+0016|wide|lib/wine/x86_64-windows/dcomp.dll|__wine_dcomp_real_wndproc
 0022|wide|lib/wine/x86_64-windows/dxgi.dll|__wine_dcomp_last_present
 0031|ascii|lib/wine/x86_64-unix/comdlg32.so|org.freedesktop.portal.FileChooser
 0031|wide|lib/wine/x86_64-windows/comdlg32.dll|FileDialogPortal
@@ -126,7 +127,6 @@ FINGERPRINTS='
 0039|ascii|lib/wine/x86_64-unix/winex11.so|is mapped, refusing to make it managed
 0043|ascii|lib/wine/x86_64-unix/comdlg32.so|org.freedesktop.portal.OpenURI
 0043|ascii|lib/wine/x86_64-windows/shell32.dll|__wine_portal_show_item
-0045|ascii|lib/wine/x86_64-windows/ole32.dll|revoke for another process windows is disabled
 pipeasio/0001|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-clamp-sample-rate
 pipeasio/0002|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-midi-timebase
 '
@@ -168,6 +168,8 @@ STAMP_ONLY='
 0050|logic-only (per-process sys-color cache reset on WM_SYSCOLORCHANGE; no new string literal)
 0051|logic-only (RDW_FRAME added to the SetSysColors redraw flags; no new string literal)
 0052|logic-only (DT_HIDEPREFIX on the menu bar DrawTextW call; no new string literal)
+0054|ascii|lib/wine/x86_64-windows/dxgi.dll|Re-blit skipped (hidden ancestry)
+0055|logic-only (PREFER_GL_PRESENT for top-level non-WS_CHILD/non-WS_POPUP device windows; only literal is a temporary FIXME)
 0053|logic-only (WM_GETMINMAXINFO minimum exported as PMinSize hints; no new string literal)
 '
 wide_pattern() {  # ascii string -> PCRE matching its UTF-16LE bytes

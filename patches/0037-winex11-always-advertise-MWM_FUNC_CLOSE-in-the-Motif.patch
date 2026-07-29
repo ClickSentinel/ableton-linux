@@ -21,11 +21,9 @@ hint-refresh timing entirely.
 
 Fixes shibco/ableton-linux#31.
 ---
- dlls/winex11.drv/window.c | 11 +++++++++--
- 1 file changed, 9 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index adcbeb8e..8bd2c7e3 100644
+index adcbeb8..8bd2c7e 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -1104,11 +1104,18 @@ static void set_mwm_hints( struct x11drv_win_data *data, UINT style, UINT ex_sty
@@ -49,6 +47,3 @@ index adcbeb8e..8bd2c7e3 100644
              if (style & WS_MINIMIZEBOX) mwm_hints.functions |= MWM_FUNC_MINIMIZE;
              if (style & WS_MAXIMIZEBOX) mwm_hints.functions |= MWM_FUNC_MAXIMIZE;
  
--- 
-2.55.0
-

@@ -20,13 +20,9 @@ app is already using to paint (e.g. the menu bar background) stays stuck on
 the old color even after the raw value itself is fixed. Mirrors what
 set_rgb_entry already does for the calling process's own SetSysColors.
 ---
- dlls/win32u/message.c        |  4 ++++
- dlls/win32u/sysparams.c      | 41 ++++++++++++++++++++++++++++++++++++
- dlls/win32u/win32u_private.h |  1 +
- 3 files changed, 46 insertions(+)
 
 diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
-index d432eb3c..c90ac890 100644
+index d432eb3..c90ac89 100644
 --- a/dlls/win32u/message.c
 +++ b/dlls/win32u/message.c
 @@ -2356,6 +2356,10 @@ static LRESULT call_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
@@ -41,7 +37,7 @@ index d432eb3c..c90ac890 100644
      thread_info->client_info->msg_source = msg_source_unavailable;
  
 diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
-index fdcdfc0a..bb4f9d71 100644
+index fdcdfc0..bb4f9d7 100644
 --- a/dlls/win32u/sysparams.c
 +++ b/dlls/win32u/sysparams.c
 @@ -7303,6 +7303,47 @@ COLORREF get_sys_color( int index )
@@ -93,7 +89,7 @@ index fdcdfc0a..bb4f9d71 100644
  {
      static const WORD pattern[] = { 0x5555, 0xaaaa, 0x5555, 0xaaaa, 0x5555, 0xaaaa, 0x5555, 0xaaaa };
 diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
-index 4e2b9283..1b8e7fd6 100644
+index 4e2b928..1b8e7fd 100644
 --- a/dlls/win32u/win32u_private.h
 +++ b/dlls/win32u/win32u_private.h
 @@ -174,6 +174,7 @@ extern DWORD get_process_layout(void);
@@ -104,6 +100,3 @@ index 4e2b9283..1b8e7fd6 100644
  extern UINT get_system_dpi(void);
  extern int get_system_metrics( int index );
  extern struct ratio get_thread_dpi(void);
--- 
-2.43.0
-

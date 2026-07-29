@@ -4,12 +4,9 @@ Subject: win32u,winex11: give captioned tool windows the native
 winex11: captioned tool windows get MWM decorations (close-only). win32u: when such a window's NC area
 is caption+borders only, map the X window to exactly the client area so the Win32 NC band is never drawn.
 ---
- dlls/win32u/window.c      | 10 ++++++++++
- dlls/winex11.drv/window.c |  8 +++++++-
- 2 files changed, 17 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 755aeed1..2c869747 100644
+index 755aeed..2c86974 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -2067,6 +2067,16 @@ static RECT get_visible_rect( HWND hwnd, BOOL shaped, UINT style, UINT ex_style,
@@ -30,7 +27,7 @@ index 755aeed1..2c869747 100644
      {
          /* NSPA: Move the window==client check AFTER GetWindowStyleMasks.  Apps that handle
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 92e611fa..c9f9fd24 100644
+index 92e611f..c9f9fd2 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -500,7 +500,13 @@ static unsigned long get_mwm_decorations_for_style( DWORD style, DWORD ex_style

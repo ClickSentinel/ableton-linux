@@ -3,11 +3,9 @@ Subject: win32u: lay out the menu bar 4px taller than SM_CYMENU
 Raise the menu-bar item floor to SM_CYMENU + 3 so NCCALCSIZE matches Live's
 client + AdjustWindowRectExForDpi(bMenu) + 4 model. Text stays centered; popup menus are unaffected.
 ---
- dlls/win32u/menu.c | 11 +++++++++--
- 1 file changed, 9 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/win32u/menu.c b/dlls/win32u/menu.c
-index a700f44a..d6caea03 100644
+index a700f44..d6caea0 100644
 --- a/dlls/win32u/menu.c
 +++ b/dlls/win32u/menu.c
 @@ -2114,8 +2114,14 @@ static void calc_menu_item_size( HDC hdc, struct menu_item *item, HWND owner, IN

@@ -7,14 +7,12 @@ Content-Transfer-Encoding: 8bit
 On reblit-timer ticks, signal frame_latency_event and refresh the window surface from the
 persistent comp buffer instead of forcing a Present; ticks where the app presented on its own do nothing.
 ---
- dlls/dxgi/factory.c | 37 +++++++++++++++++++++++++++++--------
- 1 file changed, 29 insertions(+), 8 deletions(-)
 
 diff --git a/dlls/dxgi/factory.c b/dlls/dxgi/factory.c
-index b6c87980..7912cd60 100644
+index c9ab107..88146af 100644
 --- a/dlls/dxgi/factory.c
 +++ b/dlls/dxgi/factory.c
-@@ -675,14 +675,34 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -679,14 +679,34 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
  
                  if (sc)
                  {
@@ -57,7 +55,7 @@ index b6c87980..7912cd60 100644
                  }
                  else
                  {
-@@ -741,6 +761,7 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -746,6 +766,7 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
              RemovePropW(hwnd, L"__wine_dcomp_swapchain");
              RemovePropW(hwnd, L"__wine_dcomp_comp_dc");
              RemovePropW(hwnd, L"__wine_dcomp_comp_size");

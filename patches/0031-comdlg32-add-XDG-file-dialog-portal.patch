@@ -1,27 +1,9 @@
 Subject: comdlg32: add XDG file dialog portal
 
 ---
- dlls/comdlg32/Makefile.in   |    6 +-
- dlls/comdlg32/cdlg32.c      |    4 +
- dlls/comdlg32/filedlg.c     |  676 +++++++++++++++++++-
- dlls/comdlg32/itemdlg.c     |  745 ++++++++++++++++++++++
- dlls/comdlg32/portal_dbus.c | 1172 +++++++++++++++++++++++++++++++++++
- dlls/comdlg32/unixlib.c     |   68 ++
- dlls/comdlg32/unixlib.h     |   61 ++
- dlls/shell32/brsfolder.c    |  137 ++++
- include/Makefile.in         |    1 +
- include/wine/appdefaults.h  |   77 +++
- programs/winecfg/resource.h |    6 +
- programs/winecfg/theme.c    |  185 +++++-
- programs/winecfg/winecfg.rc |   51 +-
- 13 files changed, 3121 insertions(+), 68 deletions(-)
- create mode 100644 dlls/comdlg32/portal_dbus.c
- create mode 100644 dlls/comdlg32/unixlib.c
- create mode 100644 dlls/comdlg32/unixlib.h
- create mode 100644 include/wine/appdefaults.h
 
 diff --git a/dlls/comdlg32/Makefile.in b/dlls/comdlg32/Makefile.in
-index 4de12ae3..c696696f 100644
+index 4de12ae..c696696 100644
 --- a/dlls/comdlg32/Makefile.in
 +++ b/dlls/comdlg32/Makefile.in
 @@ -3,6 +3,8 @@ MODULE    = comdlg32.dll
@@ -42,7 +24,7 @@ index 4de12ae3..c696696f 100644
 +	portal_dbus.c \
 +	unixlib.c
 diff --git a/dlls/comdlg32/cdlg32.c b/dlls/comdlg32/cdlg32.c
-index b3115650..c4538e4c 100644
+index b311565..c4538e4 100644
 --- a/dlls/comdlg32/cdlg32.c
 +++ b/dlls/comdlg32/cdlg32.c
 @@ -32,6 +32,7 @@
@@ -64,7 +46,7 @@ index b3115650..c4538e4c 100644
  		actctx.hModule = COMDLG32_hInstance;
  		actctx.lpResourceName = MAKEINTRESOURCEW(123);
 diff --git a/dlls/comdlg32/filedlg.c b/dlls/comdlg32/filedlg.c
-index 9d573759..8d45407c 100644
+index 9d57375..8d45407 100644
 --- a/dlls/comdlg32/filedlg.c
 +++ b/dlls/comdlg32/filedlg.c
 @@ -52,6 +52,7 @@
@@ -882,7 +864,7 @@ index 9d573759..8d45407c 100644
          return GetFileName31W(ofn, SAVE_DIALOG);
      else
 diff --git a/dlls/comdlg32/itemdlg.c b/dlls/comdlg32/itemdlg.c
-index 6e47cb12..ed51e302 100644
+index 6e47cb1..ed51e30 100644
 --- a/dlls/comdlg32/itemdlg.c
 +++ b/dlls/comdlg32/itemdlg.c
 @@ -21,6 +21,7 @@
@@ -1732,7 +1714,7 @@ index 6e47cb12..ed51e302 100644
  
 diff --git a/dlls/comdlg32/portal_dbus.c b/dlls/comdlg32/portal_dbus.c
 new file mode 100644
-index 00000000..e14a5a41
+index 0000000..e14a5a4
 --- /dev/null
 +++ b/dlls/comdlg32/portal_dbus.c
 @@ -0,0 +1,1172 @@
@@ -2910,7 +2892,7 @@ index 00000000..e14a5a41
 +}
 diff --git a/dlls/comdlg32/unixlib.c b/dlls/comdlg32/unixlib.c
 new file mode 100644
-index 00000000..89ce9b37
+index 0000000..89ce9b3
 --- /dev/null
 +++ b/dlls/comdlg32/unixlib.c
 @@ -0,0 +1,68 @@
@@ -2984,7 +2966,7 @@ index 00000000..89ce9b37
 +C_ASSERT( ARRAYSIZE(__wine_unix_call_funcs) == unix_portal_is_available + 1 );
 diff --git a/dlls/comdlg32/unixlib.h b/dlls/comdlg32/unixlib.h
 new file mode 100644
-index 00000000..6ce10b74
+index 0000000..6ce10b7
 --- /dev/null
 +++ b/dlls/comdlg32/unixlib.h
 @@ -0,0 +1,61 @@
@@ -3050,7 +3032,7 @@ index 00000000..6ce10b74
 +
 +#endif /* __WINE_COMDLG32_UNIXLIB_H */
 diff --git a/dlls/shell32/brsfolder.c b/dlls/shell32/brsfolder.c
-index ebaf01e7..8510b1d8 100644
+index ebaf01e..8510b1d 100644
 --- a/dlls/shell32/brsfolder.c
 +++ b/dlls/shell32/brsfolder.c
 @@ -31,7 +31,9 @@
@@ -3218,10 +3200,10 @@ index ebaf01e7..8510b1d8 100644
      info.pidlRet = NULL;
      info.lpBrowseInfo = lpbi;
 diff --git a/include/Makefile.in b/include/Makefile.in
-index 72a8d439..f5a4487e 100644
+index d19d160..3ece22e 100644
 --- a/include/Makefile.in
 +++ b/include/Makefile.in
-@@ -1110,6 +1110,7 @@ SOURCES = \
+@@ -1111,6 +1111,7 @@ SOURCES = \
  	windowscontracts.idl \
  	windowsx.h \
  	wine/afd.h \
@@ -3231,7 +3213,7 @@ index 72a8d439..f5a4487e 100644
  	wine/condrv.h \
 diff --git a/include/wine/appdefaults.h b/include/wine/appdefaults.h
 new file mode 100644
-index 00000000..1ab9bded
+index 0000000..1ab9bde
 --- /dev/null
 +++ b/include/wine/appdefaults.h
 @@ -0,0 +1,77 @@
@@ -3313,7 +3295,7 @@ index 00000000..1ab9bded
 +
 +#endif /* __WINE_APPDEFAULTS_H */
 diff --git a/programs/winecfg/resource.h b/programs/winecfg/resource.h
-index f0971c06..ec919143 100644
+index f0971c0..ec91914 100644
 --- a/programs/winecfg/resource.h
 +++ b/programs/winecfg/resource.h
 @@ -45,6 +45,9 @@
@@ -3337,7 +3319,7 @@ index f0971c06..ec919143 100644
  #define IDC_SYSPARAMS_BUTTON            8400
  #define IDC_SYSPARAMS_BUTTON_TEXT       8401
 diff --git a/programs/winecfg/theme.c b/programs/winecfg/theme.c
-index 87d91807..a754b9e4 100644
+index 87d9180..a754b9e 100644
 --- a/programs/winecfg/theme.c
 +++ b/programs/winecfg/theme.c
 @@ -31,6 +31,7 @@
@@ -3571,7 +3553,7 @@ index 87d91807..a754b9e4 100644
                      SendMessageW(GetParent(hDlg), PSM_CHANGED, 0, 0);
                      break;
 diff --git a/programs/winecfg/winecfg.rc b/programs/winecfg/winecfg.rc
-index c18ae022..a779b0ce 100644
+index c18ae02..a779b0c 100644
 --- a/programs/winecfg/winecfg.rc
 +++ b/programs/winecfg/winecfg.rc
 @@ -45,6 +45,9 @@ BEGIN

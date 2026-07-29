@@ -3,8 +3,9 @@ Subject: revert frame-extents re-enable (a5ab9f00): reintroduced
  baseline for handoff
 
 ---
+
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 8a68045c..92e611fa 100644
+index 8a68045..92e611f 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -1769,16 +1769,13 @@ BOOL read_net_frame_extents( Display *display, Window window, long *extents )

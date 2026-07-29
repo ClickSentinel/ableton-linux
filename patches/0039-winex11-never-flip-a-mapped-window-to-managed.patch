@@ -29,11 +29,9 @@ The win32u menu popups (menu bar dropdowns) were never affected: they
 are shown with SWP_NOACTIVATE and nothing pokes them while open, which
 is why patch 0038's focus gate alone did not resolve the issue.
 ---
- dlls/winex11.drv/window.c | 14 ++++++++++++++
- 1 file changed, 14 insertions(+)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 8bd2c7e3..85161e2f 100644
+index 8bd2c7e..85161e2 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -1948,6 +1948,20 @@ static void window_set_managed( struct x11drv_win_data *data, BOOL new_managed )

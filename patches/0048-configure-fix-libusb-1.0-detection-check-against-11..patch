@@ -16,12 +16,9 @@ libusb-1.0.dll never got built. Fixed in BOTH files this patch touches
 autoreconf -- a configure.ac-only fix is a no-op at build time; the
 generated configure script is what actually needs to be correct).
 ---
- configure    | 2 +-
- configure.ac | 2 +-
- 2 files changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/configure b/configure
-index c76787b9..7799c7f7 100755
+index 25f96bc..94cba22 100755
 --- a/configure
 +++ b/configure
 @@ -17830,7 +17830,7 @@ This is an error since --with-usb was requested." "$LINENO" 5 ;;
@@ -34,7 +31,7 @@ index c76787b9..7799c7f7 100755
    enable_libusb_1_0=no
  fi
 diff --git a/configure.ac b/configure.ac
-index 5297a4f8..d33b7463 100644
+index 5297a4f..d33b746 100644
 --- a/configure.ac
 +++ b/configure.ac
 @@ -1609,7 +1609,7 @@ fi

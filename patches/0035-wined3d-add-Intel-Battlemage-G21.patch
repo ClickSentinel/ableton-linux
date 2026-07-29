@@ -16,12 +16,9 @@ DRIVER_INTEL_HD4000; this tree has no newer Intel driver class. VRAM is
 Origin: local fix for issue #11 (Intel Arc B580 misidentified as HD
 Graphics 4000). Should also be upstreamed to Wine.
 ---
- dlls/wined3d/directx.c         | 4 ++++
- dlls/wined3d/wined3d_private.h | 1 +
- 2 files changed, 5 insertions(+)
 
 diff --git a/dlls/wined3d/directx.c b/dlls/wined3d/directx.c
-index 19ec8070..3cc5e3ff 100644
+index 19ec807..3cc5e3f 100644
 --- a/dlls/wined3d/directx.c
 +++ b/dlls/wined3d/directx.c
 @@ -666,6 +666,10 @@ static const struct wined3d_gpu_description gpu_description_table[] =
@@ -36,7 +33,7 @@ index 19ec8070..3cc5e3ff 100644
  
  static const struct driver_version_information *get_driver_version_info(enum wined3d_display_driver driver,
 diff --git a/dlls/wined3d/wined3d_private.h b/dlls/wined3d/wined3d_private.h
-index 190f7992..6aa4ebb4 100644
+index 190f799..6aa4ebb 100644
 --- a/dlls/wined3d/wined3d_private.h
 +++ b/dlls/wined3d/wined3d_private.h
 @@ -2451,6 +2451,7 @@ enum wined3d_pci_device

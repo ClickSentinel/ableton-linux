@@ -32,10 +32,10 @@ width, and an interactive shrink stops at the minimum without a
 counter storm.
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 4ccd2abf..fa7db89a 100644
+index 6a84639..39aedc4 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -988,6 +988,25 @@ static void set_size_hints( struct x11drv_win_data *data, DWORD style )
+@@ -1019,6 +1019,25 @@ static void set_size_hints( struct x11drv_win_data *data, DWORD style )
              size_hints->min_height = size_hints->max_height;
              size_hints->flags |= PMinSize | PMaxSize;
          }

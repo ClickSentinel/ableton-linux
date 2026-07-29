@@ -3,11 +3,9 @@ Subject: Revert "winex11: reconstruct frame extents for tool
 
 This reverts commit ef753f14c5632b9e7ccdd0ba265fd0625f5dac93.
 ---
- dlls/winex11.drv/window.c | 26 +++++++-------------------
- 1 file changed, 7 insertions(+), 19 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index fa1f3729..109b1067 100644
+index fa1f372..109b106 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -1775,25 +1775,13 @@ BOOL read_net_frame_extents( Display *display, Window window, long *extents )

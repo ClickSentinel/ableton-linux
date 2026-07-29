@@ -4,12 +4,9 @@ Subject: server: pre-dirty shared session mapping pages; win32u:
 memset the region in set_session_mapping/grow_session_mapping so every page is a real shmem page before
 clients fault it in. Also match blocks whose start equals the object offset and extend the mismatch warning.
 ---
- dlls/win32u/winstation.c |  9 ++++++---
- server/mapping.c         | 12 ++++++++++++
- 2 files changed, 18 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/win32u/winstation.c b/dlls/win32u/winstation.c
-index 3da9acdd..64a92419 100644
+index 3da9acd..64a9241 100644
 --- a/dlls/win32u/winstation.c
 +++ b/dlls/win32u/winstation.c
 @@ -153,7 +153,7 @@ static NTSTATUS find_shared_session_block( SIZE_T offset, SIZE_T size, struct se
@@ -37,10 +34,10 @@ index 3da9acdd..64a92419 100644
  
      return NULL;
 diff --git a/server/mapping.c b/server/mapping.c
-index a53b6b68..47337972 100644
+index 8bb23fd..65e729d 100644
 --- a/server/mapping.c
 +++ b/server/mapping.c
-@@ -1445,6 +1445,14 @@ void set_session_mapping( struct mapping *mapping )
+@@ -1384,6 +1384,14 @@ void set_session_mapping( struct mapping *mapping )
          return;
      }
  
@@ -55,7 +52,7 @@ index a53b6b68..47337972 100644
      block->data = tmp;
      block->offset = 0;
      block->used_size = sizeof(*shared_session);
-@@ -1477,6 +1485,10 @@ static struct session_block *grow_session_mapping( mem_size_t needed )
+@@ -1416,6 +1424,10 @@ static struct session_block *grow_session_mapping( mem_size_t needed )
          return NULL;
      }
  

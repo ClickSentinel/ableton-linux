@@ -23,12 +23,9 @@ pointer motion during interactive drags. The alias survives WM
 translations and is dropped on any genuine Win32 rect change via a
 generation counter. Adapted from ENCORE's encore-wine.patch.
 ---
- dlls/winex11.drv/window.c | 327 +++++++++++++++++++++++++++++++++++++-
- dlls/winex11.drv/x11drv.h |   7 +
- 2 files changed, 332 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 85161e2f..6a84639b 100644
+index 85161e2..6a84639 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -1597,6 +1597,183 @@ static void window_set_net_wm_state( struct x11drv_win_data *data, UINT new_stat
@@ -439,7 +436,7 @@ index 85161e2f..6a84639b 100644
      data->is_resizable = !!(swp_flags & WINE_SWP_RESIZABLE);
  
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 4d1aa53c..34b53ce4 100644
+index 4d1aa53..34b53ce 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
 @@ -715,6 +715,13 @@ struct x11drv_win_data

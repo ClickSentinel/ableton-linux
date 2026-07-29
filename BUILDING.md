@@ -22,7 +22,7 @@ Run:
 ./scripts/install.sh
 ./scripts/setup-prefix.sh
 WINEPREFIX="$HOME/.wine-ableton" \
-  "$HOME/.local/opt/wine-d2d1-nspa-11.13/bin/wine" \
+  "$HOME/.local/opt/wine-d2d1-nspa-11.14/bin/wine" \
   "/path/to/Ableton Live 12 Suite Installer.exe"
 ableton-live
 ```
@@ -59,7 +59,7 @@ make verify
 ## Environment variables
 
 - `ABLETON_WINE_ROOT` selects the Wine runtime. The default is
-  `~/.local/opt/wine-d2d1-nspa-11.13`.
+  `~/.local/opt/wine-d2d1-nspa-11.14`.
 - `ABLETON_WINEPREFIX` selects the Wine prefix. The default is
   `~/.wine-ableton`.
 - `ABLETON_LIVE_VERSION=11|12` selects a Live major version.

@@ -2,13 +2,9 @@ Subject: GNOME fixes: per-thread reentrant-wpchanged state (menu
  wedge race); no MWM decor for custom-NC windows (double-frame/white border)
 
 ---
- dlls/win32u/ntuser_private.h |  2 ++
- dlls/win32u/window.c         | 25 +++++++++----------------
- dlls/winex11.drv/window.c    |  4 ++++
- 3 files changed, 15 insertions(+), 16 deletions(-)
 
 diff --git a/dlls/win32u/ntuser_private.h b/dlls/win32u/ntuser_private.h
-index 26bab84b..381e4262 100644
+index 26bab84..381e426 100644
 --- a/dlls/win32u/ntuser_private.h
 +++ b/dlls/win32u/ntuser_private.h
 @@ -132,6 +132,8 @@ struct user_thread_info
@@ -21,7 +17,7 @@ index 26bab84b..381e4262 100644
  
  extern struct user_thread_info *get_user_thread_info(void);
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 8c43f101..0ad16c29 100644
+index 8c43f10..0ad16c2 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -56,9 +56,6 @@ static void *client_objects[MAX_USER_HANDLES];
@@ -75,7 +71,7 @@ index 8c43f101..0ad16c29 100644
      }
  
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index f9fe4e49..e68ad83a 100644
+index f9fe4e4..e68ad83 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -519,6 +519,10 @@ static unsigned long get_mwm_decorations_for_style( DWORD style, DWORD ex_style

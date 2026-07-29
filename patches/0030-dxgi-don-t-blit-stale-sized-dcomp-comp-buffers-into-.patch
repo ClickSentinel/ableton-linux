@@ -4,11 +4,9 @@ Subject: dxgi: don't blit stale-sized dcomp comp buffers into
 Gate both comp-buffer blit sites on the buffer matching the swapchain's current desc (not the
 client rect: comp dims are physical, an unaware target's client rect is logical).
 ---
- dlls/dxgi/factory.c | 40 +++++++++++++++++++++++++++++++++++++---
- 1 file changed, 37 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/dxgi/factory.c b/dlls/dxgi/factory.c
-index cf1ef6e7..c8357fd7 100644
+index 919f74c..42d8687 100644
 --- a/dlls/dxgi/factory.c
 +++ b/dlls/dxgi/factory.c
 @@ -406,6 +406,28 @@ static inline struct d3d11_swapchain *d3d11_swapchain_from_IDXGISwapChain4(IDXGI
@@ -62,13 +60,3 @@ index cf1ef6e7..c8357fd7 100644
          {
              static unsigned int reblit_count;
              ++reblit_count;
-@@ -662,7 +695,8 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
-                             : DefWindowProcW(hwnd, msg, wparam, lparam);
- 
-             BeginPaint(hwnd, &ps);
--            if (comp_dc && dims)
-+            if (comp_dc && dims
-+                    && dcomp_comp_buffer_current(hwnd, LOWORD(dims), HIWORD(dims)))
-             {
-                 unsigned int w = LOWORD(dims);
-                 unsigned int h = HIWORD(dims);

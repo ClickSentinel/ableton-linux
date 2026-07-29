@@ -2,19 +2,9 @@ Subject: NSPA 1c: frame extents, reentrancy suppression, ncsize
  guard (atom order fixed)
 
 ---
- dlls/win32u/defwnd.c           | 18 +++++--
- dlls/win32u/driver.c           |  6 +++
- dlls/win32u/window.c           | 99 +++++++++++++++++++++++++++++++---
- dlls/winex11.drv/event.c       | 14 +++++
- dlls/winex11.drv/init.c        |  1 +
- dlls/winex11.drv/window.c      | 82 +++++++++++++++++++++++++---
- dlls/winex11.drv/x11drv.h      |  6 +++
- dlls/winex11.drv/x11drv_main.c |  1 +
- include/wine/gdi_driver.h      |  1 +
- 9 files changed, 209 insertions(+), 19 deletions(-)
 
 diff --git a/dlls/win32u/defwnd.c b/dlls/win32u/defwnd.c
-index d6852b33..e377e5f8 100644
+index d6852b3..e377e5f 100644
 --- a/dlls/win32u/defwnd.c
 +++ b/dlls/win32u/defwnd.c
 @@ -1879,13 +1879,21 @@ static void handle_nc_calc_size( HWND hwnd, WPARAM wparam, RECT *win_rect )
@@ -45,7 +35,7 @@ index d6852b33..e377e5f8 100644
  
          if (ex_style & WS_EX_CLIENTEDGE)
 diff --git a/dlls/win32u/driver.c b/dlls/win32u/driver.c
-index 6270d9bb..829492d8 100644
+index 6270d9b..829492d 100644
 --- a/dlls/win32u/driver.c
 +++ b/dlls/win32u/driver.c
 @@ -875,6 +875,11 @@ static BOOL nulldrv_GetWindowStyleMasks( HWND hwnd, UINT style, UINT ex_style, U
@@ -69,7 +59,7 @@ index 6270d9bb..829492d8 100644
      nulldrv_CreateClientSurface,
      nulldrv_CreateWindowSurface,
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 919f6bb7..8c43f101 100644
+index 919f6bb..8c43f10 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -56,6 +56,9 @@ static void *client_objects[MAX_USER_HANDLES];
@@ -238,7 +228,7 @@ index 919f6bb7..8c43f101 100644
  
      if ((winpos->flags & (SWP_NOSIZE|SWP_NOMOVE|SWP_FRAMECHANGED)) != (SWP_NOSIZE|SWP_NOMOVE))
 diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
-index 38ad7f89..b27eab88 100644
+index 38ad7f8..b27eab8 100644
 --- a/dlls/winex11.drv/event.c
 +++ b/dlls/winex11.drv/event.c
 @@ -1177,6 +1177,19 @@ static void handle_wm_normal_hints_notify( HWND hwnd, XPropertyEvent *event )
@@ -270,7 +260,7 @@ index 38ad7f89..b27eab88 100644
      if (event->atom == x11drv_atom(_NET_ACTIVE_WINDOW)) handle_net_active_window( event );
  
 diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
-index f22fdfe4..e1239891 100644
+index f22fdfe..e123989 100644
 --- a/dlls/winex11.drv/init.c
 +++ b/dlls/winex11.drv/init.c
 @@ -697,6 +697,7 @@ static const struct user_driver_funcs x11drv_funcs =
@@ -282,7 +272,7 @@ index f22fdfe4..e1239891 100644
      .pCreateClientSurface = X11DRV_CreateClientSurface,
      .pCreateWindowSurface = X11DRV_CreateWindowSurface,
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 64e4961d..f9fe4e49 100644
+index 64e4961..f9fe4e4 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -518,10 +518,6 @@ static unsigned long get_mwm_decorations_for_style( DWORD style, DWORD ex_style
@@ -410,7 +400,7 @@ index 64e4961d..f9fe4e49 100644
  static BOOL get_desired_wm_state( DWORD style, const struct window_rects *rects )
  {
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 2e0a8a6f..409c5dfa 100644
+index 2e0a8a6..409c5df 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
 @@ -552,6 +552,7 @@ enum x11drv_atoms
@@ -441,7 +431,7 @@ index 2e0a8a6f..409c5dfa 100644
  extern Window create_client_window( HWND hwnd, RECT client_rect, const XVisualInfo *visual, Colormap colormap );
  extern void detach_client_window( struct x11drv_win_data *data, Window client_window );
 diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
-index b42d92d2..500a0133 100644
+index b42d92d..500a013 100644
 --- a/dlls/winex11.drv/x11drv_main.c
 +++ b/dlls/winex11.drv/x11drv_main.c
 @@ -157,6 +157,7 @@ const char * const X11DRV_atom_names[NB_XATOMS - FIRST_XATOM] =
@@ -453,7 +443,7 @@ index b42d92d2..500a0133 100644
      "_NET_WORKAREA",
      "_GTK_WORKAREAS_D0",
 diff --git a/include/wine/gdi_driver.h b/include/wine/gdi_driver.h
-index 384fdcac..da88395c 100644
+index 384fdca..da88395 100644
 --- a/include/wine/gdi_driver.h
 +++ b/include/wine/gdi_driver.h
 @@ -423,6 +423,7 @@ struct user_driver_funcs

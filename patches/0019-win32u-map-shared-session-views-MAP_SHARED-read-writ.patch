@@ -4,11 +4,9 @@ Subject: win32u: map shared session views MAP_SHARED
 Request SECTION_MAP_WRITE and map session views PAGE_READWRITE so they are MAP_SHARED and stay coherent
 with wineserver writes; falls back to read-only if the section denies write. Nothing writes through the view.
 ---
- dlls/win32u/winstation.c | 35 ++++++++++++++++++++++++++---------
- 1 file changed, 26 insertions(+), 9 deletions(-)
 
 diff --git a/dlls/win32u/winstation.c b/dlls/win32u/winstation.c
-index 64a92419..a372b6bd 100644
+index 64a9241..a372b6b 100644
 --- a/dlls/win32u/winstation.c
 +++ b/dlls/win32u/winstation.c
 @@ -120,21 +120,38 @@ static NTSTATUS map_shared_session_block( SIZE_T offset, SIZE_T size, struct ses

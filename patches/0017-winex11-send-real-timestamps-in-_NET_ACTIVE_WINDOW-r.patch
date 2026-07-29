@@ -4,12 +4,9 @@ Subject: winex11: send real timestamps in _NET_ACTIVE_WINDOW
 Send _NET_ACTIVE_WINDOW requests with the timestamp of the last processed user input (mutter
 drops timestamp-0 requests) and re-send when a newer timestamp is available.
 ---
- dlls/winex11.drv/window.c | 21 ++++++++++++++++++---
- dlls/winex11.drv/x11drv.h |  1 +
- 2 files changed, 19 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index c9f9fd24..3d7b6e21 100644
+index c9f9fd2..3d7b6e2 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -2333,10 +2333,23 @@ void set_net_active_window( HWND hwnd, HWND previous )
@@ -63,7 +60,7 @@ index c9f9fd24..3d7b6e21 100644
                  SubstructureRedirectMask | SubstructureNotifyMask, &xev );
  }
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 409c5dfa..4d1aa53c 100644
+index 409c5df..4d1aa53 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
 @@ -438,6 +438,7 @@ struct x11drv_thread_data

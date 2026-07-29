@@ -10,11 +10,9 @@ drop. Flush each status reply as it is sent.
 Origin: ENCORE (wowitsjack) patches/encore-wine.patch, dlls/winex11.drv/event.c
 hunk, reviewed and ported unchanged to this wine-11.11 tree.
 ---
- dlls/winex11.drv/event.c | 3 +++
- 1 file changed, 3 insertions(+)
 
 diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
-index b27eab88..018e00e0 100644
+index b27eab8..018e00e 100644
 --- a/dlls/winex11.drv/event.c
 +++ b/dlls/winex11.drv/event.c
 @@ -1549,6 +1549,9 @@ static void handle_xdnd_position_event( HWND hwnd, XClientMessageEvent *event )

@@ -2,11 +2,9 @@ Subject: winex11: disable frame-extents reconstruction (comdlg32
  dialogs off-screen at high DPI); keep custom-NC + reentrancy fixes
 
 ---
- dlls/winex11.drv/window.c | 14 +++++++++-----
- 1 file changed, 9 insertions(+), 5 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index e68ad83a..3c3166f1 100644
+index e68ad83..3c3166f 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -1769,11 +1769,15 @@ BOOL read_net_frame_extents( Display *display, Window window, long *extents )

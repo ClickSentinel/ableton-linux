@@ -1,128 +1,53 @@
-Subject: dcomp: never let an orphaned target subclass swallow
- window messages
+Subject: dcomp: forward messages of an orphaned target subclass to the real wndproc
 
-Keep the window's true original wndproc in the __wine_dcomp_origproc property; forward to it when the
-target property is missing, unhook on WM_NCDESTROY, and on release only restore the released target's state.
----
- dlls/dcomp/device.c | 74 +++++++++++++++++++++++++++++++++++++++------
- 1 file changed, 64 insertions(+), 10 deletions(-)
+When the last composition target for an HWND is released while dxgi is still
+subclassed on top of us, our unhook is skipped and the __wine_dcomp_target
+property is removed, but dxgi keeps calling this procedure as its saved
+original. The subclass then has no target and sent everything - including all
+mouse input - to DefWindowProc. The window kept painting, because the dcomp
+side blits independently of the WndProc, so the symptom is an editor that
+renders perfectly and is completely input-dead. Hit with JUCE 8 / SWAM editors,
+which recreate device and target over a window's lifetime.
+
+Forward to __wine_dcomp_real_wndproc instead. That property is already
+maintained by CreateTargetForHwnd on this base, is set once per window and
+never removed, so it still holds the application's own procedure at the point
+the subclass is orphaned.
+
+This replaces the five-hunk version this patch carried against the 11.13 base,
+which maintained a parallel __wine_dcomp_origproc property. That scheme is
+redundant here: on this base a second CreateTargetForHwnd never re-subclasses,
+the new target inherits orig_wndproc from its predecessor, and
+__wine_dcomp_real_wndproc already provides the window-lifetime fallback.
+
+Reported upstream and adopted by giang17 as ba291fb4f20 on d2d1-dcomp-11.0,
+which is not in the d2d1-dcomp-11.14 snapshot this base is taken from - the
+orphan branch there still returns DefWindowProcW. Drop this patch once a
+snapshot carrying that commit is picked up.
 
 diff --git a/dlls/dcomp/device.c b/dlls/dcomp/device.c
-index bf2b9a98..63e94055 100644
+index 627d281..f8a79cb 100644
 --- a/dlls/dcomp/device.c
 +++ b/dlls/dcomp/device.c
-@@ -1399,6 +1399,17 @@ static void dcomp_visual_try_reparent(struct dcomp_visual *visual)
+@@ -3226,7 +3226,21 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+     WNDPROC orig_wndproc;
  
- /* Property name for storing target pointer on HWND (Phase 5 subclass) */
- static const WCHAR dcomp_target_prop[] = L"__wine_dcomp_target";
-+/* The window's TRUE pre-subclass WndProc. Kept as a window property (not only in
-+ * the target struct) so that (a) a second CreateTargetForHwnd on the same HWND
-+ * never records our own subclass as "original" and (b) the subclass can still
-+ * forward messages after its target struct is gone. Without this, a JUCE/D2D
-+ * client that recreates its composition target (e.g. SWAM editors on device
-+ * re-creation) ended up with our subclass installed but no target property, and
-+ * every message — including all mouse input — fell through to DefWindowProc:
-+ * the editor painted fine but was completely input-dead. */
-+static const WCHAR dcomp_origproc_prop[] = L"__wine_dcomp_origproc";
+     if (!target)
++    {
++        /* The subclass outlived its target: the last target was released while
++         * dxgi sat subclassed on top, so our unhook was skipped, the target
++         * property is gone, and dxgi still calls this procedure as its saved
++         * original.  Swallowing here sends every message - including all mouse
++         * input - to DefWindowProc, while the window keeps painting because the
++         * dcomp side blits independently of the WndProc.  The result is an
++         * editor that renders perfectly and is completely input-dead.  Forward
++         * to the window-lifetime original instead. */
++        WNDPROC real_wndproc = (WNDPROC)GetPropW(hwnd, dcomp_real_wndproc_prop);
 +
-+static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
- 
- struct dcomp_target
- {
-@@ -1466,12 +1477,24 @@ static ULONG STDMETHODCALLTYPE dcomp_target_Release(IDCompositionTarget *iface)
-         if (target->device)
-             dcomp_device_remove_target(target->device, target);
- 
--        /* Remove WndProc subclass (Phase 5) */
--        if (target->orig_wndproc && target->hwnd && IsWindow(target->hwnd))
-+        /* Remove WndProc subclass (Phase 5). Only touch the window state that
-+         * still belongs to THIS target: if a newer target owns the property, or
-+         * someone else subclassed after us, leave the chain alone (the subclass
-+         * itself forwards via dcomp_origproc_prop even without a target). */
-+        if (target->hwnd && IsWindow(target->hwnd) &&
-+            (struct dcomp_target *)GetPropW(target->hwnd, dcomp_target_prop) == target)
-         {
--            SetWindowLongPtrW(target->hwnd, GWLP_WNDPROC, (LONG_PTR)target->orig_wndproc);
-             RemovePropW(target->hwnd, dcomp_target_prop);
--            FIXME("Removed WndProc subclass from hwnd %p.\n", target->hwnd);
-+            if ((WNDPROC)GetWindowLongPtrW(target->hwnd, GWLP_WNDPROC) == dcomp_target_wndproc)
-+            {
-+                WNDPROC orig = (WNDPROC)GetPropW(target->hwnd, dcomp_origproc_prop);
-+                if (orig)
-+                {
-+                    SetWindowLongPtrW(target->hwnd, GWLP_WNDPROC, (LONG_PTR)orig);
-+                    RemovePropW(target->hwnd, dcomp_origproc_prop);
-+                }
-+                FIXME("Removed WndProc subclass from hwnd %p.\n", target->hwnd);
-+            }
-         }
- 
-         /* Clean up presentation state */
-@@ -2040,12 +2063,25 @@ static void dcomp_target_flush_present(struct dcomp_target *target, struct dcomp
- static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
- {
-     struct dcomp_target *target = (struct dcomp_target *)GetPropW(hwnd, dcomp_target_prop);
--    WNDPROC orig_wndproc;
-+    WNDPROC orig_wndproc = (WNDPROC)GetPropW(hwnd, dcomp_origproc_prop);
- 
--    if (!target)
-+    if (!orig_wndproc && target) orig_wndproc = target->orig_wndproc;
-+    if (!orig_wndproc)
++        if (real_wndproc)
++            return CallWindowProcW(real_wndproc, hwnd, msg, wparam, lparam);
          return DefWindowProcW(hwnd, msg, wparam, lparam);
- 
--    orig_wndproc = target->orig_wndproc;
-+    if (!target)
-+    {
-+        /* Our target is gone but the subclass is still installed (target released
-+         * while a second target on this hwnd owned the property, or vice versa).
-+         * NEVER swallow messages here — forward to the real original WndProc so
-+         * the window keeps processing input; unhook on destroy. */
-+        if (msg == WM_NCDESTROY)
-+        {
-+            SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)orig_wndproc);
-+            RemovePropW(hwnd, dcomp_origproc_prop);
-+        }
-+        return CallWindowProcW(orig_wndproc, hwnd, msg, wparam, lparam);
 +    }
  
-     switch (msg)
-     {
-@@ -2079,6 +2115,7 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
-         /* Window is being destroyed — clean up subclass and forward */
-         SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)orig_wndproc);
-         RemovePropW(hwnd, dcomp_target_prop);
-+        RemovePropW(hwnd, dcomp_origproc_prop);
-         target->orig_wndproc = NULL;
-         return CallWindowProcW(orig_wndproc, hwnd, msg, wparam, lparam);
-     }
-@@ -2202,10 +2239,27 @@ static HRESULT STDMETHODCALLTYPE dcomp_device_CreateTargetForHwnd(IDCompositionD
-      * The installed WndProc suppresses WM_ERASEBKGND per-window (returns 1), so
-      * the class background brush is never painted for this target — we no longer
-      * zero the class-wide GCLP_HBRBACKGROUND, which would also affect unrelated
--     * windows sharing the class. */
-+     * windows sharing the class.
-+     *
-+     * A client may create more than one target for the same HWND over its
-+     * lifetime (JUCE 8's Direct2D renderer recreates its device+target, e.g.
-+     * SWAM editors). Never record our own subclass as the "original" WndProc —
-+     * that turned the window into a permanent DefWindowProc black hole (painted
-+     * but ignored all input) once the older target was released. */
-+    {
-+        WNDPROC cur = (WNDPROC)GetWindowLongPtrW(hwnd, GWLP_WNDPROC);
-+        if (cur == dcomp_target_wndproc)
-+        {
-+            object->orig_wndproc = (WNDPROC)GetPropW(hwnd, dcomp_origproc_prop);
-+        }
-+        else
-+        {
-+            object->orig_wndproc = cur;
-+            SetPropW(hwnd, dcomp_origproc_prop, (HANDLE)cur);
-+            SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)dcomp_target_wndproc);
-+        }
-+    }
-     SetPropW(hwnd, dcomp_target_prop, (HANDLE)object);
--    object->orig_wndproc = (WNDPROC)SetWindowLongPtrW(hwnd,
--            GWLP_WNDPROC, (LONG_PTR)dcomp_target_wndproc);
+     orig_wndproc = target->orig_wndproc;
  
-     FIXME("Created composition target %p for hwnd %p (subclassed, orig_wndproc %p).\n",
-             object, hwnd, object->orig_wndproc);

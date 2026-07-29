@@ -22,11 +22,9 @@ The NotifyGrab/NotifyUngrab modes were already filtered before
 focus_out(); this covers the NotifyNormal FocusOut the WMs send once the
 shuffle resolves.
 ---
- dlls/winex11.drv/event.c | 30 +++++++++++++++++++++++++++++-
- 1 file changed, 29 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
-index 018e00e0..a5247610 100644
+index 018e00e..a524761 100644
 --- a/dlls/winex11.drv/event.c
 +++ b/dlls/winex11.drv/event.c
 @@ -682,6 +682,20 @@ BOOL is_current_process_focused(void)

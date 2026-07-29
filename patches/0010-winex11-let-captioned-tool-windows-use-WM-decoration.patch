@@ -4,11 +4,9 @@ Subject: winex11: let captioned tool windows use WM decorations
 Request MWM decorations for tool windows that carry a real caption, so the WM
 draws their frame. Caption-less tool windows are unaffected.
 ---
- dlls/winex11.drv/window.c | 8 +++++++-
- 1 file changed, 7 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 92e611fa..109b1067 100644
+index 92e611f..109b106 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -500,7 +500,13 @@ static unsigned long get_mwm_decorations_for_style( DWORD style, DWORD ex_style

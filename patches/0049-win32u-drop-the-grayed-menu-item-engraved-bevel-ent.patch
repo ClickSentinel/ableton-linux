@@ -10,14 +10,12 @@ source of truth for it, drop the two-pass bevel entirely for the
 non-hilite grayed case and always single-draw in COLOR_GRAYTEXT, matching
 what the MF_HILITE-grayed case a few lines below already does successfully.
 ---
- dlls/win32u/menu.c | 30 ++++++++++++------------------
- 1 file changed, 12 insertions(+), 18 deletions(-)
 
 diff --git a/dlls/win32u/menu.c b/dlls/win32u/menu.c
-index a700f44a..17679bed 100644
+index 70d48e2..08b1665 100644
 --- a/dlls/win32u/menu.c
 +++ b/dlls/win32u/menu.c
-@@ -2690,14 +2690,17 @@ static void draw_menu_item( HWND hwnd, struct menu *menu, HWND owner, HDC hdc,
+@@ -2704,14 +2704,17 @@ static void draw_menu_item( HWND hwnd, struct menu *menu, HWND owner, HDC hdc,
  
          if (item->fState & MF_GRAYED)
          {
@@ -43,7 +41,7 @@ index a700f44a..17679bed 100644
          }
  
          DrawTextW( hdc, item->text, i, &rect, format );
-@@ -2717,16 +2720,7 @@ static void draw_menu_item( HWND hwnd, struct menu *menu, HWND owner, HDC hdc,
+@@ -2731,16 +2734,7 @@ static void draw_menu_item( HWND hwnd, struct menu *menu, HWND owner, HDC hdc,
              }
  
              if (item->fState & MF_GRAYED)
@@ -61,6 +59,3 @@ index a700f44a..17679bed 100644
              DrawTextW( hdc, item->text + i + 1, -1, &rect, format );
          }
  
--- 
-2.43.0
-

@@ -3,8 +3,9 @@ Subject: re-enable frame-extents round-trip (revert patch 06) +
  WM frame
 
 ---
+
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 8d8e3839..755aeed1 100644
+index 8d8e383..755aeed 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -4277,24 +4277,6 @@ BOOL WINAPI NtUserSetWindowPos( HWND hwnd, HWND after, INT x, INT y, INT cx, INT
@@ -33,7 +34,7 @@ index 8d8e3839..755aeed1 100644
  
      if (is_current_thread_window( hwnd ))
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 3c3166f1..8a68045c 100644
+index 3c3166f..8a68045 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -1769,15 +1769,16 @@ BOOL read_net_frame_extents( Display *display, Window window, long *extents )

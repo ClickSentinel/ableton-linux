@@ -1,22 +1,9 @@
 Subject: libusb-1.0: add host USB bridge for Push 2
 
 ---
- configure                       |   8 +
- configure.ac                    |   5 +
- dlls/libusb-1.0/Makefile.in     |   9 +
- dlls/libusb-1.0/libusb-1.0.spec |  16 +
- dlls/libusb-1.0/libusb.c        | 589 ++++++++++++++++++++++++++++++++
- dlls/libusb-1.0/unixlib.c       | 391 +++++++++++++++++++++
- dlls/libusb-1.0/unixlib.h       | 189 ++++++++++
- 7 files changed, 1207 insertions(+)
- create mode 100644 dlls/libusb-1.0/Makefile.in
- create mode 100644 dlls/libusb-1.0/libusb-1.0.spec
- create mode 100644 dlls/libusb-1.0/libusb.c
- create mode 100644 dlls/libusb-1.0/unixlib.c
- create mode 100644 dlls/libusb-1.0/unixlib.h
 
 diff --git a/configure b/configure
-index 73a4d6a4..c76787b9 100755
+index a1b4b6f..25f96bc 100755
 --- a/configure
 +++ b/configure
 @@ -1241,6 +1241,7 @@ enable_ksuser
@@ -56,7 +43,7 @@ index 73a4d6a4..c76787b9 100755
  wine_fn_config_makefile dlls/localspl enable_localspl
  wine_fn_config_makefile dlls/localspl/tests enable_tests
 diff --git a/configure.ac b/configure.ac
-index ee0b1c48..5297a4f8 100644
+index ee0b1c4..5297a4f 100644
 --- a/configure.ac
 +++ b/configure.ac
 @@ -1609,6 +1609,8 @@ fi
@@ -87,7 +74,7 @@ index ee0b1c48..5297a4f8 100644
  WINE_CONFIG_MAKEFILE(dlls/localspl/tests)
 diff --git a/dlls/libusb-1.0/Makefile.in b/dlls/libusb-1.0/Makefile.in
 new file mode 100644
-index 00000000..4b44d20b
+index 0000000..4b44d20
 --- /dev/null
 +++ b/dlls/libusb-1.0/Makefile.in
 @@ -0,0 +1,9 @@
@@ -102,7 +89,7 @@ index 00000000..4b44d20b
 +	unixlib.c
 diff --git a/dlls/libusb-1.0/libusb-1.0.spec b/dlls/libusb-1.0/libusb-1.0.spec
 new file mode 100644
-index 00000000..2b1d14a6
+index 0000000..2b1d14a
 --- /dev/null
 +++ b/dlls/libusb-1.0/libusb-1.0.spec
 @@ -0,0 +1,16 @@
@@ -124,7 +111,7 @@ index 00000000..2b1d14a6
 +161 stdcall libusb_submit_transfer(ptr)
 diff --git a/dlls/libusb-1.0/libusb.c b/dlls/libusb-1.0/libusb.c
 new file mode 100644
-index 00000000..cea773b3
+index 0000000..cea773b
 --- /dev/null
 +++ b/dlls/libusb-1.0/libusb.c
 @@ -0,0 +1,589 @@
@@ -719,7 +706,7 @@ index 00000000..cea773b3
 +}
 diff --git a/dlls/libusb-1.0/unixlib.c b/dlls/libusb-1.0/unixlib.c
 new file mode 100644
-index 00000000..28aeabd3
+index 0000000..28aeabd
 --- /dev/null
 +++ b/dlls/libusb-1.0/unixlib.c
 @@ -0,0 +1,391 @@
@@ -1116,7 +1103,7 @@ index 00000000..28aeabd3
 +C_ASSERT(ARRAYSIZE(__wine_unix_call_funcs) == unix_funcs_count);
 diff --git a/dlls/libusb-1.0/unixlib.h b/dlls/libusb-1.0/unixlib.h
 new file mode 100644
-index 00000000..750dc18d
+index 0000000..750dc18
 --- /dev/null
 +++ b/dlls/libusb-1.0/unixlib.h
 @@ -0,0 +1,189 @@

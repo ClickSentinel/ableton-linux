@@ -2,11 +2,9 @@ Subject: win32u: clamp top-level window size to monitor
  (bug-57955 anti-growth; size-only, small-overshoot only)
 
 ---
- dlls/win32u/window.c | 18 ++++++++++++++++++
- 1 file changed, 18 insertions(+)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 755aeed1..8d8e3839 100644
+index 755aeed..8d8e383 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -4277,6 +4277,24 @@ BOOL WINAPI NtUserSetWindowPos( HWND hwnd, HWND after, INT x, INT y, INT cx, INT

@@ -11,11 +11,9 @@ compile error (incompatible argument type) rather than a merge conflict.
 Wrap with round_dpi(), matching the convention used everywhere else in
 this codebase since the refactor.
 ---
- dlls/win32u/menu.c | 4 ++--
- 1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/win32u/menu.c b/dlls/win32u/menu.c
-index 88d27e67..70d48e2c 100644
+index 88d27e6..70d48e2 100644
 --- a/dlls/win32u/menu.c
 +++ b/dlls/win32u/menu.c
 @@ -2127,7 +2127,7 @@ static void calc_menu_item_size( HDC hdc, struct menu_item *item, HWND owner, IN

@@ -4,12 +4,9 @@ Subject: winex11: report the drawable's visual in
 set_dc_drawable: fill escape.visual via XGetWindowAttributes so xrender matches the drawable's depth
 (non-window drawables unchanged). X11DRV_ReleaseDC: park the DC on the root window with default_visual.
 ---
- dlls/winex11.drv/init.c   | 24 ++++++++++++++++++++++++
- dlls/winex11.drv/window.c |  9 +++++++++
- 2 files changed, 33 insertions(+)
 
 diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
-index e1239891..b3ebc0b3 100644
+index e123989..b3ebc0b 100644
 --- a/dlls/winex11.drv/init.c
 +++ b/dlls/winex11.drv/init.c
 @@ -270,6 +270,30 @@ void set_dc_drawable( HDC hdc, Drawable drawable, const RECT *rect, int mode )
@@ -44,7 +41,7 @@ index e1239891..b3ebc0b3 100644
  }
  
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 3d7b6e21..adcbeb8e 100644
+index 3d7b6e2..adcbeb8 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -3391,6 +3391,15 @@ void X11DRV_ReleaseDC( HWND hwnd, HDC hdc )

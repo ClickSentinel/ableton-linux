@@ -29,9 +29,6 @@ underscore draw itself on DT_HIDEPREFIX too, leaving '&'-stripping
 and prefix-offset tracking (unaffected by this flag pre-existing)
 exactly as before.
 ---
- dlls/user32/text.c |  2 +-
- dlls/win32u/menu.c | 10 +++++++++-
- 2 files changed, 10 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/user32/text.c b/dlls/user32/text.c
 index 114d069..56d07de 100644

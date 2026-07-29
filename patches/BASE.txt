@@ -1,23 +1,60 @@
 # Wine patch base and provenance
 
 Base repository: https://github.com/giang17/wine.git
-Branch: `d2d1-dcomp-11.13`
-Base commit: `5c23dd1c`, `winex11: use NORMAL not UTILITY for non-DComp ownerless TOOLWINDOW popups (issue 84)`
+Branch: `d2d1-dcomp-11.14`
+Base commit: `c7502574`, `PATCHES.md: document the D2D1 colour management and DComp additions.`
 
-Bumped 2026-07-21 from `d2d1-dcomp-11.11` (`7ea0c8b7dd`) to close the Wine
-point-version gap with upstream's actively-maintained branch and with ENCORE
-(github.com/wowitsjack/ENCORE), which runs plain Wine 11.13. Full rebase
-narrative — 5 merge conflicts, three build breaks the clean rebase didn't
-catch, a build.sh/pipefail tooling gotcha — is in
+Bumped 2026-07-28 from `d2d1-dcomp-11.13` (`5c23dd1c`) to pick up upstream's
+DComp tree-timer work: the skip-unchanged composite hash and the vacated-area
+host restore, plus the move-suppression follow-up. Those cover the fossil-frame
+and tab-bleed cases that patch 0054's visibility gate does not, and were
+recommended by the branch maintainer on issue 57.
+
+Series changes made by this bump:
+
+- `0045` dropped: the RevokeDragDrop cross-process guard is already present in
+  `dlls/ole32/ole2.c` on this base.
+- `0016` rewritten from five hunks to one. The parallel `__wine_dcomp_origproc`
+  property it maintained is redundant here — a second `CreateTargetForHwnd`
+  never re-subclasses on this base, and `__wine_dcomp_real_wndproc` already
+  provides the window-lifetime fallback — so it now only stops the orphaned
+  subclass swallowing messages. This base still returns `DefWindowProcW` there;
+  drop the patch once a snapshot carrying upstream `ba291fb4f20` is taken.
+- The `WM_PAINT` handling in `dcomp_target_wndproc` (`dlls/dxgi/factory.c`) is
+  now upstream's, superseding this series' version. Patches 0025, 0030 and 0041
+  each rewrote that block; upstream has since replaced it with "forward to the
+  app's original wndproc first, then re-blit via `dcomp_reblit_comp_buffer()`
+  and `ValidateRect`". That covers both concerns those patches were balancing:
+  paint-driven plugins get their invalidation callback, and the composed content
+  is restored on top afterwards — which is what 0041 was protecting when it
+  refused to forward at all, citing Learn View reverting ~3s after the last
+  present. **That specific symptom needs re-testing on this base.** 0030's
+  stale-size guard survives and improves: `dcomp_comp_buffer_current()` now sits
+  inside `dcomp_reblit_comp_buffer()`, so it protects every re-blit caller
+  rather than only `WM_PAINT`, and that is the same function 0054 gates.
+- Every patch file was regenerated, because the series was replayed with a real
+  `git rebase` across an 11.13 -> 11.14 base commit rather than re-applied with
+  fuzz. This matters. An earlier attempt used `patch -F3`, which silently
+  inserted 0001's block into the middle of an unterminated comment in
+  `swapchain_blit_gdi()`. The file still parsed, so the misapplication surfaced
+  only as `use of undeclared identifier 'src_w'` once the compiler reached code
+  that had been commented out. Fuzzy matching finds a plausible anchor, not the
+  right one. `git am --3way` cannot rescue a near-miss either: the build creates
+  a fresh repository whose object store has none of the old base's blobs, so
+  every patch must apply exactly.
+
+Earlier bump (11.11 to 11.13, 2026-07-21): full rebase narrative — 5 merge
+conflicts, three build breaks the clean rebase didn't catch, a
+build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 51 files, numbered 0001 through 0053.
-Patches 0027 and 0044 are intentionally absent.
+The current Wine series contains 52 files, numbered 0001 through 0055.
+Patches 0027, 0044 and 0045 are intentionally absent.
 
 ## Applying the series
 
 Run `./build.sh`. Inside the Podman image, `scripts/container-build.sh`
-unpacks `vendor/wine-base-5c23dd1c.tar.zst`, creates a Git repository, and
+unpacks `vendor/wine-base-c7502574.tar.zst`, creates a Git repository, and
 applies `patches/00*.patch` in lexical order with `git am --3way`.
 
 Some early patch files have no `From` or `Date` header. The build script adds a

@@ -12,11 +12,9 @@ menu bar at all, requiring a caller to separately enumerate every window
 and call DrawMenuBar on each one, entirely outside this function, to get
 the same effect this one-flag fix now gives for free to any caller.
 ---
- dlls/win32u/sysparams.c | 10 ++++++++--
- 1 file changed, 8 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
-index bb4f9d71..18cc50c6 100644
+index bb4f9d7..18cc50c 100644
 --- a/dlls/win32u/sysparams.c
 +++ b/dlls/win32u/sysparams.c
 @@ -7427,8 +7427,14 @@ BOOL WINAPI NtUserSetSysColors( INT count, const INT *colors, const COLORREF *va
@@ -36,6 +34,3 @@ index bb4f9d71..18cc50c6 100644
      return TRUE;
  }
  
--- 
-2.43.0
-

@@ -4,11 +4,9 @@ Subject: winealsa: re-subscribe MIDI devices when they reappear
 Subscribe the shared input port to the system announce port; on SND_SEQ_EVENT_PORT_START re-match
 the new port by its winmm display name, adopt the new address, and re-subscribe any open input/output.
 ---
- dlls/winealsa.drv/alsamidi.c | 133 ++++++++++++++++++++++++++++++-----
- 1 file changed, 115 insertions(+), 18 deletions(-)
 
 diff --git a/dlls/winealsa.drv/alsamidi.c b/dlls/winealsa.drv/alsamidi.c
-index b1f3b967..4b653073 100644
+index b1f3b96..4b65307 100644
 --- a/dlls/winealsa.drv/alsamidi.c
 +++ b/dlls/winealsa.drv/alsamidi.c
 @@ -231,7 +231,13 @@ static snd_seq_t *seq_open(int *port_in_ret)

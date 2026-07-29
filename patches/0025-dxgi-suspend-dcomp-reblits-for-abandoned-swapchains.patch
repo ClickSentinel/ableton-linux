@@ -7,11 +7,9 @@ Count consecutive idle ticks per target; after DCOMP_STALE_TICKS (3s) skip comp-
 WM_PAINT to the original wndproc. frame_latency_event keeps firing; a new present resets the counter.
 
 ---
- dlls/dxgi/factory.c | 45 +++++++++++++++++++++++++++++++++++++++++----
- 1 file changed, 41 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/dxgi/factory.c b/dlls/dxgi/factory.c
-index 7912cd60..cf1ef6e7 100644
+index 88146af..919f74c 100644
 --- a/dlls/dxgi/factory.c
 +++ b/dlls/dxgi/factory.c
 @@ -390,6 +390,14 @@ static void STDMETHODCALLTYPE dxgi_factory_UnregisterOcclusionStatus(IWineDXGIFa
@@ -42,20 +40,7 @@ index 7912cd60..cf1ef6e7 100644
      if (comp_dc && dims)
      {
          unsigned int w = LOWORD(dims);
-@@ -641,6 +655,12 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
-             HDC comp_dc = (HDC)GetPropW(hwnd, L"__wine_dcomp_comp_dc");
-             LPARAM dims = (LPARAM)GetPropW(hwnd, L"__wine_dcomp_comp_size");
- 
-+            /* Stale swapchain (see DCOMP_STALE_TICKS): let the app's own
-+             * wndproc paint — the comp snapshot is a fossil by now. */
-+            if ((LONG)(LONG_PTR)GetPropW(hwnd, L"__wine_dcomp_idle_ticks") >= DCOMP_STALE_TICKS)
-+                return orig ? CallWindowProcW(orig, hwnd, msg, wparam, lparam)
-+                            : DefWindowProcW(hwnd, msg, wparam, lparam);
-+
-             BeginPaint(hwnd, &ps);
-             if (comp_dc && dims)
-             {
-@@ -695,13 +715,29 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -699,13 +713,29 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
  
                      if (count == last)
                      {
@@ -89,7 +74,7 @@ index 7912cd60..cf1ef6e7 100644
                      SetPropW(hwnd, L"__wine_dcomp_last_present", (HANDLE)(LONG_PTR)count);
                  }
                  else
-@@ -762,6 +798,7 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+@@ -767,6 +797,7 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
              RemovePropW(hwnd, L"__wine_dcomp_comp_dc");
              RemovePropW(hwnd, L"__wine_dcomp_comp_size");
              RemovePropW(hwnd, L"__wine_dcomp_last_present");

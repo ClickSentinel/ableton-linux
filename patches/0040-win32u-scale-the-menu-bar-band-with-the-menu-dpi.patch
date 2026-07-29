@@ -23,11 +23,9 @@ the resize loop converges in one pass.  Popup menus are unaffected
 12.4.3 and 12.4.2 sessions: WM moveresize cycles land pixel-exact and
 hold, zero geometry creep over 30s idle polls, normal idle CPU.
 ---
- dlls/win32u/menu.c | 25 ++++++++++++++++---------
- 1 file changed, 16 insertions(+), 9 deletions(-)
 
 diff --git a/dlls/win32u/menu.c b/dlls/win32u/menu.c
-index d6caea03..88d27e67 100644
+index d6caea0..88d27e6 100644
 --- a/dlls/win32u/menu.c
 +++ b/dlls/win32u/menu.c
 @@ -2114,14 +2114,20 @@ static void calc_menu_item_size( HDC hdc, struct menu_item *item, HWND owner, IN
@@ -70,6 +68,3 @@ index d6caea03..88d27e67 100644
      }
      item->rect.bottom += item_height;
      TRACE( "%s\n", wine_dbgstr_rect( &item->rect ));
--- 
-2.55.0
-

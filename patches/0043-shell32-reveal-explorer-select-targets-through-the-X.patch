@@ -22,16 +22,9 @@ library under new WoW64), when the target does not exist, or when the
 portal call fails. comdlg32 imports shell32, so shell32 resolves the
 export dynamically to avoid an import cycle.
 ---
- dlls/comdlg32/cdlg32.c      | 59 +++++++++++++++++++++++++++
- dlls/comdlg32/comdlg32.spec |  3 ++
- dlls/comdlg32/portal_dbus.c | 75 +++++++++++++++++++++++++++++++++++
- dlls/comdlg32/unixlib.c     |  9 ++++-
- dlls/comdlg32/unixlib.h     |  6 +++
- dlls/shell32/shlexec.c      | 79 +++++++++++++++++++++++++++++++++++++
- 6 files changed, 230 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/comdlg32/cdlg32.c b/dlls/comdlg32/cdlg32.c
-index c4538e4c..24880dd3 100644
+index c4538e4..24880dd 100644
 --- a/dlls/comdlg32/cdlg32.c
 +++ b/dlls/comdlg32/cdlg32.c
 @@ -20,6 +20,8 @@
@@ -118,7 +111,7 @@ index c4538e4c..24880dd3 100644
 +    return !status;
 +}
 diff --git a/dlls/comdlg32/comdlg32.spec b/dlls/comdlg32/comdlg32.spec
-index 01c7cf63..8b06e755 100644
+index 01c7cf6..8b06e75 100644
 --- a/dlls/comdlg32/comdlg32.spec
 +++ b/dlls/comdlg32/comdlg32.spec
 @@ -26,3 +26,6 @@
@@ -129,7 +122,7 @@ index 01c7cf63..8b06e755 100644
 +# Wine internal: XDG OpenURI portal reveal, used by shell32's explorer /select routing
 +@ cdecl __wine_portal_show_item(wstr)
 diff --git a/dlls/comdlg32/portal_dbus.c b/dlls/comdlg32/portal_dbus.c
-index e14a5a41..70eff41b 100644
+index e14a5a4..70eff41 100644
 --- a/dlls/comdlg32/portal_dbus.c
 +++ b/dlls/comdlg32/portal_dbus.c
 @@ -27,6 +27,7 @@
@@ -222,7 +215,7 @@ index e14a5a41..70eff41b 100644
  NTSTATUS CDECL portal_is_available(void *args)
  {
 diff --git a/dlls/comdlg32/unixlib.c b/dlls/comdlg32/unixlib.c
-index 89ce9b37..2d62039c 100644
+index 89ce9b3..2d62039 100644
 --- a/dlls/comdlg32/unixlib.c
 +++ b/dlls/comdlg32/unixlib.c
 @@ -38,6 +38,7 @@
@@ -253,7 +246,7 @@ index 89ce9b37..2d62039c 100644
 -C_ASSERT( ARRAYSIZE(__wine_unix_call_funcs) == unix_portal_is_available + 1 );
 +C_ASSERT( ARRAYSIZE(__wine_unix_call_funcs) == unix_portal_open_directory + 1 );
 diff --git a/dlls/comdlg32/unixlib.h b/dlls/comdlg32/unixlib.h
-index 6ce10b74..e1205ec7 100644
+index 6ce10b7..e1205ec 100644
 --- a/dlls/comdlg32/unixlib.h
 +++ b/dlls/comdlg32/unixlib.h
 @@ -51,11 +51,17 @@ struct portal_is_available_params
@@ -275,7 +268,7 @@ index 6ce10b74..e1205ec7 100644
  
  #endif /* __WINE_COMDLG32_UNIXLIB_H */
 diff --git a/dlls/shell32/shlexec.c b/dlls/shell32/shlexec.c
-index d2a6d570..b4cbdc9c 100644
+index d2a6d57..b4cbdc9 100644
 --- a/dlls/shell32/shlexec.c
 +++ b/dlls/shell32/shlexec.c
 @@ -1632,6 +1632,68 @@ static WCHAR *expand_environment( const WCHAR *str )
@@ -371,6 +364,3 @@ index d2a6d570..b4cbdc9c 100644
      wcmd = wcmdBuffer;
      len = lstrlenW(wszApplicationName) + 3;
      if (sei_tmp.lpParameters[0])
--- 
-2.55.0
-
