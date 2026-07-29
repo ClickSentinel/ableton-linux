@@ -166,7 +166,8 @@ Apply them in sequence with the rest of the series.
   `glXSwapBuffers`. Windows with the `WS_CHILD` or `WS_POPUP` style
   keep the GDI path: child windows have no X11 window of their own, and
   popup windows show black content on the direct path until the first
-  interaction. Setting `WINE_DISABLE_GL_PRESENT` in the environment
-  restores the GDI path for every window. Diagnosis and measurements:
+  interaction. Setting `WINE_DISABLE_GL_PRESENT=1` restores the GDI
+  path for every window; the value `0` is ignored. Diagnosis and
+  measurements:
   Lucas Gillingham (ClickSentinel). See
   `notes/ABLETON-WINE-GPU-RENDERER.md`.

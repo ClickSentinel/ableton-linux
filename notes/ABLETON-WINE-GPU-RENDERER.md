@@ -82,7 +82,8 @@ own. Windows with the `WS_POPUP` style (Settings, the authorisation
 dialog, context menus) also keep the GDI path because they show black
 content on the direct path until the first click or keypress. Set
 `WINE_DISABLE_GL_PRESENT=1` in the environment to restore the GDI path
-for every window; a rebuild is unnecessary.
+for every window; a rebuild is unnecessary. The value `0` is ignored
+and keeps the direct path.
 
 To confirm which path a build uses, start Live with
 `WINEDEBUG=fixme+all,err+all` and count the message `Using GDI present`

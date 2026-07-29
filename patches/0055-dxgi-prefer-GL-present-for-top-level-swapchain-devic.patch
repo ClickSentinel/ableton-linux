@@ -25,18 +25,20 @@ the desktop, and a parent test would call it top-level. The dcomp
 target-switch code in factory.c still overrides the flags per target
 window, and FORCE_GDI_PRESENT beats the preference at present time.
 
-WINE_DISABLE_GL_PRESENT restores the GDI path without a rebuild.
+WINE_DISABLE_GL_PRESENT=1 restores the GDI path without a rebuild. The
+value is read, not just the presence, so =0 keeps the GL path (PR 94
+review).
 
 Diagnosis and measurements: Lucas Gillingham (ClickSentinel), issue 91.
 ---
- dlls/dxgi/swapchain.c | 27 +++++++++++++++++++++++++++
- 1 file changed, 27 insertions(+)
+ dlls/dxgi/swapchain.c | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
 
 diff --git a/dlls/dxgi/swapchain.c b/dlls/dxgi/swapchain.c
-index b4ed824..ec49330 100644
+index b4ed824..3fd784e 100644
 --- a/dlls/dxgi/swapchain.c
 +++ b/dlls/dxgi/swapchain.c
-@@ -1187,6 +1187,33 @@ HRESULT d3d11_swapchain_init(struct d3d11_swapchain *swapchain, struct dxgi_devi
+@@ -1187,6 +1187,38 @@ HRESULT d3d11_swapchain_init(struct d3d11_swapchain *swapchain, struct dxgi_devi
          goto cleanup;
      }
  
@@ -51,15 +53,20 @@ index b4ed824..ec49330 100644
 +     * paint black on the GL path until first interaction, so both keep the
 +     * GDI path.  The dcomp target-switch code in factory.c still overrides
 +     * this per target window, and FORCE_GDI_PRESENT beats the preference
-+     * at present time.  WINE_DISABLE_GL_PRESENT restores the old behaviour
-+     * without a rebuild. */
++     * at present time.  WINE_DISABLE_GL_PRESENT=1 restores the old
++     * behaviour without a rebuild; a value of 0 is ignored. */
 +    if (desc->device_window)
 +    {
 +        LONG style = GetWindowLongW(desc->device_window, GWL_STYLE);
-+        WCHAR disable[2];
++        WCHAR val[8] = {0};
++        BOOL disabled;
 +
-+        if (!(style & (WS_CHILD | WS_POPUP))
-+                && !GetEnvironmentVariableW(L"WINE_DISABLE_GL_PRESENT", disable, ARRAY_SIZE(disable)))
++        /* A value too long for the buffer leaves val zeroed and counts as
++         * set, so any long value still disables. */
++        disabled = GetEnvironmentVariableW(L"WINE_DISABLE_GL_PRESENT", val, ARRAY_SIZE(val))
++                && val[0] != '0';
++
++        if (!disabled && !(style & (WS_CHILD | WS_POPUP)))
 +        {
 +            wined3d_swapchain_set_prefer_gl_present(swapchain->wined3d_swapchain, TRUE);
 +            FIXME("Top-level device window %p (style %#lx), preferring GL present.\n",
