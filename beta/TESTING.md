@@ -86,15 +86,18 @@ Keep the previous and newer installer files. Replace `OLD.run` and `NEW.run`
 with their paths:
 
 ```bash
-sh NEW.run --update
-sh OLD.run --update
+sh NEW.run --update --no-link
+sh OLD.run --update --no-link
 sh NEW.run --uninstall
-sh NEW.run --no-launch
+sh NEW.run --no-launch --no-link
 ```
 
 The first two commands install the newer package and restore the previous one.
 The uninstaller keeps the Wine prefix. The final command reinstalls the newer
 package without starting Ableton's installer.
+
+The installer remembers `--no-link`. To configure Ableton Link after this
+sequence, run the installer again with `--link`.
 
 ### Audio tests
 

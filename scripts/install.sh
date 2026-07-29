@@ -176,13 +176,12 @@ for f in "$here/learnheal.exe" "$root/tools/learnheal.exe"; do
 done
 # ableton-linkd anchors the Ableton Link session natively so tempo and
 # timeline survive a Live restart (notes/ABLETON-WINE-LINK-FIRSTCLASS.md).
-# The launcher auto-starts it; setup-link.sh enables the user unit staged
-# next to it (never auto-enabled here: Link networking is opt-in).
+# The launcher auto-starts it. The .run wrapper calls setup-link.sh once after
+# this install; repository installs may call the staged script directly.
 install -m755 "$linkd" "$HOME/.local/share/ableton-wine/ableton-linkd"
 install -m644 "$linkd_unit" "$HOME/.local/share/ableton-wine/ableton-linkd.service"
-# setup-link.sh is opt-in (sudo: multicast route, firewall, user unit) and runs
-# post-install from the share dir per README; it sits next to install.sh both
-# in the kit (scripts/) and in a repo checkout (scripts/).
+# Keep the setup command installed for retries after a firewall or
+# hook-removal failure.
 install -m755 "$here/setup-link.sh" "$HOME/.local/share/ableton-wine/setup-link.sh"
 
 # Record the kit version so a later installer can tell what it is updating

@@ -3,10 +3,13 @@
 # Usage:  sh ableton-wine-setup-@VERSION@.run [options]
 # Options:
 #   --runtime-only   install the patched Wine only; skip making the Wine prefix
-#   --update         update an existing installation in place (Live, settings, license kept)
+#   --update         update compatibility files; keep Live, authorization, and projects
 #   --no-launch      never run the Ableton installer (zip/exe) automatically
+#   --no-link        skip Ableton Link setup (remembered on later runs)
+#   --link           configure Ableton Link even if previously skipped or declined
 #   --extract DIR    unpack this installer's files into DIR and exit
 #   --uninstall      remove the installed Wine, launcher, and menu entries
+#   --prefix         with --uninstall: also delete the Wine prefix and Live
 #   --help           this text
 # Environment:
 #   ABLETON_DPI_MODE    auto|preserve|100|fractional|dpi<N> (overrides scale auto-detection)
@@ -34,41 +37,52 @@ fail() { printf '!! %s\n' "$*" >&2; exit 1; }
 
 mode=install
 do_launch=1
+do_link_setup=1
+do_link_force=0
 extract_dir=""
+drop_prefix=0
 while [ $# -gt 0 ]; do
     case "$1" in
-        --help|-h)      head -15 "$self" | sed -n '2,15{s/^# \{0,1\}//;p}'; exit 0 ;;
+        --help|-h)      head -18 "$self" | sed -n '2,18{s/^# \{0,1\}//;p}'; exit 0 ;;
         --runtime-only) mode=runtime ;;
         --update)       mode=update ;;
         --no-launch)    do_launch=0 ;;
+        --no-link)      do_link_setup=0 ;;
+        --link)         do_link_setup=1; do_link_force=1 ;;
         --uninstall)    mode=uninstall ;;
+        --prefix)       drop_prefix=1 ;;
         --extract)      mode=extract; extract_dir="${2:?--extract needs a directory}"; shift ;;
         *)              fail "unknown option: $1 (try --help)" ;;
     esac
     shift
 done
 
+if [ "$drop_prefix" = 1 ] && [ "$mode" != uninstall ]; then
+    fail "--prefix only applies with --uninstall"
+fi
+
 say "== Ableton-on-Wine installer $VERSION =="
 
 # --- offer an in-place update when an installation is already here ------------
 # Rerunning the full install always worked (dated rollbacks throughout), but it
 # demands an Ableton download and walks every prompt again; update mode brings
-# runtime, launcher, and prefix policy to this kit's version and touches
-# nothing else: not Live, not settings, not the license.
+# runtime, launcher, and prefix policy to this kit's version. It preserves the
+# Live installation, authorization, and projects; compatibility settings may
+# change.
 if [ "$mode" = install ] && [ -x "$HOME/.local/opt/$RUNTIME_NAME/bin/wine" ] \
    && [ -f "${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}/system.reg" ]; then
     installed_ver="$(cat "$HOME/.local/share/ableton-wine/VERSION" 2>/dev/null || true)"
     say ""
     say "An existing installation was found${installed_ver:+ (version $installed_ver)}."
     if [ -t 0 ]; then
-        printf 'Update it to %s? Ableton Live, your settings, and the license are kept. [Y/n] ' "$VERSION"
+        printf 'Update it to %s? Live, authorization, and projects are kept; compatibility settings may change. [Y/n] ' "$VERSION"
         read -r ans || ans=""
         case "$ans" in
             [Nn]*) say "-- full install it is; the existing runtime gets a dated rollback" ;;
             *)     mode=update ;;
         esac
     else
-        say "-- updating it to $VERSION (Ableton Live, settings, and the license are kept)"
+        say "-- updating it to $VERSION (Live, authorization, and projects are kept; compatibility settings may change)"
         mode=update
     fi
 fi
@@ -162,6 +176,62 @@ mkdir -p "$kit"
 tar -xf "$workdir/payload.tar" -C "$kit"
 rm -f "$workdir/payload.tar"
 
+# Setup versions 1 and 2 installed this hook as root. Declined installs
+# never run setup-link.sh, which would remove it, and --no-link promises no
+# sudo prompt, so on those paths only point at the leftover.
+warn_stale_link_hook() {
+    local hook=/etc/NetworkManager/dispatcher.d/50-link-multicast
+    if [ -e "$hook" ]; then
+        say "   note: an earlier Link setup installed $hook"
+        say "   it is no longer used; remove it with: sudo rm $hook"
+    fi
+}
+
+configure_link() {
+    local marker="$HOME/.local/share/ableton-wine/link-configured"
+    # The version is owned by setup-link.sh; a marker recording anything else
+    # forces one re-run so existing installs pick up changed behavior.
+    local required_version
+    required_version="$(sed -n 's/^LINK_SETUP_VERSION=//p' "$kit/scripts/setup-link.sh")"
+
+    if [ "$do_link_setup" -eq 0 ]; then
+        say "-- Ableton Link setup skipped (--no-link)"
+        # The decline is sticky, even over an earlier configured state: later
+        # updates stay quiet until --link opts back in, which re-runs the
+        # idempotent setup in full, so nothing is lost by recording it.
+        mkdir -p "$(dirname "$marker")" 2>/dev/null || true
+        printf 'declined\n%s\n' "$required_version" > "$marker" 2>/dev/null || true
+        warn_stale_link_hook
+        return 0
+    fi
+
+    if [ -f "$marker" ] && [ "$do_link_force" -ne 1 ]; then
+        local state ver
+        state="$(sed -n 1p "$marker")"
+        ver="$(sed -n 2p "$marker")"
+        if [ "$state" = declined ]; then
+            say "-- Ableton Link setup was previously declined (--no-link); pass --link to configure it now"
+            warn_stale_link_hook
+            return 0
+        fi
+        if [ -n "$required_version" ] && [ "$ver" = "$required_version" ]; then
+            say "-- Ableton Link is already configured"
+            return 0
+        fi
+    fi
+
+    say "-- configuring Ableton Link"
+    say "   This asks for sudo only to open UDP port 20808 in an active firewall"
+    say "   and to remove what earlier setup versions installed under /etc."
+    if bash "$kit/scripts/setup-link.sh"; then
+        return 0
+    fi
+
+    say "!! Ableton Link was not configured; Live installation will continue."
+    say "!! Close Live and run ~/.local/share/ableton-wine/setup-link.sh to retry."
+    return 0
+}
+
 if [ "$mode" = extract ]; then
     mkdir -p "$extract_dir"
     cp -a "$kit/." "$extract_dir/"
@@ -169,7 +239,11 @@ if [ "$mode" = extract ]; then
     exit 0
 fi
 if [ "$mode" = uninstall ]; then
-    bash "$kit/scripts/uninstall.sh" "$@"
+    if [ "$drop_prefix" = 1 ]; then
+        bash "$kit/scripts/uninstall.sh" --prefix
+    else
+        bash "$kit/scripts/uninstall.sh"
+    fi
     exit 0
 fi
 
@@ -202,7 +276,8 @@ export PATH="$kit/bin:$PATH"
 if [ "$mode" = update ]; then
     say "-- updating the patched Wine (a dated rollback of the old runtime is kept)"
     bash "$kit/scripts/install.sh"
-    say "-- refreshing the Wine prefix (registry policy + runtime DLL healing; Live untouched)"
+    configure_link
+    say "-- refreshing the Wine prefix (registry policy + runtime DLL healing; compatibility settings may change)"
     bash "$kit/scripts/setup-prefix.sh" --refresh
     say ""
     say "================================================================"
@@ -216,6 +291,7 @@ fi
 say "-- installing the patched Wine (goes to ~/.local/opt, touches nothing else)"
 bash "$kit/scripts/install.sh"
 [ "$mode" = runtime ] && { say "OK: the patched Wine is installed (--runtime-only: stopped before creating the Wine prefix)"; exit 0; }
+configure_link
 
 # --- create the prefix --------------------------------------------------------
 # Seed ABLETON_DPI_MODE from the detected display scale; the launcher re-detects on every start.
@@ -291,9 +367,8 @@ else
     say "           ~/.local/opt/$RUNTIME_NAME/bin/wine ./*.exe"
 fi
 say "Launch Live:   ~/.local/bin/ableton-live"
-say "Then, inside Live (both matter):"
-say "  * Options menu -> untick 'Auto-Scale Plugin Window'"
-say "  * Preferences -> Audio -> Driver Type: ASIO -> Device: PipeASIO"
+say "Then, inside Live:"
+say "  * Settings/Preferences -> Audio -> Driver Type: ASIO -> Audio Device: PipeASIO"
 say "================================================================"
 exit 0
 __PAYLOAD_BELOW__

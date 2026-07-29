@@ -11,6 +11,12 @@
   as the X11 `PMinSize` hint, and the window manager stops the drag at
   the minimum.
 
+- The installer now configures Ableton Link during installation. Setup no
+  longer adds a multicast route or NetworkManager hook: the Link SDK selects
+  its interfaces itself. `sudo` is used to open UDP port 20808 when UFW or
+  firewalld is active, and on existing installs to remove the old hook and
+  route during one setup re-run. `--no-link` skips the step and is
+  remembered on later runs; `--link` opts back in.
 - The README now covers installation and ordinary use. Troubleshooting, source
   builds, configuration overrides, and maintainer material have dedicated
   documents.

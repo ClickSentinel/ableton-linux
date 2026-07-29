@@ -82,12 +82,20 @@ USB diagnostics.
 
 ## Ableton Link does not find peers
 
-Link peers must share a local network that carries multicast. Disconnect any
-VPN, close Live, then retry the network setup:
+Link peers must share a local network that carries multicast. Many guest and
+public Wi-Fi networks block multicast. Multicast also stops at a VPN tunnel:
+peers on the far side of a VPN cannot be discovered, while peers on your own
+network remain reachable with the VPN connected.
 
-```bash
-~/.local/share/ableton-wine/setup-link.sh
-```
+Check these in order:
+
+1. If you run a firewall, allow UDP port 20808.
+2. If you installed with `--no-link`, run the installer again with `--link`.
+3. Otherwise, close Live and retry the setup:
+
+   ```bash
+   ~/.local/share/ableton-wine/setup-link.sh
+   ```
 
 Start Live and enable **Show Link Toggle** and Link again. See
 [Ableton Link diagnostics](notes/ABLETON-WINE-LINK.md) if peers still do not
