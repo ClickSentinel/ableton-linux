@@ -70,7 +70,9 @@ extras="$(cd "$root/patches" && ls 00*.patch pipeasio/*.patch 2>/dev/null | grep
 # titles and notes/); a gap is fine if documented here, a dropped patch is not.
 declare -A SERIES_GAPS=(
     [0027]="retired 2026-07-14 — gitignore housekeeping, no artifact effect"
-    [0044]="reserved 2026-07-24 for the issue 57 parked-pane reblit gate; entry harmless once 0044 lands"
+    [0044]="reserved 2026-07-24 for the issue 57 parked-pane reblit gate; shipped as 0056 instead"
+    [0054]="reserved 2026-07-29 for PR 77's language-fallback font patch"
+    [0055]="reserved 2026-07-29 for PR 94's GL-present patch"
 )
 seq_expect=1
 for f in $(awk '{print $2}' "$SERIES" | grep -v '^pipeasio/' | sort); do
@@ -168,6 +170,7 @@ STAMP_ONLY='
 0050|logic-only (per-process sys-color cache reset on WM_SYSCOLORCHANGE; no new string literal)
 0051|logic-only (RDW_FRAME added to the SetSysColors redraw flags; no new string literal)
 0052|logic-only (DT_HIDEPREFIX on the menu bar DrawTextW call; no new string literal)
+0056|ascii|lib/wine/x86_64-windows/dxgi.dll|Re-blit skipped (hidden ancestry)
 0053|logic-only (WM_GETMINMAXINFO minimum exported as PMinSize hints; no new string literal)
 '
 wide_pattern() {  # ascii string -> PCRE matching its UTF-16LE bytes
