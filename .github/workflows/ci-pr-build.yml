@@ -1,0 +1,120 @@
+# Wine build for PRs/pushes that touch the Wine build itself, plus a manual
+# trigger for checking any other ref on demand:
+#
+#   gh workflow run ci-pr-build.yml --repo <owner>/ableton-linux --ref <branch>
+#
+# Relies on this repo's existing "require approval for first-time
+# contributors" setting (Settings -> Actions -> General) to gate runs from
+# unfamiliar forks - a maintainer approves before it executes, same as any
+# other workflow here. Runs with the default pull_request token (read-only,
+# no secrets) regardless.
+#
+# ccache (actions/cache) and a Docker Buildx layer cache (GHA backend) keep
+# repeat runs fast - compiled objects and the image's apt/toolchain install,
+# respectively. Both keyed loosely (OS-scoped, not ref-scoped), so a new
+# branch still reuses whatever any prior run already compiled.
+#
+# Tarball is attached as a downloadable artifact:
+#
+#   gh run download <run-id> --repo <owner>/ableton-linux --name wine-build
+name: ci-pr-build
+
+# The same path list appears twice (pull_request and push) rather than via a
+# YAML anchor: GitHub's workflow parser doesn't support them, so this stays
+# boring and duplicated on purpose.
+on:
+  pull_request:
+    paths:
+      - patches/**
+      - Containerfile
+      - build.sh
+      - scripts/container-build.sh
+      - scripts/build-ableton-linkd.sh
+      - tools/**
+      - vendor/**
+      - .github/workflows/ci-pr-build.yml
+  push:
+    branches: [main]
+    paths:
+      - patches/**
+      - Containerfile
+      - build.sh
+      - scripts/container-build.sh
+      - scripts/build-ableton-linkd.sh
+      - tools/**
+      - vendor/**
+      - .github/workflows/ci-pr-build.yml
+  workflow_dispatch: {}
+
+# A new push to the same PR (or a re-run against main) makes the previous,
+# now-stale build pointless; cancel it instead of burning runner minutes on
+# both.
+concurrency:
+  group: ci-pr-build-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Restore ccache (compiled-object cache, keyed loosely on purpose)
+        uses: actions/cache@v6
+        with:
+          path: .ccache
+          # Cache key doesn't need to be exact — ccache hits/misses per object
+          # file regardless of key match; restore-keys just gets the closest
+          # prior cache as a base instead of starting empty.
+          key: ccache-${{ runner.os }}-${{ hashFiles('patches/**', 'Containerfile') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Builds and loads the same image build.sh builds next (same tag), so
+      # build.sh's own `docker build` sees a fully cached, no-op rebuild.
+      # This is the apt/toolchain layer cache; ccache above is the compiled-
+      # object cache. Separate caches because they invalidate on different
+      # things: this one on Containerfile, that one on Containerfile *and*
+      # patches/**.
+      - name: Build container image (Buildx, GHA layer cache)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Containerfile
+          tags: ableton-wine-build:22.04
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # GitHub-hosted runners have Docker preinstalled, not podman.
+      - name: Build Wine + PipeASIO + ableton-linkd
+        run: ENGINE=docker JOBS="$(nproc)" ./build.sh
+
+      # container-build.sh writes dist/ and .ccache/ (mode 600) as the
+      # container's user, which under plain `docker run` (unlike rootless
+      # podman locally) is actual root — leaves both unreadable by the
+      # unprivileged runner user that the later steps (and actions/cache's
+      # post-job save) run as.
+      - name: Fix ownership of container output (docker runs as root here)
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" dist .ccache
+
+      - name: ccache stats
+        if: always()
+        continue-on-error: true
+        run: docker run --rm -v "$PWD/.ccache:/ccache" -e CCACHE_DIR=/ccache ableton-wine-build:22.04 ccache -s
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: wine-build
+          path: |
+            dist/wine-d2d1-nspa-11.13-*.tar.zst
+            dist/wine-d2d1-nspa-11.13-*.tar.zst.sha256
+            dist/ableton-linkd
+            dist/BUILD-INFO-*.txt
+          if-no-files-found: error
+          retention-days: 14

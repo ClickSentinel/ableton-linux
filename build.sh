@@ -28,12 +28,13 @@ echo "== [1/4] build container image ($IMAGE) =="
 $ENGINE build -t "$IMAGE" -f Containerfile .
 
 echo "== [2/4] build Wine + PipeASIO in the container (JOBS=$JOBS) =="
-mkdir -p dist
+mkdir -p dist "$here/.ccache"
 relabel=""
 if [ -f /sys/fs/selinux/enforce ]; then relabel=",Z"; fi
 $ENGINE run --rm \
     -v "$here:/src:ro$relabel" \
     -v "$here/dist:/out:rw$relabel" \
+    -v "$here/.ccache:/ccache:rw$relabel" \
     -e JOBS="$JOBS" \
     -e "INSTALL_PREFIX=$INSTALL_PREFIX" \
     "$IMAGE" \
