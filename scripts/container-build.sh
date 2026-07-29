@@ -172,10 +172,19 @@ echo "== [5/8] strip + prune (dev files served their purpose in [4/8]; nothing b
 # resources, .rodata literals (the audit fingerprints) and the builtin signature
 # all live outside the symtab; the relocation gate re-runs the stripped tree.
 # .dll16/.tlb/.vxd etc. are not COFF and stay untouched.
-find "$PREFIX_ROOT/lib/wine" \( -name '*.dll' -o -name '*.exe' -o -name '*.sys' \
-    -o -name '*.drv' -o -name '*.cpl' -o -name '*.ocx' \) -exec llvm-strip --strip-all {} +
-strip --strip-unneeded "$PREFIX_ROOT"/lib/wine/*-unix/*.so
-for f in "$PREFIX_ROOT"/bin/*; do strip --strip-unneeded "$f" 2>/dev/null || true; done  # sh wrappers in bin/ are not ELF
+# ABLETON_KEEP_SYMBOLS: diagnostic-only escape hatch. Skips stripping so gdb
+# can resolve frames (compile already carries -gdwarf-4 -g -O2 by default;
+# this changes zero codegen, only what's left in the symtab after linking).
+# Never set for a real/shipped build: BUILD-INFO's hashes below are meant to
+# be computed post-strip, and this tree is enormously bigger unstripped.
+if [ -n "${ABLETON_KEEP_SYMBOLS:-}" ]; then
+    echo "   ABLETON_KEEP_SYMBOLS set: skipping strip, keeping -gdwarf-4 debug info"
+else
+    find "$PREFIX_ROOT/lib/wine" \( -name '*.dll' -o -name '*.exe' -o -name '*.sys' \
+        -o -name '*.drv' -o -name '*.cpl' -o -name '*.ocx' \) -exec llvm-strip --strip-all {} +
+    strip --strip-unneeded "$PREFIX_ROOT"/lib/wine/*-unix/*.so
+    for f in "$PREFIX_ROOT"/bin/*; do strip --strip-unneeded "$f" 2>/dev/null || true; done  # sh wrappers in bin/ are not ELF
+fi
 rm -f "$PREFIX_ROOT"/lib/wine/*-windows/*.a
 rm -rf "$PREFIX_ROOT/include" "$PREFIX_ROOT/share/man"
 rm -f "$PREFIX_ROOT"/bin/widl "$PREFIX_ROOT"/bin/winebuild "$PREFIX_ROOT"/bin/winecpp \

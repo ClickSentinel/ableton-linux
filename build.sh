@@ -28,14 +28,16 @@ echo "== [1/4] build container image ($IMAGE) =="
 $ENGINE build -t "$IMAGE" -f Containerfile .
 
 echo "== [2/4] build Wine + PipeASIO in the container (JOBS=$JOBS) =="
-mkdir -p dist
+mkdir -p dist "${ABLETON_CCACHE_DIR:-/mnt/storage-2tb/.ableton-wine-ccache}"
 relabel=""
 if [ -f /sys/fs/selinux/enforce ]; then relabel=",Z"; fi
 $ENGINE run --rm \
     -v "$here:/src:ro$relabel" \
     -v "$here/dist:/out:rw$relabel" \
+    -v "${ABLETON_CCACHE_DIR:-/mnt/storage-2tb/.ableton-wine-ccache}:/ccache:rw$relabel" \
     -e JOBS="$JOBS" \
     -e "INSTALL_PREFIX=$INSTALL_PREFIX" \
+    -e "ABLETON_KEEP_SYMBOLS=${ABLETON_KEEP_SYMBOLS:-}" \
     "$IMAGE" \
     /src/scripts/container-build.sh
 
