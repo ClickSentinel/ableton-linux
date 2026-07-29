@@ -1,0 +1,226 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: dist <build@localhost>
+Date: Sun, 26 Jul 2026 20:55:00 +0200
+Subject: [PATCH 54/54] avrt: implement MMCSS thread characteristics for audio
+ tasks
+
+AvSetMmThreadCharacteristics and AvSetMmThreadPriority were stubs that
+returned a fixed fake handle and changed nothing. Windows uses the
+multimedia class scheduler to keep threads registered under "Pro Audio"
+ahead of ordinary desktop work, and that is the only mechanism a DAW
+uses to protect its DSP pool: Live never raises those threads through
+SetThreadPriority, so with the stub in place the entire pool stays at
+THREAD_PRIORITY_NORMAL, which the server maps to nice 0.
+
+Measured on Live 12 Suite: 30 worker threads each call
+AvSetMmThreadCharacteristicsW(L"Pro Audio") followed by
+AvSetMmThreadPriority(handle, AVRT_PRIORITY_CRITICAL), and all 30 stay
+SCHED_OTHER nice 0. Under CPU contention they are preempted, the host
+misses its buffer deadline, and playback crackles while the audio device
+itself reports no errors at all: PipeWire counted 463 xruns in 60s on
+Live's node against 0 on the sink.
+
+Give the calling thread the top of the NT application band for the tasks
+that carry a buffer deadline, and let the existing nice mapping in
+apply_thread_priority() take it from there. Threads whose task carries no
+deadline ("Games", "Window Manager") are left alone. Hosts on a system
+without RLIMIT_NICE headroom see no change, since the server's mapping
+bails out early there.
+
+The handle becomes a real allocation recording the thread's previous
+priority so AvRevertMmThreadCharacteristics can restore it, and
+AvSetMmThreadPriority now validates it. WINE_MMCSS_DISABLE=1 restores the
+old no-op behaviour for A/B testing.
+
+Issue 49: crackling audio with PipeASIO.
+--- a/dlls/avrt/main.c
++++ b/dlls/avrt/main.c
+@@ -27,6 +27,64 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(avrt);
+ 
++#define AVRT_TASK_MAGIC 0x54525641 /* 'AVRT' */
++
++struct avrt_task
++{
++    DWORD magic;
++    int   saved_priority;
++};
++
++/* The MMCSS tasks Windows registers by default. */
++static const WCHAR *const mmcss_tasks[] =
++{
++    L"Audio", L"Capture", L"Distribution", L"Games", L"Playback",
++    L"Pro Audio", L"Window Manager", NULL
++};
++
++static BOOL is_known_task(const WCHAR *name)
++{
++    const WCHAR *const *task;
++
++    for (task = mmcss_tasks; *task; task++)
++        if (!lstrcmpiW(name, *task)) return TRUE;
++    return FALSE;
++}
++
++/* Tasks whose threads run against a hard buffer deadline. Only these are
++ * worth lifting; "Games" and "Window Manager" carry no such deadline and
++ * raising them costs the desktop for nothing. */
++static BOOL is_audio_task(const WCHAR *name)
++{
++    return !lstrcmpiW(name, L"Pro Audio") || !lstrcmpiW(name, L"Audio") ||
++           !lstrcmpiW(name, L"Playback")  || !lstrcmpiW(name, L"Capture");
++}
++
++static BOOL mmcss_enabled(void)
++{
++    static int enabled = -1;
++
++    if (enabled == -1)
++    {
++        WCHAR buf[8];
++        enabled = !(GetEnvironmentVariableW(L"WINE_MMCSS_DISABLE", buf, ARRAY_SIZE(buf)) && buf[0] == '1');
++    }
++    return enabled;
++}
++
++static int avrt_priority_to_thread_priority(AVRT_PRIORITY prio)
++{
++    switch (prio)
++    {
++    case AVRT_PRIORITY_VERYLOW:  return THREAD_PRIORITY_NORMAL;
++    case AVRT_PRIORITY_LOW:      return THREAD_PRIORITY_ABOVE_NORMAL;
++    case AVRT_PRIORITY_NORMAL:   return THREAD_PRIORITY_HIGHEST;
++    case AVRT_PRIORITY_HIGH:
++    case AVRT_PRIORITY_CRITICAL: return THREAD_PRIORITY_TIME_CRITICAL;
++    }
++    return THREAD_PRIORITY_HIGHEST;
++}
++
+ static inline WCHAR *strdupAW(const char *src)
+ {
+     int len;
+@@ -56,7 +114,9 @@
+ 
+ HANDLE WINAPI AvSetMmThreadCharacteristicsW(const WCHAR *name, DWORD *index)
+ {
+-    FIXME("(%s,%p): stub\n", debugstr_w(name), index);
++    struct avrt_task *task;
++
++    TRACE("(%s,%p)\n", debugstr_w(name), index);
+ 
+     if (!name)
+     {
+@@ -70,7 +130,39 @@
+         return NULL;
+     }
+ 
+-    return (HANDLE)0x12345678;
++    if (!is_known_task(name))
++    {
++        SetLastError(ERROR_INVALID_TASK_NAME);
++        return NULL;
++    }
++
++    if (!(task = malloc(sizeof(*task))))
++    {
++        SetLastError(ERROR_OUTOFMEMORY);
++        return NULL;
++    }
++
++    task->magic = AVRT_TASK_MAGIC;
++    task->saved_priority = GetThreadPriority(GetCurrentThread());
++
++    /* Wine has no multimedia class scheduler. A DAW registers every audio
++     * worker under "Pro Audio" and expects the class to keep them ahead of
++     * ordinary desktop work; leaving the call a no-op strands the whole DSP
++     * pool at THREAD_PRIORITY_NORMAL, where any busy application preempts it
++     * and the host misses its buffer deadline. Map the task onto the top of
++     * the NT application band instead and let the server's existing nice
++     * mapping carry it to the scheduler. Systems without RLIMIT_NICE headroom
++     * fall back to no change, exactly as before this patch. */
++    if (is_audio_task(name) && mmcss_enabled())
++    {
++        if (SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL))
++            TRACE("raised %s thread to TIME_CRITICAL\n", debugstr_w(name));
++        else
++            WARN("could not raise priority of %s thread\n", debugstr_w(name));
++    }
++
++    if (!*index) *index = 1;
++    return task;
+ }
+ 
+ BOOL WINAPI AvQuerySystemResponsiveness(HANDLE AvrtHandle, ULONG *value)
+@@ -81,14 +173,43 @@
+ 
+ BOOL WINAPI AvRevertMmThreadCharacteristics(HANDLE AvrtHandle)
+ {
+-    FIXME("(%p): stub\n", AvrtHandle);
++    struct avrt_task *task = AvrtHandle;
++
++    TRACE("(%p)\n", AvrtHandle);
++
++    if (!task || task->magic != AVRT_TASK_MAGIC)
++    {
++        SetLastError(ERROR_INVALID_HANDLE);
++        return FALSE;
++    }
++
++    SetThreadPriority(GetCurrentThread(), task->saved_priority);
++    task->magic = 0;
++    free(task);
+     return TRUE;
+ }
+ 
+ BOOL WINAPI AvSetMmThreadPriority(HANDLE AvrtHandle, AVRT_PRIORITY prio)
+ {
+-    FIXME("(%p)->(%u) stub\n", AvrtHandle, prio);
+-    return TRUE;
++    struct avrt_task *task = AvrtHandle;
++
++    TRACE("(%p)->(%d)\n", AvrtHandle, prio);
++
++    if (!task || task->magic != AVRT_TASK_MAGIC)
++    {
++        SetLastError(ERROR_INVALID_HANDLE);
++        return FALSE;
++    }
++
++    if (prio < AVRT_PRIORITY_VERYLOW || prio > AVRT_PRIORITY_CRITICAL)
++    {
++        SetLastError(ERROR_INVALID_PARAMETER);
++        return FALSE;
++    }
++
++    if (!mmcss_enabled()) return TRUE;
++
++    return SetThreadPriority(GetCurrentThread(), avrt_priority_to_thread_priority(prio));
+ }
+ 
+ HANDLE WINAPI AvSetMmMaxThreadCharacteristicsA(const char *task1, const char *task2, DWORD *index)
+@@ -117,7 +238,7 @@
+ 
+ HANDLE WINAPI AvSetMmMaxThreadCharacteristicsW(const WCHAR *task1, const WCHAR *task2, DWORD *index)
+ {
+-    FIXME("(%s,%s,%p): stub\n", debugstr_w(task1), debugstr_w(task2), index);
++    TRACE("(%s,%s,%p)\n", debugstr_w(task1), debugstr_w(task2), index);
+ 
+     if (!task1 || task2)
+     {
+@@ -125,11 +246,5 @@
+         return NULL;
+     }
+ 
+-    if (!index)
+-    {
+-        SetLastError(ERROR_INVALID_HANDLE);
+-        return NULL;
+-    }
+-
+-    return (HANDLE)0x12345678;
++    return AvSetMmThreadCharacteristicsW(task1, index);
+ }
+-- 
+2.43.0
+
