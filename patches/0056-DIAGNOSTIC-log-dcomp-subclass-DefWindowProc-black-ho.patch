@@ -1,0 +1,54 @@
+Subject: DIAGNOSTIC ONLY: log the dcomp subclass DefWindowProc black hole
+
+Not for merge. Instruments the two places where a dcomp-subclassed target
+window can end up with no original WndProc to forward to, which sends every
+message - including all mouse input - to DefWindowProc. The window keeps
+painting, because dcomp blits its content independently of the WndProc, so
+the symptom is "paints fine but is completely input-dead" - exactly what the
+existing comments in this file describe for JUCE/SWAM editors that recreate
+their composition target, and exactly the Splice panel symptom in issue 61.
+
+Splice's panel is a WebView2 composition-hosting target. Collapsing the panel
+(double-clicking the divider) makes CHOC build a new host window and move the
+webview into it while the WebView2 browser process survives, so a second
+CreateTargetForHwnd runs against a window that may already carry our subclass.
+If the origproc property is gone at that moment - removed by a WM_NCDESTROY on
+a recycled HWND while the subclass survived - orig_wndproc is NULL and the
+window becomes the black hole the guard above it was written to prevent.
+
+These two ERRs make that condition observable instead of inferred. Build with
+this applied, reproduce, and grep for "BLACK HOLE" / "origproc prop is GONE".
+diff --git a/dlls/dcomp/device.c b/dlls/dcomp/device.c
+index 059b3de..7cafee0 100644
+--- a/dlls/dcomp/device.c
++++ b/dlls/dcomp/device.c
+@@ -2078,7 +2078,18 @@ static LRESULT CALLBACK dcomp_target_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
+ 
+     if (!orig_wndproc && target) orig_wndproc = target->orig_wndproc;
+     if (!orig_wndproc)
++    {
++        /* DIAGNOSTIC (issue 61 / Splice panel): our subclass is installed but we
++         * have neither the origproc property nor a target to recover it from, so
++         * every message - including all mouse input - goes to DefWindowProc. The
++         * window keeps painting (dcomp blits its own content) but is input-dead. */
++        static unsigned int blackhole_count;
++        if (!blackhole_count++ || !(blackhole_count % 500))
++            ERR("dcomp subclass BLACK HOLE: hwnd %p msg %#x has no orig_wndproc "
++                "(target %p) - window is input-dead, count %u.\n",
++                hwnd, msg, target, blackhole_count);
+         return DefWindowProcW(hwnd, msg, wparam, lparam);
++    }
+ 
+     if (!target)
+     {
+@@ -2262,6 +2273,10 @@ static HRESULT STDMETHODCALLTYPE dcomp_device_CreateTargetForHwnd(IDCompositionD
+         if (cur == dcomp_target_wndproc)
+         {
+             object->orig_wndproc = (WNDPROC)GetPropW(hwnd, dcomp_origproc_prop);
++            if (!object->orig_wndproc)
++                ERR("dcomp target %p on hwnd %p: subclass already installed but "
++                    "origproc prop is GONE - this window will be input-dead.\n",
++                    object, hwnd);
+         }
+         else
+         {

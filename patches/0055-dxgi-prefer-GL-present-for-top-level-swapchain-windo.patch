@@ -1,0 +1,108 @@
+Subject: dxgi: prefer GL present for top-level non-popup swapchain windows
+
+Live's GPU renderer creates a D3D11 swapchain covering its whole main
+window. wined3d's swapchain_present sends SEQUENTIAL and FLIP_SEQUENTIAL
+swapchains to swapchain_blit_gdi unless WINED3D_SWAPCHAIN_PREFER_GL_PRESENT
+is set, and that path is a full-window GPU readback plus a full-window
+XPutImage upload - the code puts it at ~5-10ms per frame.
+
+Measured on a 2560x1350 window under a scripted mouse-move sweep, with the
+only difference between builds being this patch:
+
+  without: 645.6 / 671.2 MB/s,  119.9% / 95.3% of a core
+  with   :   0.41 /   0.40 MB/s,  21.8% / 20.2% of a core
+
+The path change is directly observable rather than inferred: the fire-once
+FIXME("Using GDI present.") in swapchain_blit_gdi fires once on a full Live
+startup without this patch and not at all with it, so the readback function
+stops being called rather than merely getting cheaper.
+
+(The exact swap effect in play is not FLIP_SEQUENTIAL or FLIP_DISCARD -
+wined3d's "Unimplemented swap effect" FIXME never fires - but SEQUENTIAL
+has not been distinguished from DISCARD-plus-partial-copy, as five separate
+conditions reach the same branch. The measurement above does not depend on
+which one it is.)
+
+PREFER_GL_PRESENT already exists and is documented as avoiding exactly this
+readback, but it was only ever set in dxgi/factory.c for DComp composition
+targets that are top-level. A plain top-level swapchain window - Live's main
+window - never went through that branch and so never got the flag.
+
+Set it at swapchain creation for top-level device windows, excluding both
+WS_CHILD and WS_POPUP. Two earlier revisions got this wrong. The first tested only the parent and
+flagged every top-level window. The second also excluded WS_POPUP, which was
+still not enough: CreateSwapChainForComposition creates its own
+"WineDCompSwapchain" window with WS_CHILD parented to the desktop, so
+GetAncestor(GA_PARENT) returns the desktop and a parent-only test classifies
+it as top-level. That flagged every DComp composition swapchain, and the
+windows they back - Live's Settings and authorisation dialogs - painted black
+until interacted with, intermittently, because the swap goes to a child
+window with no on-screen drawable. The GDI blit is immune because it
+writes through the window surface, which survives map/expose. Note that
+WS_POPUP and WS_CAPTION coexist - Live's Settings window is framed and still
+WS_POPUP (style 96c80000) - so a title bar is not evidence of a non-popup.
+
+Child and embedded plugin windows have no whole_window and keep the GDI blit
+as before. The DComp target path runs later and re-decides per target, so its
+choice still wins where it applies, and swapchain_present independently falls
+back to the GDI blit if the GL context did not bind (dc == backup_dc), so a
+failed bind is not fatal.
+
+See notes/FINDINGS-GPU-RENDERER-PRESENT-STORM-2026-07-28.md.
+
+diff --git a/dlls/dxgi/swapchain.c b/dlls/dxgi/swapchain.c
+index b4ed824..ce226b0 100644
+--- a/dlls/dxgi/swapchain.c
++++ b/dlls/dxgi/swapchain.c
+@@ -1187,6 +1187,51 @@ HRESULT d3d11_swapchain_init(struct d3d11_swapchain *swapchain, struct dxgi_devi
+         goto cleanup;
+     }
+ 
++    /* A top-level window has an X11 whole_window, so wined3d can present it
++     * with glXSwapBuffers instead of the GDI fallback.  Without this a
++     * SEQUENTIAL/FLIP_SEQUENTIAL swapchain takes swapchain_blit_gdi on every
++     * present: a full-window GPU readback plus a full-window XPutImage upload
++     * (~5-10ms/frame, and ~600MB/s of X11 traffic for a 2560x1350 window under
++     * sustained repaints - see
++     * notes/FINDINGS-GPU-RENDERER-PRESENT-STORM-2026-07-28.md).  Live's main
++     * window is top-level and hits exactly that path once its GPU renderer is
++     * enabled.  Child/embedded windows have no whole_window and must keep the
++     * GDI blit, so they are left alone; the DComp target path in
++     * dxgi/factory.c re-decides this per target and runs after this.
++     *
++     * Both WS_CHILD and WS_POPUP are excluded, and the WS_CHILD half is the
++     * one that matters most: dxgi_factory_CreateSwapChainForComposition
++     * creates its own "WineDCompSwapchain" window with WS_CHILD and the
++     * desktop as parent, so GetAncestor(GA_PARENT) returns the desktop and a
++     * parent-only test wrongly classifies it as top-level.  That flagged
++     * every DComp composition swapchain for GL present and left the windows
++     * they back (Live's Settings and authorisation dialogs) painting black
++     * until interacted with, intermittently - the swap goes to a child
++     * window that has no on-screen drawable, while the GDI blit writes
++     * through the window surface and is unaffected.
++     *
++     * WS_POPUP is excluded for the same reason on the popup's own swapchain.
++     * Note WS_POPUP and WS_CAPTION coexist - Live's Settings window is framed
++     * and still WS_POPUP (style 96c80000) - so a title bar is not evidence
++     * that a window is not a popup. */
++    if (desc->device_window)
++    {
++        HWND parent = GetAncestor(desc->device_window, GA_PARENT);
++        LONG style = GetWindowLongW(desc->device_window, GWL_STYLE);
++
++        if ((!parent || parent == GetDesktopWindow()) && !(style & (WS_CHILD | WS_POPUP)))
++        {
++            static unsigned int flagged;
++            WCHAR cls[64] = {0};
++
++            GetClassNameW(desc->device_window, cls, ARRAY_SIZE(cls));
++            if (++flagged <= 8)
++                FIXME("GL present for device window %p class %s style %08lx.\n",
++                        desc->device_window, debugstr_w(cls), style);
++            wined3d_swapchain_set_prefer_gl_present(swapchain->wined3d_swapchain, TRUE);
++        }
++    }
++
+     state = wined3d_swapchain_get_state(swapchain->wined3d_swapchain);
+     wined3d_swapchain_state_get_size(state, &desc->backbuffer_width, &desc->backbuffer_height);
+ 
