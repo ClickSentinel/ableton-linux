@@ -1,0 +1,79 @@
+Subject: dxgi: prefer GL present for top-level swapchain device
+ windows
+
+wined3d presents a D3D11 swapchain through swapchain_blit_gdi() unless
+WINED3D_SWAPCHAIN_PREFER_GL_PRESENT is set, and the only code that set
+it was the DirectComposition target-switch path in factory.c. Live's
+main window is a plain top-level swapchain window, so every Present
+read the full backbuffer off the GPU into system memory and pushed it
+to the display server as a full-window image: about 14 MB per frame at
+2560x1350, ~650 MB/s of display-server traffic and more than one core
+while the mouse moves across the window (issue 91). On the GL path the
+present stays on the GPU and ends in glXSwapBuffers: ~0.4 MB/s and
+about 20% of a core in the same test, and the fire-once "Using GDI
+present." FIXME stops firing.
+
+d3d11_swapchain_init now sets the preference when the device window is
+top-level. WS_CHILD device windows (dcomp composition targets,
+embedded plugin editors) have no X11 whole_window, and WS_POPUP ones
+(Live's Settings and authorisation dialogs, context menus; some are
+framed, WS_POPUP | WS_CAPTION, style 96c80000) paint black on the GL
+path until first interaction, so both keep the GDI path. The test uses
+style bits rather than the parent because
+CreateSwapChainForComposition()'s own WS_CHILD window is parented to
+the desktop, and a parent test would call it top-level. The dcomp
+target-switch code in factory.c still overrides the flags per target
+window, and FORCE_GDI_PRESENT beats the preference at present time.
+
+WINE_DISABLE_GL_PRESENT=1 restores the GDI path without a rebuild. The
+value is read, not just the presence, so =0 keeps the GL path (PR 94
+review).
+
+Diagnosis and measurements: Lucas Gillingham (ClickSentinel), issue 91.
+---
+ dlls/dxgi/swapchain.c | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/dlls/dxgi/swapchain.c b/dlls/dxgi/swapchain.c
+index b4ed824..3fd784e 100644
+--- a/dlls/dxgi/swapchain.c
++++ b/dlls/dxgi/swapchain.c
+@@ -1187,6 +1187,38 @@ HRESULT d3d11_swapchain_init(struct d3d11_swapchain *swapchain, struct dxgi_devi
+         goto cleanup;
+     }
+ 
++    /* Top-level device windows have an X11 whole_window, so GL can bind a
++     * client drawable and glXSwapBuffers straight from the GPU; without the
++     * preference every Present takes swapchain_blit_gdi()'s path: read the
++     * whole backbuffer back into system memory and push it to the display
++     * server as a full-window image (issue 91).  WS_CHILD device windows
++     * (dcomp composition targets, embedded plugin editors) have no
++     * whole_window, and WS_POPUP ones (Live's Settings and authorisation
++     * dialogs, context menus — some are framed, WS_POPUP | WS_CAPTION)
++     * paint black on the GL path until first interaction, so both keep the
++     * GDI path.  The dcomp target-switch code in factory.c still overrides
++     * this per target window, and FORCE_GDI_PRESENT beats the preference
++     * at present time.  WINE_DISABLE_GL_PRESENT=1 restores the old
++     * behaviour without a rebuild; a value of 0 is ignored. */
++    if (desc->device_window)
++    {
++        LONG style = GetWindowLongW(desc->device_window, GWL_STYLE);
++        WCHAR val[8] = {0};
++        BOOL disabled;
++
++        /* A value too long for the buffer leaves val zeroed and counts as
++         * set, so any long value still disables. */
++        disabled = GetEnvironmentVariableW(L"WINE_DISABLE_GL_PRESENT", val, ARRAY_SIZE(val))
++                && val[0] != '0';
++
++        if (!disabled && !(style & (WS_CHILD | WS_POPUP)))
++        {
++            wined3d_swapchain_set_prefer_gl_present(swapchain->wined3d_swapchain, TRUE);
++            FIXME("Top-level device window %p (style %#lx), preferring GL present.\n",
++                    desc->device_window, style);
++        }
++    }
++
+     state = wined3d_swapchain_get_state(swapchain->wined3d_swapchain);
+     wined3d_swapchain_state_get_size(state, &desc->backbuffer_width, &desc->backbuffer_height);
+ 
