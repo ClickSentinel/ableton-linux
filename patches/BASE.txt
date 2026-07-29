@@ -11,8 +11,8 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 53 files, numbered 0001 through 0055.
-Patches 0027 and 0044 are intentionally absent.
+The current Wine series contains 52 files, numbered 0001 through 0056.
+Patches 0027, 0044, 0054 and 0055 are intentionally absent — 0054 is reserved for PR 77's language-fallback font work and 0055 for PR 94's GL-present patch, both upstream.
 
 ## Applying the series
 
