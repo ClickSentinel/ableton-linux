@@ -72,6 +72,7 @@ for required in \
     lib/wine/x86_64-unix/libusb-1.0.so \
     lib/wine/x86_64-unix/comdlg32.so \
     lib/wine/x86_64-unix/winealsa.so \
+    lib/wine/x86_64-unix/winegstreamer.so \
     lib/wine/x86_64-windows/pipeasio64.dll \
     lib/wine/x86_64-windows/pipeasio.dll \
     lib/wine/x86_64-unix/pipeasio64.dll.so \

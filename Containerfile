@@ -56,6 +56,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       # driver. PipeASIO builds against the vendored PipeWire SDK below, not a
       # jammy package (jammy's 0.3.48 predates the thread-utils API it needs).
       libasound2-dev libpulse-dev \
+      # media import: without these, configure silently drops winegstreamer
+      # and mp3/mp4/wma import just fails (issue #44). Actual codec plugins
+      # still come from the user's host GStreamer install at runtime.
+      libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
       # TLS (Live online auth / pack downloads), USB display bridge, XDG portal
       libgnutls28-dev libusb-1.0-0-dev libudev-dev libdbus-1-dev \
  && rm -rf /var/lib/apt/lists/* \
