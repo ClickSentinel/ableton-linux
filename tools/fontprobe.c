@@ -40,8 +40,9 @@ static int CALLBACK cb(const LOGFONTA *lf, const TEXTMETRICA *tm,
     /* Skip the vertical-writing aliases Wine prefixes with '@'. */
     if (lf->lfFaceName[0] == '@') return 1;
     if (family_count < MAX_FAMILIES && !seen(lf->lfFaceName)) {
-        strncpy(families[family_count], lf->lfFaceName, LF_FACESIZE - 1);
-        families[family_count][LF_FACESIZE - 1] = '\0';
+        /* snprintf rather than strncpy: always terminates, and does not trip
+         * -Wstringop-truncation on a face name that fills the buffer. */
+        snprintf(families[family_count], LF_FACESIZE, "%s", lf->lfFaceName);
         family_count++;
     }
     return 1;

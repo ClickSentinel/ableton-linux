@@ -379,24 +379,53 @@ install_maxplug_fallback_fonts() {
         return 0                      # non-fatal: everything else still works
     fi
 
-    mkdir -p "$winfonts"
+    # Every step below is kept non-fatal on purpose. The script runs under
+    # `set -e`, and this is a late, optional repair: a failing `wine reg add`
+    # would otherwise abort the whole prefix setup and leave it half-configured,
+    # which is strictly worse than a configured prefix plus a loud warning.
+    # scripts/check-m4l-fonts.sh exists to catch the not-installed state later.
+    if ! mkdir -p "$winfonts"; then
+        echo "!! cannot create $winfonts; skipping the M4L font fallback repair"
+        return 0
+    fi
+
+    local copied=0 registered=0
     for entry in "${faces[@]}"; do
         n="${entry##*:}"
         [ -f "$src/$n" ] || { missing=1; continue; }
-        # -u so a refresh does not rewrite identical files every run.
-        cp -u "$src/$n" "$winfonts/$n" 2>/dev/null || cp "$src/$n" "$winfonts/$n"
+        # -u so a refresh does not rewrite identical files every run; some cp
+        # builds lack it, hence the plain retry.
+        if cp -u "$src/$n" "$winfonts/$n" 2>/dev/null || cp "$src/$n" "$winfonts/$n"; then
+            copied=$((copied + 1))
+        else
+            echo "!! failed to copy $n into $winfonts"
+        fi
     done
     [ "$missing" -eq 1 ] && echo "   (some Vera faces absent from $src; registering what is present)"
 
+    # Files alone are not enough: Wine's font list is registry-driven and never
+    # picks up files added after its initial scan.
     for entry in "${faces[@]}"; do
         n="${entry##*:}"
         [ -f "$winfonts/$n" ] || continue
-        wine reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Fonts' \
-            /v "${entry%%:*} (TrueType)" /t REG_SZ \
-            /d "C:\\windows\\Fonts\\$n" /f >/dev/null
+        if wine reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Fonts' \
+               /v "${entry%%:*} (TrueType)" /t REG_SZ \
+               /d "C:\\windows\\Fonts\\$n" /f >/dev/null 2>&1; then
+            registered=$((registered + 1))
+        fi
     done
-    "$WINESERVER" -w
-    echo "   MaxPlug font fallback installed and registered (source: $src)"
+    "$WINESERVER" -w || true
+
+    if [ "$registered" -eq 0 ]; then
+        echo "!! MaxPlug font fallback NOT registered ($copied file(s) copied)."
+        echo "   M4L devices requesting a missing typeface will hang Live."
+        echo "   Re-run this script with Live closed, then verify with:"
+        echo "     scripts/check-m4l-fonts.sh"
+    elif [ "$registered" -lt "${#faces[@]}" ]; then
+        echo "   MaxPlug font fallback partially registered ($registered/${#faces[@]}); verify with scripts/check-m4l-fonts.sh"
+    else
+        echo "   MaxPlug font fallback installed and registered (source: $src)"
+    fi
 }
 echo "== fonts: Max for Live fallback chain =="
 install_maxplug_fallback_fonts
