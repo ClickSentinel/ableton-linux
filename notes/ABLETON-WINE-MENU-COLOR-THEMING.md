@@ -1,11 +1,12 @@
-# How the native menu bar's color theming works
+# How the native menu bar's color theming and font fallback work
 
 Issue #32 (unified top bar) and #35 (theming fit and finish). Reference
 documentation for the system that makes Wine's native win32 menu chrome
 (menu bar, dropdowns, dialogs) match Ableton's own active theme instead
-of Wine's stock light-Windows-95 gray, and keeps following it live while
-Live keeps running. For the investigation behind the remaining gap in
-the "live" half (point 4: switching while the Preferences dialog is
+of Wine's stock light-Windows-95 gray, keeps following it live while
+Live keeps running, and renders its text in Live's own font without
+losing non-Latin scripts. For the investigation behind the remaining gap
+in the "live" half (point 4: switching while the Preferences dialog is
 still open), see `FINDINGS-LIVE-THEME-PREVIEW-SIGNAL-2026-07-26.md`.
 
 ## Overview
@@ -32,6 +33,14 @@ dropping a Win95-era grayed-text bevel that reads badly once the menu
 is dark (`0049`), and hiding the alt-key mnemonic underlines the bar
 always drew, since real Windows only shows them once Alt is pressed and
 this Wine tree never implements that toggle (`0052`).
+
+Font is a third, largely independent axis on the same chrome. The
+launcher substitutes Live's own face into the non-client `LOGFONT`s so
+the bar matches Live's UI; because that face is Latin-only, and because
+substituting it also disables Wine's built-in CJK fallback population, a
+further patch was needed to make missing glyphs resolve through the
+`SystemLink` chain at draw time (`0054`, on the `language-fallback`
+branch, not yet in `main`).
 
 ## Fixing the grayed-item bevel
 
@@ -180,6 +189,136 @@ Preferences dialog closes and `Preferences.cfg` is written); this
 section covers the delay *after* that write is observed and
 `setsyscolors.exe` has already been invoked.
 
+## Substituting Live's own font
+
+`sync_font_substitutes()` / `sync_metric_fonts()` (`scripts/ableton-live`,
+issue #32) symlink Live's own `AbletonSans*.ttf` faces into the prefix's
+Fonts directory and repoint `MS Shell Dlg`/`MS Shell Dlg 2` plus the
+`WindowMetrics` non-client `LOGFONT`s (`MenuFont`, `MessageFont`,
+`CaptionFont`, and the rest) at whichever face is present (`Ableton Sans
+Small`, falling back to plain `Ableton Sans`), so the chrome matches
+Live's own UI instead of rendering stock Tahoma.
+
+Both faces cover Latin script only - checked directly against the font
+files' own `cmap` tables: Basic Latin, Latin-1, Latin Extended-A/B, and
+a handful of Greek symbols. Zero glyphs in Cyrillic, Arabic, Hebrew,
+Devanagari, Thai, CJK, or Hangul.
+
+The substitution has a second effect beyond narrowing glyph coverage.
+Wine's built-in Unicode/CJK fallback population (`dlls/win32u/font.c`,
+`load_system_links`) is keyed by string-comparing the current `MS Shell
+Dlg` substitute against a small fixed list of recognised names
+("Tahoma", "MS UI Gothic", "SimSun", "Gulim"). Once that substitute is
+anything else, none of those matches fire and the whole population step
+silently does nothing.
+
+## Falling back for missing glyphs
+
+`sync_font_fallback()` (`scripts/ableton-live`) registers Wine's real,
+general font-linking mechanism -
+`HKLM\Software\Microsoft\Windows NT\CurrentVersion\FontLink\SystemLink`,
+which unlike the hard-coded population above works for any font name -
+with a two-entry chain for whichever family was just substituted in:
+
+1. **Tahoma**, Wine's only bundled font with real non-Latin coverage
+   (checked: 104 Cyrillic + 162 Arabic glyphs).
+2. **Whatever CJK font the host has installed**, found via `fc-match -f
+   '%{file}'/'%{family}' ':lang=ja'` and symlinked into the prefix's
+   Fonts directory. Best-effort: skipped silently if `fc-match` is
+   unavailable or the host has no CJK font, which leaves the prefix
+   exactly where a stock Wine install would be - Wine bundles no CJK
+   font at all, so this is strictly additive.
+
+Registering the chain alone made no visible difference. `WINEDEBUG=+font`
+confirmed Wine loads it and resolves it to real font files, including
+correctly picking the Japanese face out of a 5-face `.ttc` collection,
+yet menu text needing those glyphs still rendered as tofu. `SystemLink`
+is only consulted by `can_select_face` during whole-font *selection*,
+gated on the system ANSI codepage matching a *requested* charset, never
+during glyph *rendering* (`dlls/win32u/freetype.c`,
+`dlls/user32/text.c`). The actual lookup, `freetype_get_glyph_index`, is
+a direct FreeType charmap query against the single already-selected
+font, with no awareness of any linked fallback, and `DrawTextExW` - what
+the menu-drawing code calls - has no substitution logic of its own. A
+registered chain fixes nothing until something walks it per string
+drawn.
+
+**`patches/0054-win32u-fall-back-to-a-linked-font-for-missing-glyph.patch`**
+adds that missing consumer in `dlls/win32u/menu.c`'s `draw_menu_item`,
+the same function `0049` already touches for the disabled-text bevel:
+
+1. `get_fallback_font_for_text()` tests whether the selected font can
+   render the item's text at all, via `NtGdiGetGlyphIndicesW` with
+   `GGI_MARK_NONEXISTING_GLYPHS` (`font_GetGlyphIndices` also only ever
+   checks the one selected font, which is exactly the per-font coverage
+   test wanted). Control characters (`< ' '`) are excluded: item text
+   carries its raw `'\t'`-separated shortcut column, no font has a
+   renderable glyph for a literal tab, and flagging it as missing failed
+   every otherwise-covered string that happened to show a shortcut.
+2. If something is missing, it walks that font's registered `SystemLink`
+   families (`get_font_link_families()`, new in `dlls/win32u/font.c` - a
+   thin accessor over what `find_gdi_font_link` already tracks
+   internally and is otherwise unreachable outside that file) and
+   temporarily selects the first candidate that covers the text,
+   matching size and weight via `NtGdiExtGetObjectW` +
+   `NtGdiHfontCreate` as this file already does for its Marlett-glyph
+   drawing, for that item's `DrawTextW` calls, then restores and deletes
+   it.
+
+`NtGdiExtGetObjectW` returns the resolved *face* name (e.g. `"Ableton
+Sans Small Regular"`), not the family name the chain is registered under
+(`"Ableton Sans Small"`), so the code strips a known style suffix
+(`" Regular"`, `" Bold"`, `" Italic"`, `" Bold Italic"`, `" Regular
+Italic"`) and retries before giving up.
+
+The same patch also fixes CJK menu-item truncation, reported against it
+after it shipped (issue 35): first and last characters missing on
+centered menu bar items, cut off on the right on left-aligned popup
+items - `"オプション"` showing as `"プショ"`. `calc_menu_item_size`, which
+sizes `item->rect` and shares this file with `draw_menu_item`, measured
+`item->text` with whatever font was already selected in `hdc` - the
+original font, never the fallback `draw_menu_item` actually renders
+with. A fallback font's real glyphs are typically wider than the
+original's notdef metrics, so `item->rect` came out sized for the wrong
+font and `DrawTextW` clipped the wider render to fit. Fixed by
+forward-declaring `get_fallback_font_for_text` and calling it in
+`calc_menu_item_size` before measuring, the way `draw_menu_item` already
+calls it before drawing; both call sites select the same plain
+(non-bold) menu font into `hdc` first, so the two selections stay in
+lockstep.
+
+Live's own browser panel, track list, and other in-app UI were never
+affected and needed no fix - that is Live's bundled Skia + HarfBuzz +
+FreeType stack, a separate rendering path from the win32 chrome these
+patches touch, and it already has correct font fallback.
+
+### Known limitation: whole-string swap
+
+Text mixing scripts - an English label concatenated with a non-Latin
+project or track name - renders *entirely* in the fallback font rather
+than mixing faces mid-string. Real per-glyph fallback is a
+Uniscribe/DirectWrite-level feature plain `DrawTextW` has never had, and
+implementing it properly means splitting a string into per-script runs
+and drawing each with its own face. This trades a rarer, minor
+font-consistency slip for the text rendering at all.
+
+### Dead end: the suspected wrong glyph
+
+Investigated 2026-07-23, after the truncation fix. The File menu's
+`パックをインストール...` ("Install a Pack...") appeared from a screenshot
+to render its first character as `バ` (U+30D0) instead of the correct
+`パ` (U+30D1). `WINEDEBUG=+menu` confirmed the raw string Ableton hands
+to Wine is already correct (`debugstr_menuitem`'s `Text=` field shows
+`\30d1` first), and the fallback font in use, Noto Sans CJK JP, has
+distinct correct glyphs for both codepoints (fontTools cmap: U+30D0 ->
+1601, U+30D1 -> 1602). A genuinely wrong render would have meant a deep
+Wine bug, most likely a stale glyph or font cache, since
+`get_fallback_font_for_text` creates a fresh throwaway `HFONT` per item.
+
+It was a misread. `パ`'s handakuten (small circle) and `バ`'s dakuten
+(two short strokes) are easy to confuse at screenshot scale; zooming in
+confirmed the circle is there. No action taken.
+
 ## Hiding the alt-key mnemonic underlines
 
 Issue 35 point 6: "is it possible to remove the underlines from the
@@ -219,13 +358,14 @@ underlines; an open dropdown's own items still show theirs.
 
 | file | role |
 |---|---|
-| `scripts/ableton-live` | `sync_win32_colors`, `blend_gray_text`, `resolve_live_topbar`, `ensure_flat_menu`, `theme_watch_loop`, `theme_watch_prefs_cfg` |
+| `scripts/ableton-live` | `sync_win32_colors`, `blend_gray_text`, `resolve_live_topbar`, `ensure_flat_menu`, `theme_watch_loop`, `theme_watch_prefs_cfg`, `sync_font_substitutes`, `sync_metric_fonts`, `sync_font_fallback` |
 | `scripts/detect-theme.sh` | `ableton_live_theme_file`, `ableton_ask_color`, `ableton_newest_prefs_dir`, `ableton_detect_theme`, `ableton_detect_topbar_colors` (host-theme detection, used by `ABLETON_TOPBAR_MODE=system`) |
 | `tools/setsyscolors.c` + `build_setsyscolors.sh` | the live `SetSysColors()` call itself; a small no-CRT PE binary, rebuilt independently of the Wine tarball |
 | `patches/0049-*.patch` | drops the grayed-item engraved-bevel double-draw |
 | `patches/0050-*.patch` | per-process sys-color/brush/pen cache invalidation on `WM_SYSCOLORCHANGE` |
 | `patches/0051-*.patch` | `RDW_FRAME` in `NtUserSetSysColors`'s forced repaint |
 | `patches/0052-*.patch` | hides the menu bar's alt-key mnemonic underlines (`DT_HIDEPREFIX`, plus making that flag actually work in `dlls/user32/text.c`) |
+| `patches/0054-*.patch` | walks the `SystemLink` chain for menu text the selected font cannot render, and sizes items with the same fallback font. On `language-fallback`, not in `main` |
 
 ## Debugging notes for whoever touches this next
 

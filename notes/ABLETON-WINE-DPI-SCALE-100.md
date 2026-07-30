@@ -107,3 +107,15 @@ The relevant probes are in [`tools/`](../tools/):
 - `menumeasure.c` measures the menu band.
 - `showrestore.c` checks restored geometry.
 - `xsettle.c` records when X geometry settles.
+
+Run probes under the Live IFEO `dpiAwareness` value, not raw. Every raw
+probe run at 125% collapses into the unaware doubling loop described
+above, so its output is noise rather than signal; the committed drift-0
+probe logs date from the 100% era, when raw runs were still meaningful.
+Comparing a raw 125% run against those logs invalidated one runtime
+bisect before the trap was recognised.
+
+Probes are also a weaker oracle than they look: they hold one thread in
+one DPI context for their whole life, so any mechanism that depends on
+the context changing under the window cannot reproduce in them. Patch
+0040 was validated against `wmresize2` and still did not fix Live.
