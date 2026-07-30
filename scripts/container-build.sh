@@ -93,6 +93,14 @@ if [ ! -s "$winealsa_unix" ]; then
     exit 1
 fi
 
+# configure also silently drops winegstreamer (mp3/mp4/wma import) without
+# the gstreamer-1.0 dev packages — shipped unnoticed until issue #44.
+winegstreamer_unix="$PREFIX_ROOT/lib/wine/x86_64-unix/winegstreamer.so"
+if [ ! -s "$winegstreamer_unix" ]; then
+    echo "!! winegstreamer.so missing: libgstreamer1.0-dev/libgstreamer-plugins-base1.0-dev not present at configure time; no mp3/mp4/wma import" >&2
+    exit 1
+fi
+
 # configure also silently drops ntsync without linux/ntsync.h; every NT sync
 # wait then becomes a wineserver round trip (~1.3 cores with Live running).
 # Shipped unnoticed twice in 2026-07. Check BOTH halves: the 07-12 build lost

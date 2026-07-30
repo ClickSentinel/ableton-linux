@@ -100,16 +100,20 @@ done
 
 echo "== [4/4] publish =="
 if [ -n "$notes" ]; then
-    # Strip any block an earlier run left, so re-running after a failed upload
-    # replaces the summary rather than stacking a second copy. The second sed
-    # drops the blank line that block leaves behind, which would otherwise add
-    # a line to the body on every run.
+    # The summary replaces the workflow's generated prose entirely and keeps
+    # only its tail: the stable-installer link and the build provenance block.
+    # The first sed drops any block an earlier run left, so re-running after a
+    # failed upload replaces the summary rather than stacking a second copy,
+    # and keeps a notes file that happens to contain the tail's first line from
+    # confusing the second sed, which selects the tail itself.
     body="$(gh_api "$api/releases/$rid" | jq -r '.body // ""' \
         | sed '/<!-- release-notes:start -->/,/<!-- release-notes:end -->/d' \
-        | sed '/./,$!d')"
+        | sed -n '/^The newest installer is always at:/,$p')"
+    [ -n "$body" ] || { echo "!! the drafted body has no installer/provenance tail:" \
+        "check .github/workflows/release.yml against this script" >&2; exit 1; }
     jq -n --rawfile n "$notes" --arg b "$body" \
         '{body: ("<!-- release-notes:start -->\n" + $n
-                 + "\n<!-- release-notes:end -->\n\n" + $b), draft: false}' \
+                 + "\n<!-- release-notes:end -->\n\n---\n\n" + $b), draft: false}' \
         | gh_api -X PATCH "$api/releases/$rid" -d @- >/dev/null
 else
     gh_api -X PATCH "$api/releases/$rid" -d '{"draft": false}' >/dev/null
