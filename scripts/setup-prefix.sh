@@ -311,6 +311,96 @@ else
     "$WINESERVER" -w
 fi
 
+# Repair Max for Live's font fallback chain.
+#
+# Max builds its own font list from EnumFontFamiliesEx and matches requested
+# typeface names against that list. Devices routinely name faces that do not
+# exist here - they are authored on macOS, so Geneva, Menlo, Lucida Grande and
+# Helvetica Neue all show up, plus Consolas. On Windows this never surfaces
+# because GDI's font mapper silently substitutes and never fails; under Wine the
+# lookup honestly fails, so MaxPlug walks its own fallback chain. The terminal
+# entries of that chain are hardcoded in MaxPlug.dll as "Bitstream Vera Sans",
+# "Bitstream Vera Serif" and "Bitstream Vera Sans Mono". Bitstream Vera is a
+# 2003-era family shipped by neither Wine nor Live, and modern distros ship its
+# successor DejaVu instead - so the chain runs out, and MaxPlug parks Live's UI
+# thread on a condition variable that is never signalled. Live's window freezes
+# permanently (zero CPU on the UI thread) while audio keeps playing.
+#
+# Two non-obvious constraints, both established by testing - see
+# notes/FINDINGS-M4L-CARBON-REGULATOR-DEADLOCK-2026-07-29.md:
+#
+#   * A FontSubstitutes alias does NOT work. Substitutes only redirect
+#     CreateFontIndirect; they never enter EnumFontFamilies output, so Max
+#     cannot see them. Aliasing the Vera names to DejaVu changed nothing.
+#   * Copying the files into the Fonts directory is not enough on its own.
+#     Wine's font list is registry-driven, so files added after the initial
+#     scan stay invisible until registered under the HKLM Fonts key.
+#     Wine reads the family name from inside the file, so the registry value
+#     name cannot be used to alias some other font either.
+#
+# Hence: install real Vera files, then register them. Idempotent, and run even
+# under --refresh, because a prefix missing this fallback hangs on M4L load.
+install_maxplug_fallback_fonts() {
+    local winfonts="$WINEPREFIX/drive_c/windows/Fonts"
+    local src="" d n entry missing=0
+    # face name -> filename. Upstream Vera names are fixed, so no runtime probing.
+    local faces=(
+        "Bitstream Vera Sans:Vera.ttf"
+        "Bitstream Vera Sans Bold:VeraBd.ttf"
+        "Bitstream Vera Sans Oblique:VeraIt.ttf"
+        "Bitstream Vera Sans Bold Oblique:VeraBI.ttf"
+        "Bitstream Vera Sans Mono:VeraMono.ttf"
+        "Bitstream Vera Sans Mono Bold:VeraMoBd.ttf"
+        "Bitstream Vera Sans Mono Oblique:VeraMoIt.ttf"
+        "Bitstream Vera Sans Mono Bold Oblique:VeraMoBI.ttf"
+        "Bitstream Vera Serif:VeraSe.ttf"
+        "Bitstream Vera Serif Bold:VeraSeBd.ttf"
+    )
+
+    # Prefer the vendored copy so a prefix needs no host font package; fall back
+    # to a system install if the kit was trimmed. kit_root sets $root and prints
+    # nothing, so it must be called as a statement rather than substituted.
+    if kit_root && [ -f "$root/vendor/fonts/bitstream-vera/Vera.ttf" ]; then
+        src="$root/vendor/fonts/bitstream-vera"
+    else
+        for d in /usr/share/fonts/truetype/ttf-bitstream-vera \
+                 /usr/share/fonts/bitstream-vera \
+                 /usr/share/fonts/TTF; do
+            [ -f "$d/Vera.ttf" ] && { src="$d"; break; }
+        done
+    fi
+
+    if [ -z "$src" ]; then
+        echo "!! Bitstream Vera fonts not found - Max for Live devices that request"
+        echo "   a missing typeface WILL hang Live (frozen window, audio still"
+        echo "   playing). Vendor them into vendor/fonts/bitstream-vera/ or install"
+        echo "   your distro's package (Debian/Ubuntu: ttf-bitstream-vera,"
+        echo "   Fedora: bitstream-vera-fonts, Arch: ttf-bitstream-vera)."
+        return 0                      # non-fatal: everything else still works
+    fi
+
+    mkdir -p "$winfonts"
+    for entry in "${faces[@]}"; do
+        n="${entry##*:}"
+        [ -f "$src/$n" ] || { missing=1; continue; }
+        # -u so a refresh does not rewrite identical files every run.
+        cp -u "$src/$n" "$winfonts/$n" 2>/dev/null || cp "$src/$n" "$winfonts/$n"
+    done
+    [ "$missing" -eq 1 ] && echo "   (some Vera faces absent from $src; registering what is present)"
+
+    for entry in "${faces[@]}"; do
+        n="${entry##*:}"
+        [ -f "$winfonts/$n" ] || continue
+        wine reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Fonts' \
+            /v "${entry%%:*} (TrueType)" /t REG_SZ \
+            /d "C:\\windows\\Fonts\\$n" /f >/dev/null
+    done
+    "$WINESERVER" -w
+    echo "   MaxPlug font fallback installed and registered (source: $src)"
+}
+echo "== fonts: Max for Live fallback chain =="
+install_maxplug_fallback_fonts
+
 # Live bundles the exact VC++ redistributable it was built against in its own
 # Redist folder (<Live folder>/Redist, next to Program/): present only after
 # Live's installer has run, so fresh prefixes never match here.
