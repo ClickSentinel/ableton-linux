@@ -72,6 +72,9 @@ declare -A SERIES_GAPS=(
     [0027]="retired 2026-07-14 — gitignore housekeeping, no artifact effect"
     [0044]="reserved 2026-07-24 for the issue 57 parked-pane reblit gate; shipped as 0056 instead"
     [0054]="reserved 2026-07-29 for PR 77's language-fallback font patch"
+    [0057]="reserved 2026-07-30 for PR 105's wined3d GPU naming patch"
+    [0058]="reserved 2026-07-30 for PR 102's GDI client-rect disagreement patch"
+    [0059]="reserved 2026-07-30 for PR 107's DPI-context client-rect query patch"
 )
 seq_expect=1
 for f in $(awk '{print $2}' "$SERIES" | grep -v '^pipeasio/' | sort); do
@@ -172,6 +175,7 @@ STAMP_ONLY='
 0052|logic-only (DT_HIDEPREFIX on the menu bar DrawTextW call; no new string literal)
 0056|ascii|lib/wine/x86_64-windows/dxgi.dll|Re-blit skipped (hidden ancestry)
 0053|logic-only (WM_GETMINMAXINFO minimum exported as PMinSize hints; no new string literal)
+0060|logic-only (IFileOperation DeleteItem queue and execution; verified by API repro)
 '
 wide_pattern() {  # ascii string -> PCRE matching its UTF-16LE bytes
     printf '%s' "$1" | od -An -v -tx1 | tr -d '\n' | tr -s ' ' ' ' \
