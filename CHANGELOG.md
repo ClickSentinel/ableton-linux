@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## 2026.07.29.1
 
 - Live now uses its GPU renderer. Prefix setup removes the legacy
   `-_ForceGdiBackend` line from `Options.txt` (step 5c). This removes the
-  Learn View and Splice view flicker and drops idle CPU to 1-2%. See
+  Learn View and Splice view flicker in the measured cases and drops idle CPU
+  to 1-2%. Some edge cases remain under investigation. See
   [the GPU renderer note](notes/ABLETON-WINE-GPU-RENDERER.md).
 - Fixed windows fighting an interactive resize below the app minimum
   (Wine patch 0053). winex11 now exports the `WM_GETMINMAXINFO` minimum
@@ -17,7 +18,27 @@
   activity such as mouse movement. Wine now shows finished frames directly
   from the graphics card. Set `WINE_DISABLE_GL_PRESENT=1` to restore the
   previous behaviour. Diagnosis and measurements by Lucas Gillingham.
-
+- Fixed the flicker left behind in the Learn View's rectangle after the pane
+  closes (issue 57, Wine patch 0056). Live parks the WebView2 pane rather than
+  destroying it, so Wine kept stamping the last captured frame into the closed
+  pane's area at timer cadence. DirectComposition re-blits now stop while the
+  target window's ancestor chain is hidden. Reported by jttdev, reviewed by
+  Giang Nguyen.
+- Menu colors now follow the desktop theme correctly (issue 35, Wine patches
+  0049 to 0052). The menu bar takes the darker chrome color and dropdowns take
+  the lighter content color, grayed items lose the engraved bevel,
+  `SetSysColors` invalidates the per-process color cache and repaints the
+  non-client area, and the menu bar hides its alt-key mnemonic underlines until
+  Alt is held. The theme watcher waits on inotify when `inotify-tools` is
+  installed and selects the newest `Preferences.cfg` by modification time. A
+  live theme switch can still take a few seconds to appear. See
+  [the menu color note](notes/ABLETON-WINE-MENU-COLOR-THEMING.md).
+- Moved the Wine base from 11.11 to 11.13 (giang17/wine `d2d1-dcomp-11.13` at
+  `5c23dd1c`). Wine patches 0046 to 0048 fix the series against 11.13's
+  frame-latency, fractional-DPI, and libusb detection changes. The runtime now
+  installs to `~/.local/opt/wine-d2d1-nspa-11.13`; the 11.11 directory from
+  earlier releases stays on disk and can be deleted, about 380 MB. See
+  [the base bump note](notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md).
 - The installer now configures Ableton Link during installation. Setup no
   longer adds a multicast route or NetworkManager hook: the Link SDK selects
   its interfaces itself. `sudo` is used to open UDP port 20808 when UFW or
@@ -26,7 +47,9 @@
   remembered on later runs; `--link` opts back in.
 - The README now covers installation and ordinary use. Troubleshooting, source
   builds, configuration overrides, and maintainer material have dedicated
-  documents.
+  documents. The credits name the giang17/wine `d2d1-dcomp` stack this project
+  builds on.
+- Added a repository Code of Conduct.
 - Fixed a Live crash when closing WebView2 plugin editors (issue 52, Wine
   patch 0045). `RevokeDragDrop` now rejects windows owned by another process,
   matching `RegisterDragDrop`. Fix by Giang Nguyen. See
@@ -39,6 +62,11 @@
   fresh installer runs.
 - Prefix setup now shows the failing command and exit status when winetricks
   fails (issue 28).
+- `scripts/release.sh --notes-file <path>` places a hand-written summary at the
+  top of the GitHub release body, above the install instructions and build
+  provenance the workflow generates. The file is read at publish time and is
+  committed nowhere.
+- CI builds Wine on pull requests that touch the runtime, using ccache.
 
 ## 2026.07.23.1
 

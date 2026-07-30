@@ -267,8 +267,14 @@ Maintained by [Cade "shibco" Diehm](https://shiba.computer/about) and
 [astrazds](https://github.com/astrazds),
 [Version33](https://github.com/Version33), and
 [0tanh](https://github.com/0tanh). [yioannides](https://github.com/yioannides)
-made the application and MIME icons. ENCORE by wowitsjack informed several
-patches.
+made the application and MIME icons.
+
+This project is based off the `d2d1-dcomp` stack from 
+[giang17/wine](https://github.com/giang17/wine), specifically, we forked
+from branch `d2d1-dcomp-11.13` and `5c23dd1c` to continue building our work 
+from these solid foundations. _Thank you! <3_ 
+
+ENCORE by [wowitsjack](https://github.com/wowitsjack) informed several early patches.
 
 Questions: [cade@parare.al](mailto:cade@parare.al)
 
