@@ -127,7 +127,48 @@ rate-limited TRACE record both rects and the backbuffer size, so an
 affected machine can show which side lies, toward a root fix in
 `translate_drawable_coords` itself.
 
-Runtime verification on an affected compositor is pending.
+Runtime verification is below: the gate is correct, and the
+disagreement it detects has a root cause worth fixing.
+
+### The disagreement is a DPI-context gap; patch 0059 closes it (2026-07-30)
+
+The trigger is fractional display scaling, not a compositor, a driver
+or a window manager. It reproduces on AMD Navi 31 under COSMIC/Wayland
+— a setup with no symptom at 100% — by putting the prefix at 125%
+(`ABLETON_DPI_MODE=dpi120`, LogPixels 120). That covers both reports:
+niri at 125%, and issue 100's KDE/NVIDIA machine, where the trigger is
+Live's Enable HiDPI Mode.
+
+Patch 0023 brackets the present-time client-rect queries with the
+window's own DPI awareness context, in `wined3d_swapchain_present`,
+`wined3d_swapchain_resize_buffers`, `wined3d_swapchain_state_init` and
+`d3d12_swapchain_resize_buffers`. It does not cover
+`wined3d_texture_translate_drawable_coords`, the one that runs on the
+CS thread. The flip subtracts a height resolved in that thread's
+inherited context from a destination rect resolved in the window's,
+and under scaling those are two different numbers for the same window.
+
+Patch 0059 brackets that query the same way, and 0058's gate with it.
+The second half is not optional: the gate runs before the blit and
+sends mismatched frames to `swapchain_blit_gdi()`, which never reaches
+the flip, so an unbracketed gate diverts every scaled frame and the
+corrected flip never runs. The first build of 0059 showed no bar and a
+healthy frame rate while its own FIXME had fired zero times.
+
+Measured at 125% on one machine, mouse moving over the window, Live's
+CPU sampled with `top -b`, 15 readings at 2s (one core = 100%):
+
+| Series | Black bar | Live CPU | Present path |
+|---|---|---|---|
+| 0055, no 0058 | yes | 29.8% | direct |
+| + 0058 | no | 98.9% | copy |
+| + 0058 + 0059 | no | 25.2% | direct |
+
+0058 on its own trades the bar for the copy path's cost on every
+scaled setup, and that cost is not noticeable by feel — only by
+measurement. With 0059 there is nothing to trade: the bar is gone and
+the direct path survives. 0058 stays in as the safety net, silent, and
+as the assertion that the two contexts now agree.
 
 ## Related
 

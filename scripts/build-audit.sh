@@ -131,6 +131,7 @@ FINGERPRINTS='
 0045|ascii|lib/wine/x86_64-windows/ole32.dll|revoke for another process windows is disabled
 0055|wide|lib/wine/x86_64-windows/dxgi.dll|WINE_DISABLE_GL_PRESENT
 0058|ascii|lib/wine/x86_64-windows/wined3d.dll|Present-time client rect disagrees
+0059|ascii|lib/wine/x86_64-windows/wined3d.dll|Flip client rect queried in the window DPI context
 pipeasio/0001|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-clamp-sample-rate
 pipeasio/0002|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-midi-timebase
 '
