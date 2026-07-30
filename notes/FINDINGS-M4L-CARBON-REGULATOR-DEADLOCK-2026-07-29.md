@@ -1,6 +1,6 @@
 # Max for Live hangs: a generic MaxPlug deadlock, not a device-specific bug (2026-07-29)
 
-Follow-up to [FINDINGS-M4L-SEEK-FREEZE-2026-07-22.md](FINDINGS-M4L-SEEK-FREEZE-2026-07-22.md). Two conclusions change.
+This supersedes an earlier, unpublished investigation of the same hang that framed it as a transport/seek freeze. Two conclusions from that earlier work change.
 
 **The hang is a blocked wait, not a runaway loop.** The older document's findings 5 and 16 read it as an *active spin* — "roughly 30 AudioCalc threads all actively accumulating CPU" plus "an exact 3-address cycle repeating eight consecutive times ... a strong signature of a genuine loop". Resolving the backtrace against the actual Wine PE exports, and then measuring per-thread CPU during a live hang, shows both readings were wrong. The UI thread is parked in a condition variable and burns exactly zero CPU; the "repeating cycle" is an ordinary bounded recursive descent.
 
