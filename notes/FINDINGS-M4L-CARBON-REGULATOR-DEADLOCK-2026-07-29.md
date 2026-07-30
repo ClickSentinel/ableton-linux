@@ -6,7 +6,7 @@ Follow-up to [FINDINGS-M4L-SEEK-FREEZE-2026-07-22.md](FINDINGS-M4L-SEEK-FREEZE-2
 
 **It is not about Carbon Regulator, or Creative Extensions, or any particular device.** Two racks that share no M4L device whatsoever both hang, converging on the identical MaxPlug wait. See "DECISIVE: Stabbed Bass" below. The device-specific framing that has driven this investigation since 2026-07-22 was an artefact of sampling.
 
-Read this note in order: the early sections build a device-level theory that the later sections falsify. The mapping of modules to devices remains factually correct and is worth keeping; the causal conclusion drawn from it is not. Everything else in the older note (the repro, the ENCORE cross-build result, the charset dead end) still stands.
+Read this note in order: the early sections build a device-level theory that the later sections falsify. The mapping of modules to devices remains factually correct and is worth keeping; the causal conclusion drawn from it is not. Everything else in the older note (the repro, the cross-build result, the charset dead end) still stands.
 
 ## Method
 
@@ -210,7 +210,7 @@ The causal chain:
 4. Bitstream Vera is a 2003-era open family that is **not** part of MS corefonts and is shipped by neither Wine nor Live. Worse, modern distros ship its *successor* DejaVu, not Bitstream Vera itself — so the chain's last resort is absent on essentially every current Linux system.
 5. Chain exhausted, MaxPlug's font resolution parks the UI thread on a condition variable (`maxplug+0x14b619a` -> `SleepConditionVariableCS`) and never signals it. Zero CPU, deterministic, permanent.
 
-**So the bug is Max's, not Wine's.** Wine's only contribution is reporting the failure accurately where Windows silently papers over it — arguably the more correct behaviour, which happens to expose a latent MaxPlug defect. That is exactly why it reproduced identically under ENCORE: nothing about it is patch-stack-specific, and no Wine patch was ever going to fix it.
+**So the bug is Max's, not Wine's.** Wine's only contribution is reporting the failure accurately where Windows silently papers over it — arguably the more correct behaviour, which happens to expose a latent MaxPlug defect. That is why no Wine patch was ever going to fix it: nothing about it is patch-stack-specific, which is also why it reproduced identically on an unrelated Wine build.
 
 It also retroactively explains the two hangs' different log signatures. Carbon Regulator's devices request **Lato** and **Consolas** but not Geneva — and its log showed only a `Bitstream Vera Sans` error. Stabbed Bass's devices request **Geneva** — and its log showed Geneva *then* `Bitstream Vera Sans`. Different primary face, same terminal failure.
 
