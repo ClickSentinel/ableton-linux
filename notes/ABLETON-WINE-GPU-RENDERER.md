@@ -96,6 +96,39 @@ These measurements come from one machine (AMD Navi 31, COSMIC/Wayland
 via XWayland). Confirmation on Intel or NVIDIA hardware and on a
 non-Wayland session is still open.
 
+### The direct path can land the frame low; patch 0058 gates it (2026-07-30)
+
+Two reports show the direct path drawing Live's frame too low, a black
+band on top and the bottom rows clipped, while input hit-testing stays
+on the real layout: niri/XWayland at 125% (reported on PR 98, about
+476 px low) and KDE Plasma with NVIDIA when Live's Enable HiDPI Mode
+setting is on (issue 100). KDE floats its windows, so a tiling-only
+explanation does not cover both.
+
+The candidate mechanism both share sits in the present path. The
+destination rect is captured on Live's thread in the window's DPI
+context (patch 0023). The blit's y-flip re-queries the client rect
+later, on wined3d's CS thread, in that thread's DPI context
+(`wined3d_texture_translate_drawable_coords`). Nothing forces the two
+queries to agree: the threads can hold different DPI awareness, and
+the window can be resized between capture and execution. On a
+disagreement, GL's bottom-left origin lands the frame low by the
+difference.
+
+Patch 0058 gates the direct path on agreement, per frame: it re-queries
+the client rect on the CS thread and compares it with the captured
+destination rect. Matching frames keep the direct path. Disagreeing
+frames take the GDI path, which anchors top-left and renders correctly
+under the same mismatch. On an affected setup every frame disagrees,
+so the swapchain behaves as if `WINE_DISABLE_GL_PRESENT=1` without
+anyone setting it, and healthy setups keep the direct path. The
+fire-once FIXME `Present-time client rect disagrees` plus a
+rate-limited TRACE record both rects and the backbuffer size, so an
+affected machine can show which side lies, toward a root fix in
+`translate_drawable_coords` itself.
+
+Runtime verification on an affected compositor is pending.
+
 ## Related
 
 - [Diagnosis narrative](ABLETON-WINE-GPU-RENDERER-WEBVIEW2-DIAGNOSIS.md)
