@@ -1,6 +1,22 @@
-# Issue #51 investigation: BEAP Unicode filename install failure (2026-07-24)
+# BEAP Unicode filename breaks install (issue 51, 2026-07-24)
 
-## The report
+Installing Live fails on a Max4Live BEAP clip whose filename carries a
+non-ASCII character, with a repeating MSI rename error. Unresolved. The
+leading theory - that `unzip`, the distro, or the locale mangles the
+name during the bootstrap's own extraction - was tested directly across
+all four target distros and does not hold: for a UTF-8-flagged zip entry
+neither distro nor locale changes the output at all.
+
+The one untested variable is whether Ableton's real distributed zip sets
+that flag on this entry. If it does not, `unzip` falls back to
+locale-driven guessing, which is a different code path from everything
+tested here. Settling that needs a copy of the actual download, which
+needs a real Ableton licence.
+
+Bypassing the bootstrap's extraction step works around it, confirmed by
+the reporter.
+
+## Report
 
 https://github.com/shibco/ableton-linux/issues/51 (weatherglow22, Ubuntu
 Studio, Surface Laptop 5, Live 12 Intro). During install, a repeating
@@ -27,7 +43,7 @@ earlier-reported install (`bp.µSeq.maxpat`, U+00B5 MICRO SIGN) — same
 presentation (raw `msi:cabinet_copy_file` trace vs this Inno-style retry
 dialog — different installer engine per edition/version, same class of bug).
 
-## What's been ruled out (all tested, not inferred)
+## Rejected approaches
 
 1. **Missing/wrong system locale in the wine/MSI layer.** The original
    report this pattern was first seen on had a confirmed, fully-generated
@@ -71,7 +87,7 @@ dialog — different installer engine per edition/version, same class of bug).
    branch's `11.13`). **Installed clean, no error at all** — `bp.µSeq.maxpat`
    present and correct in the installed `BEAP/clippings/BEAP/MIDI/` tree.
 
-## What's NOT ruled out — the real gap
+## Open questions
 
 Point 4's success and point 2's clean unzip tests both used files/zips
 **we constructed or already had**, not the reporter's actual download.
@@ -94,9 +110,10 @@ Two live unknowns:
   (e.g. a subtly different byte sequence than our long-standing
   pre-extracted files have carried since whenever they were first unpacked).
 
-## Practical workaround given to the user — CONFIRMED WORKING
+## Workaround
 
-Extract the zip yourself before running the installer (`unzip -O UTF-8` or
+Confirmed working by the reporter. Extract the zip yourself before
+running the installer (`unzip -O UTF-8` or
 `bsdtar -xf`, either avoids the bootstrap's own extraction step entirely),
 then run wine directly against the extracted `.exe` rather than going
 through `install-ableton-latest.run`'s own zip-handling:
@@ -119,7 +136,7 @@ questions above — bypassing `setup-run-header.sh`'s `unzip` step entirely
 (by extracting yourself, or in this case just already having an extracted
 `.exe` to run) resolved it, while nothing about Wine/MSI itself changed.
 
-## Next step, if this keeps coming up
+## Next step
 
 Ask a future reporter (or weatherglow22 directly) to run, on their own zip,
 before ever touching the installer:
@@ -135,7 +152,7 @@ for i in z.infolist():
 That one flag check resolves the remaining ambiguity directly — no VM lab
 needed for it.
 
-## Environment used for this investigation
+## Environment
 
 - `arch-cloud`, `ubuntu2404-cloud`, `fedora-cloud`, `debian-cloud`
   (ableton-vm-tools, see /mnt/storage-2tb/GitHub/ableton-vm-tools)

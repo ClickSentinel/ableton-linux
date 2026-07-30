@@ -1,16 +1,38 @@
 # M4L hover tooltips appear far from the pointer (2026-07-30)
 
-**Status: no Wine-side cause found, across seven tested hypotheses.** Each was refuted with a concrete experiment recorded below. The evidence points at Max/JUCE computing the wrong coordinate before any Win32 call: Wine honours every positioning request it is given, exactly, 24 times out of 24.
+No Wine-side cause found, across seven tested hypotheses, each refuted
+with a concrete experiment recorded below. The evidence points at
+Max/JUCE computing the wrong coordinate before any Win32 call: Wine
+honours every positioning request it is given, exactly, 24 times out of
+24.
 
-That is a negative result, not a proof of absence. Wine is large and this investigation only ruled out the paths it thought to check — the ones listed below, plus the specific mechanisms in "Also checked and eliminated". A Wine-side cause upstream of the position Max computes (something it queries and gets a wrong answer to) has *not* been exhaustively excluded; the query APIs actually examined were `GetCursorPos`, `GetMonitorInfo`/`SPI_GETWORKAREA`, and `GetWindowRect`. If you have a new idea for what feeds that computation, it is worth testing — just check it against the refutations here first so the same ground is not re-covered.
+That is a negative result, not a proof of absence. This investigation
+only ruled out the paths it thought to check - the ones listed below,
+plus the specific mechanisms under "Rejected approaches". A Wine-side
+cause upstream of the position Max computes, something it queries and
+gets a wrong answer to, has *not* been exhaustively excluded; the query
+APIs actually examined were `GetCursorPos`, `GetMonitorInfo` and
+`SPI_GETWORKAREA`, and `GetWindowRect`. If you have a new idea for what
+feeds that computation it is worth testing, but check it against the
+refutations here first so the same ground is not re-covered.
 
-A genuine and *separate* Wine bug was found along the way — `GetCursorPos` misbehaving under XWayland. It does not cause this symptom but is worth its own issue. See "Separate finding" near the end.
+A genuine and separate Wine bug was found along the way, `GetCursorPos`
+misbehaving under XWayland. It does not cause this symptom but is worth
+its own issue.
 
 ## Symptom
 
-Hovering a control in a Max for Live device UI pops a tooltip in the wrong place — typically several hundred pixels away, clustered at one spot, while the pointer is elsewhere. It reads as "random" because the spot changes between bursts as the device UI relayouts.
+Hovering a control in a Max for Live device UI pops a tooltip in the
+wrong place, typically several hundred pixels away, clustered at one
+spot, while the pointer is elsewhere. It reads as "random" because the
+spot changes between bursts as the device UI relayouts.
 
-Right-click **context menus** are *not* affected. Every `title="menu"` JUCE menu and every win32u `#32768` menu observed across five captures landed correctly at the cursor. Only the small hover tooltips misplace. If someone reports "menus appear in random places", confirm which of the two they actually mean before investigating — that ambiguity cost several captures here.
+Right-click **context menus** are not affected. Every `title="menu"`
+JUCE menu and every win32u `#32768` menu observed across five captures
+landed correctly at the cursor. Only the small hover tooltips misplace.
+If someone reports "menus appear in random places", confirm which of the
+two they mean before investigating; that ambiguity cost several captures
+here.
 
 ## Environment
 
@@ -33,9 +55,11 @@ DISPLAY3            ( 2560,360)-(4480,1440)   work == full
 virtual desktop     (-1920,  0)-(4480,1440)   6400x1440
 ```
 
-The side monitors start at `y=360` and the primary at `y=0`, so the desktop has a notch across the top. That was investigated as a cause and ruled out (hypothesis 5).
+The side monitors start at `y=360` and the primary at `y=0`, so the
+desktop has a notch across the top. That was investigated as a cause and
+ruled out, hypothesis 5.
 
-## The tooltip windows
+The tooltip windows themselves:
 
 ```text
 class   JUCE_<hash>          (the hash changes per Max session)
@@ -45,18 +69,23 @@ size    26px tall, width varies with the text (41-155 observed)
 owner   none (0)
 ```
 
-Menu drop-shadow slivers appear alongside them as `200x12` / `12x106` windows with `WS_EX_TRANSPARENT` added. They move with the menu and are not themselves interesting.
+Menu drop-shadow slivers appear alongside them as `200x12` and `12x106`
+windows with `WS_EX_TRANSPARENT` added. They move with the menu and are
+not themselves interesting.
 
-## What is proven
+## Evidence
 
-**1. Wine honours every positioning request exactly.** Parsing `calc_winpos` from a `+win` trace and comparing the requested `swp` against the resulting `new_rects`:
+**1. Wine honours every positioning request exactly.** Parsing
+`calc_winpos` from a `+win` trace and comparing the requested `swp`
+against the resulting `new_rects`:
 
 ```text
 positioning calls where Wine honoured the request EXACTLY: 24
 calls where the result differed from the request:           0
 ```
 
-**2. The application repositions the tooltip itself.** With `+relay,+win` together, the sequence per tooltip is unambiguous:
+**2. The application repositions the tooltip itself.** With
+`+relay,+win` together, the sequence per tooltip is unambiguous:
 
 ```text
 324594  Call user32.SetWindowPos(0x90364, NULL, 1659,510, 99x26, 0x214)  ret=1408ce916
@@ -70,7 +99,8 @@ calls where the result differed from the request:           0
         -> SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE. THE MISPLACEMENT.
 ```
 
-**3. The destination is right-aligned to a fixed rect, not the pointer.** Widths vary, `left` adjusts to keep `right` constant:
+**3. The destination is right-aligned to a fixed rect, not the
+pointer.** Widths vary, `left` adjusts to keep `right` constant:
 
 ```text
 1549+147 = 1696      1966+87  = 2053      1645+147 = 1792
@@ -79,13 +109,19 @@ calls where the result differed from the request:           0
                      1990+63  = 2053      1744+48  = 1792
 ```
 
-Three clusters, each with a constant top (`368`, `320`, `560`). This is placement against a rect. Whatever rect Max is using, it is wrong, and it is not any window on screen.
+Three clusters, each with a constant top (`368`, `320`, `560`). This is
+placement against a rect. Whatever rect Max is using is wrong, and it is
+not any window on screen.
 
-**4. It is not derived from the pointer.** Sampling `GetCursorPos` at 50ms alongside a `+win` capture: only **5 of 30** destinations fall within 40px of any reported cursor position, and those look coincidental.
+**4. It is not derived from the pointer.** Sampling `GetCursorPos` at
+50ms alongside a `+win` capture: only 5 of 30 destinations fall within
+40px of any reported cursor position, and those look coincidental.
 
-**5. It is not derived from the device window.** In one capture the device window moved from `(822,374)-(1700,668)` to `(745,459)-(1623,753)` mid-session while destinations did not track it.
+**5. It is not derived from the device window.** In one capture the
+device window moved from `(822,374)-(1700,668)` to
+`(745,459)-(1623,753)` mid-session while destinations did not track it.
 
-## Hypotheses tested and refuted
+## Rejected approaches
 
 | # | Hypothesis | How it died |
 | --- | --- | --- |
@@ -97,33 +133,59 @@ Three clusters, each with a constant top (`368`, `320`, `560`). This is placemen
 | 6 | Wine moves the window after the app places it | 24/24 requests honoured exactly, 0 deviations |
 | 7 | Wine's `GetCursorPos` returns a bad position and JUCE follows it | 5/30 coincidental matches; destinations are rect-aligned, not cursor-aligned |
 
-Also checked and eliminated as the mover:
+Also eliminated as the mover:
 
-- **Patch 0007** (`win32u: clamp top-level window size to monitor`) — size-only, and skipped entirely when `SWP_NOSIZE` is set, which it is here.
-- **`NtUserUpdateLayeredWindow`** — the window is `WS_EX_LAYERED`, but this path calls `apply_window_pos()` directly and never reaches `NtUserSetWindowPos`, so it cannot produce the observed trace line.
-- **`NtUserScrollWindowEx`** (`dce.c:2207`, moves children by a delta) — its flags include `SWP_NOREDRAW|SWP_DEFERERASE` (`0x201d`), not the observed `0x15`.
-- **`NtUserArrangeIconicWindows`** (`window.c:4855`) and **`SetWindowPlacement`** (`window.c:3195/3202`) — right flags, wrong context; neither applies to a tooltip.
-- **`winex11.drv`** — its only two `NtUserSetWindowPos` call sites use different flags.
+- **Patch 0007** (`win32u: clamp top-level window size to monitor`).
+  Size-only, and skipped entirely when `SWP_NOSIZE` is set, which it is
+  here.
+- **`NtUserUpdateLayeredWindow`**. The window is `WS_EX_LAYERED`, but
+  this path calls `apply_window_pos()` directly and never reaches
+  `NtUserSetWindowPos`, so it cannot produce the observed trace line.
+- **`NtUserScrollWindowEx`** (`dce.c:2207`, moves children by a delta).
+  Its flags include `SWP_NOREDRAW|SWP_DEFERERASE` (`0x201d`), not the
+  observed `0x15`.
+- **`NtUserArrangeIconicWindows`** (`window.c:4855`) and
+  **`SetWindowPlacement`** (`window.c:3195/3202`). Right flags, wrong
+  context; neither applies to a tooltip.
+- **`winex11.drv`**. Its only two `NtUserSetWindowPos` call sites use
+  different flags.
 
-No caller in Wine's tree uses exactly `SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE` with a real position. That combination is the canonical "move only" call an application makes, and JUCE emits it for a position-only bounds change.
+No caller in Wine's tree uses exactly
+`SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE` with a real position. That
+combination is the canonical move-only call an application makes, and
+JUCE emits it for a position-only bounds change.
 
 ## Conclusion
 
-On the evidence gathered, Max/JUCE computes a tooltip position against a rect it has wrong, then issues a normal `SetWindowPos` move, and Wine does exactly as asked. That is enough to report to Cycling '74 with unusually good evidence — exact hwnds, both call sites, coordinates, and proof the host honoured both requests. It is not enough to close the door on a Wine-side contribution: see the caveat at the top of this note.
+On the evidence gathered, Max/JUCE computes a tooltip position against a
+rect it has wrong, then issues a normal `SetWindowPos` move, and Wine
+does exactly as asked. That is enough to report to Cycling '74 with
+unusually good evidence - exact hwnds, both call sites, coordinates, and
+proof the host honoured both requests. It is not enough to close the
+door on a Wine-side contribution; see the caveat at the top.
 
-## Separate finding: `GetCursorPos` is unreliable under XWayland
+## Separate finding
 
-Real, ours, and worth its own issue — but **not** the cause of the above.
+`GetCursorPos` is unreliable under XWayland. Real, ours, and worth its
+own issue, but not the cause of the above.
 
-Wayland only gives a client pointer coordinates while the pointer is over its own surface, so `XQueryPointer` — which `winex11.drv` uses for `GetCursorPos` — has no dependable global answer. Sampling at 50ms for 45s during normal hovering (`tools/curprobe.sh`):
+Wayland only gives a client pointer coordinates while the pointer is
+over its own surface, so `XQueryPointer` - which `winex11.drv` uses for
+`GetCursorPos` - has no dependable global answer. Sampling at 50ms for
+45s during normal hovering (`tools/curprobe.sh`):
 
-- `GetCursorPos` returned **(0,0)** at the moment the foreground window was lost
-- a **471px** Y jump and back within 100ms, while X moved only 24px — physically impossible for a hand
-- **93 of 898 samples (10%)** had no foreground window at all
+- `GetCursorPos` returned `(0,0)` at the moment the foreground window
+  was lost.
+- A 471px Y jump and back within 100ms, while X moved only 24px -
+  physically impossible for a hand.
+- 93 of 898 samples, 10%, had no foreground window at all.
 
-Possible fix direction: have `winex11.drv` fall back to the last position from motion events when `XQueryPointer` cannot give a trustworthy global answer. Needs its own investigation and repro; do not fold it into the tooltip issue.
+Possible fix direction: have `winex11.drv` fall back to the last
+position from motion events when `XQueryPointer` cannot give a
+trustworthy global answer. Needs its own investigation and repro; do not
+fold it into the tooltip issue.
 
-## Tooling added
+## Tooling
 
 All build with plain mingw, no Wine source tree needed:
 
@@ -145,7 +207,8 @@ x86_64-w64-mingw32-gcc -O2 -o tools/curprobe.exe   tools/curprobe.c   -luser32
 
 ## Capture recipes
 
-Window positioning with the requested and resulting rects (channel `win`, function `calc_winpos`):
+Window positioning with the requested and resulting rects (channel
+`win`, function `calc_winpos`):
 
 ```bash
 WINEPREFIX=~/.wine-ableton WINEDEBUG=+win ableton-live > /tmp/win.log 2>&1
@@ -170,24 +233,52 @@ WINEPREFIX=~/.wine-ableton ~/.local/opt/wine-d2d1-nspa-11.13/bin/wine \
 
 ## Measurement traps
 
-These cost most of the eight captures this investigation took. Read before writing another probe.
+These cost most of the eight captures this investigation took. Read
+before writing another probe.
 
-1. **Reporting the first rect you see catches popups pre-move.** A menu looked stuck at `(0,0)` when it was simply about to be placed.
-2. **Reporting after a fixed settle delay catches popups post-teardown.** Max parks a dismissed popup at a fixed anchor *and* collapses it to a sliver (`300px` wide -> `16px`). Distinguish by size: a **same-size** move is a real misplacement; a move that also resizes is teardown. Conflating these produced a wrong "all menus were placed correctly" verdict.
-3. **Do not mark a window "seen" before checking visibility.** Windows that exist but are hidden at probe startup then get suppressed forever, so they never appear when shown. This hid the Max device window from three captures despite it being a popup's owner.
-4. **Exclude the popup itself from any anchor search.** Otherwise every popup "matches" its own rect and the report is worthless.
-5. **`... | grep -q` under `set -o pipefail` returns 141.** `grep -q` exits on first match, the writer takes `SIGPIPE`, and a *present* string reads as absent. Use a herestring or capture first.
-6. **Never pipe a long capture into `grep`.** Buffered output is lost when the process is killed; an early attempt produced 7 lines instead of ~1M. Redirect to a file and filter afterwards.
-7. **`RelayInclude` needs `module.function` entries.** The module-only form (`user32`) traces nothing at all, silently.
-8. **`win32u` exports are syscall stubs and relay cannot hook them.** `RelayInclude=win32u.NtUserSetWindowPos` yields zero output. Use the `+win` channel for win32u-level visibility.
-9. **`calc_winpos` with `SWP_NOMOVE` logs the window's *current* position**, because win32u fills `winpos.x/y` from the existing rect. Do not read that as a move request. Check the flags first.
-10. **hwnds are reused across sessions.** Never compare a rect from one capture against an hwnd in another — that produced a false "Wine is reporting the wrong window size" conclusion.
+1. **Reporting the first rect you see catches popups pre-move.** A menu
+   looked stuck at `(0,0)` when it was simply about to be placed.
+2. **Reporting after a fixed settle delay catches popups
+   post-teardown.** Max parks a dismissed popup at a fixed anchor *and*
+   collapses it to a sliver (`300px` wide to `16px`). Distinguish by
+   size: a same-size move is a real misplacement; a move that also
+   resizes is teardown. Conflating these produced a wrong "all menus
+   were placed correctly" verdict.
+3. **Do not mark a window "seen" before checking visibility.** Windows
+   that exist but are hidden at probe startup then get suppressed
+   forever, so they never appear when shown. This hid the Max device
+   window from three captures despite it being a popup's owner.
+4. **Exclude the popup itself from any anchor search.** Otherwise every
+   popup matches its own rect and the report is worthless.
+5. **`... | grep -q` under `set -o pipefail` returns 141.** `grep -q`
+   exits on first match, the writer takes `SIGPIPE`, and a present
+   string reads as absent. Use a herestring or capture first.
+6. **Never pipe a long capture into `grep`.** Buffered output is lost
+   when the process is killed; an early attempt produced 7 lines instead
+   of about 1M. Redirect to a file and filter afterwards.
+7. **`RelayInclude` needs `module.function` entries.** The module-only
+   form (`user32`) traces nothing at all, silently.
+8. **`win32u` exports are syscall stubs and relay cannot hook them.**
+   `RelayInclude=win32u.NtUserSetWindowPos` yields zero output. Use the
+   `+win` channel for win32u-level visibility.
+9. **`calc_winpos` with `SWP_NOMOVE` logs the window's *current*
+   position**, because win32u fills `winpos.x/y` from the existing rect.
+   Do not read that as a move request. Check the flags first.
+10. **hwnds are reused across sessions.** Never compare a rect from one
+    capture against an hwnd in another; that produced a false "Wine is
+    reporting the wrong window size" conclusion.
 
 ## Artifacts
 
-Captures are not committed (large, and `*.log` is gitignored). Regenerate with the recipes above.
+Captures are not committed (large, and `*.log` is gitignored).
+Regenerate with the recipes above.
 
 ## Related
 
-- [FINDINGS-M4L-CARBON-REGULATOR-DEADLOCK-2026-07-29.md](FINDINGS-M4L-CARBON-REGULATOR-DEADLOCK-2026-07-29.md) — the M4L font-fallback deadlock, same "Max defect surfaced under Wine" shape, but that one had a shippable fix.
-- [ABLETON-WINE-DROPDOWN-MANAGED-FLIP.md](ABLETON-WINE-DROPDOWN-MANAGED-FLIP.md) — patch 0039, the managed-flip fix for Live's own Preferences dropdowns. Related mechanism, different windows, and the starting point for hypothesis 1.
+- [FINDINGS-M4L-CARBON-REGULATOR-DEADLOCK-2026-07-29.md](FINDINGS-M4L-CARBON-REGULATOR-DEADLOCK-2026-07-29.md)
+  - the M4L font-fallback deadlock, same "Max defect surfaced under
+  Wine" shape, but that one had a shippable fix.
+- [ABLETON-WINE-DROPDOWN-MANAGED-FLIP.md](ABLETON-WINE-DROPDOWN-MANAGED-FLIP.md)
+  - patch 0039, the managed-flip fix for Live's own Preferences
+  dropdowns. Related mechanism, different windows, and the starting
+  point for hypothesis 1.

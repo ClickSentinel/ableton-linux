@@ -1,4 +1,11 @@
-# Wine Mono installer prompt blocks headless/scripted setup-prefix.sh (2026-07-23)
+# Wine Mono installer prompt blocks headless setup-prefix.sh (2026-07-23)
+
+`wineboot -u` opens Wine's interactive Wine Mono Installer dialog on a
+genuinely fresh prefix, because this build vendors no Mono runtime. With
+no display attached the dialog cannot even render, so `wineserver` never
+goes idle and every later `wineserver -w` blocks forever. Unfixed here;
+it only bites unattended provisioning, which is the one path that always
+starts from a fresh prefix.
 
 ## Symptom
 
@@ -11,7 +18,7 @@ in host or guest logs. `wineserver -w` never returns.
 Reproduced 3/3 times, always at the same point, on a debian-cloud VM
 (ableton-vm-tools) dispatching the run over SSH with no attached display.
 
-## Root cause
+## Cause
 
 `wineboot -u` triggers Wine's own built-in interactive **"Wine Mono
 Installer"** dialog the first time it needs `mscoree.dll` and finds no local
@@ -58,7 +65,7 @@ it" — but the prompt fires anyway, unconditionally, as part of plain
 just wineboot's generic first-run nag that happens to block instead of
 no-op when unanswered, isn't confirmed yet.
 
-## Fix directions (not yet implemented here)
+## Fix directions
 
 - Vendor a wine-mono MSI matching this Wine build the same way
   `vendor/winetricks-cache/{corefonts,vcrun2022,vcrun6}` are already
@@ -69,9 +76,10 @@ no-op when unanswered, isn't confirmed yet.
   with no timeout — silent infinite hangs are much worse than a clear
   error.
 
-## Workaround used in ableton-vm-tools
+## Workaround
 
-None yet — flagged for a bug report rather than worked around. If needed
+None yet in ableton-vm-tools — flagged for a bug report rather than
+worked around. If needed
 before upstream fixes it: `winetricks -q mono` (or a vendored MSI, per
 above) run once against a fresh prefix before `setup-prefix.sh`'s own
 `wineboot -u` step would avoid the prompt entirely, since winetricks calls

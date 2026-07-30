@@ -4,7 +4,7 @@ If you're already running Ableton Live through [ENCORE](https://github.com/wowit
 
 ## Steps
 
-1. **Install this project's Wine runtime.** Download the installer and run it (see the main [README](README.md)). This only touches `~/.local/opt` and `~/.local/bin`/`~/.local/share` — it does not touch your existing ENCORE prefix.
+1. **Install this project's Wine runtime.** Download the installer and run it (see the main [README](../README.md)). This only touches `~/.local/opt` and `~/.local/bin`/`~/.local/share` — it does not touch your existing ENCORE prefix.
 
 2. **Copy your ENCORE prefix — don't move it.** Keeping the original intact means you always have a fallback if anything goes wrong.
 
