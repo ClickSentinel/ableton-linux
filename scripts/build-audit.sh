@@ -228,6 +228,8 @@ must() { [ -s "$tree/$1" ] && ok "$1" "present" || bad "$1" "missing/empty"; }
 must bin/wine
 must bin/wineserver
 must lib/wine/x86_64-unix/winealsa.so
+must lib/wine/x86_64-unix/winegstreamer.so
+must lib/wine/x86_64-windows/winegstreamer.dll
 must lib/wine/x86_64-unix/comdlg32.so
 must lib/wine/x86_64-windows/pipeasio64.dll
 must lib/wine/x86_64-unix/pipeasio64.dll.so
@@ -253,6 +255,10 @@ if command -v readelf >/dev/null; then
     else
         ok "pipeasio64.dll.so rpath" "none (resolves via host loader)"
     fi
+    readelf -d "$tree/lib/wine/x86_64-unix/winegstreamer.so" 2>/dev/null \
+        | grep -qF 'Shared library: [libgstreamer-1.0.so.0]' \
+        && ok "winegstreamer.so DT_NEEDED" "host libgstreamer-1.0.so.0" \
+        || bad "winegstreamer.so DT_NEEDED" "host libgstreamer-1.0.so.0 not linked"
 else
     bad "readelf" "binutils missing — cannot verify bridge DT_NEEDED (install binutils)"
 fi
