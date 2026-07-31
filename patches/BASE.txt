@@ -11,7 +11,7 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 59 files, numbered 0001 through 0062.
+The current Wine series contains 60 files, numbered 0001 through 0063.
 Patches 0027, 0044, and 0057 are intentionally absent.
 
 ## Applying the series
@@ -217,3 +217,9 @@ Apply them in sequence with the rest of the series.
   changes. Was proposed as 0057 on PR 88; renumbered, 0057 stays
   reserved for `fix/intel-gpu`. See
   `notes/ABLETON-WINE-M4L-SELECTION-FLICKER.md`.
+- `0063`: send Show in Explorer folder targets to the desktop file
+  manager through `org.freedesktop.FileManager1.ShowItems`. The OpenURI
+  portal's `OpenDirectory` method is defined for files, and folder
+  reveals failed on the setups reported in issue 41. The portal call and
+  Wine Explorer remain the fallbacks. Mailbox commit: `bc577464`. See
+  `notes/ABLETON-WINE-SHOW-IN-EXPLORER.md`.
