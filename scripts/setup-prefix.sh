@@ -387,15 +387,28 @@ install_maxplug_fallback_fonts() {
     done
     [ "$missing" -eq 1 ] && echo "   (some Vera faces absent from $src; registering what is present)"
 
-    for entry in "${faces[@]}"; do
-        n="${entry##*:}"
-        [ -f "$winfonts/$n" ] || continue
-        if wine reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Fonts' \
-               /v "${entry%%:*} (TrueType)" /t REG_SZ \
-               /d "C:\\windows\\Fonts\\$n" /f >/dev/null 2>&1; then
+    # One import rather than ten `wine reg add` calls: each spawns a wine
+    # process, and this runs on every setup and every --refresh. Backslashes are
+    # doubled and lines are CRLF because that is what .reg format wants; the
+    # values land byte-identical to what reg add wrote.
+    local reg_file fonts_key='HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+    reg_file="$(mktemp)" || { echo "!! cannot write a temporary .reg; skipping registration"; return 0; }
+    {
+        printf 'REGEDIT4\r\n\r\n'
+        printf '[%s]\r\n' "$fonts_key"
+        for entry in "${faces[@]}"; do
+            n="${entry##*:}"
+            [ -f "$winfonts/$n" ] || continue
+            printf '"%s (TrueType)"="%s"\r\n' "${entry%%:*}" 'C:\\windows\\Fonts\\'"$n"
             registered=$((registered + 1))
-        fi
-    done
+        done
+        printf '\r\n'
+    } > "$reg_file"
+
+    if [ "$registered" -gt 0 ] && ! wine reg import "$reg_file" >/dev/null 2>&1; then
+        registered=0                  # import failed: nothing landed
+    fi
+    rm -f "$reg_file"
     "$WINESERVER" -w || true
 
     if [ "$registered" -eq 0 ]; then
