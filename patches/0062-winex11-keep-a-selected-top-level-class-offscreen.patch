@@ -1,0 +1,64 @@
+Subject: winex11: keep a selected top-level class offscreen
+
+Live's Max for Live device view contains a child window. Selecting away from
+an M4L track hides that child; selecting the track again shows it. The child
+changes the top-level client clipping region between simple and non-simple,
+so needs_offscreen_rendering alternates for Live's whole client surface.
+
+client_surface_update_offscreen implements each change by unmapping the
+1920x1057 client window, reparenting it between Live's whole window and
+winex11's dummy parent, and mapping it again. Xwayland can expose the empty
+client during that round trip. A compositor capture measured the resulting
+black frame at 0.0120 mean luminance versus about 0.2205 normally.
+
+Allow a launcher to name one exact top-level Windows class that should remain
+on the offscreen-composited path. The comparison is deliberately limited to
+top-level windows and exact ASCII class names. Setting
+WINE_X11_FORCE_OFFSCREEN_CLASS to "Ableton Live Window Class" prevents the
+attach/detach transition without changing M4L child lifetime or rendering.
+
+In an unforced control, track-away/track-back clicks were followed within
+8-13 ms by full-client Unmap/Reparent/Map sequences. With the class forced
+offscreen, six identical cycles produced no full-client transitions; none of
+347 compositor frames fell below 0.2247 mean luminance.
+
+diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
+index b3ebc0b..4097ef3 100644
+--- a/dlls/winex11.drv/init.c
++++ b/dlls/winex11.drv/init.c
+@@ -220,6 +220,27 @@ static BOOL needs_client_window_clipping( HWND hwnd )
+     return ret > 0;
+ }
+ 
++static BOOL force_offscreen_for_class( HWND hwnd )
++{
++    const char *forced_class = getenv( "WINE_X11_FORCE_OFFSCREEN_CLASS" );
++    WCHAR class_buffer[128];
++    UNICODE_STRING class_name = {0, sizeof(class_buffer), class_buffer};
++    unsigned int i;
++    size_t forced_length;
++    INT length;
++
++    if (!forced_class || !forced_class[0]) return FALSE;
++    forced_length = strlen( forced_class );
++    if (forced_length >= ARRAY_SIZE(class_buffer)) return FALSE;
++    if (NtUserGetAncestor( hwnd, GA_PARENT ) != NtUserGetDesktopWindow()) return FALSE;
++    if ((length = NtUserGetClassName( hwnd, FALSE, &class_name )) <= 0) return FALSE;
++    if ((unsigned int)length != forced_length) return FALSE;
++
++    for (i = 0; i < (unsigned int)length; ++i)
++        if ((unsigned char)forced_class[i] != class_buffer[i]) return FALSE;
++    return TRUE;
++}
++
+ BOOL needs_offscreen_rendering( HWND hwnd )
+ {
+     static const WCHAR dcomp_target_propW[] =
+@@ -227,6 +248,7 @@ BOOL needs_offscreen_rendering( HWND hwnd )
+     static const WCHAR d3d_hwnd_target_propW[] =
+         {'_','_','w','i','n','e','_','d','3','d','_','h','w','n','d','_','t','a','r','g','e','t',0};
+ 
++    if (force_offscreen_for_class( hwnd )) return TRUE;
+     if (NtUserGetDpiForWindow( hwnd ) != NtUserGetWinMonitorDpi( hwnd, MDT_RAW_DPI )) return TRUE; /* needs DPI scaling */
+     if (NtUserGetAncestor( hwnd, GA_PARENT ) != NtUserGetDesktopWindow())
+     {

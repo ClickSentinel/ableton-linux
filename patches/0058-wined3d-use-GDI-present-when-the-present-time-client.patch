@@ -1,0 +1,121 @@
+Subject: wined3d: use GDI present when the present-time client rect
+ disagrees (issue 100)
+
+The GL present path (0055) blits the backbuffer to the drawable and
+y-flips through wined3d_texture_translate_drawable_coords(), which
+queries the window's client rect on the CS thread at execution time.
+The destination rect it flips was captured earlier, on the presenting
+thread, in the window's DPI context (0023). Nothing guarantees the two
+agree: the CS thread's DPI context can resolve the same window to a
+different client height, and the window can be resized between capture
+and execution. When they disagree the flip height no longer matches
+the destination rect, and with GL's bottom-left origin the frame lands
+low: a black band fills the top of the client area and the bottom rows
+are clipped. Input hit-testing is unaffected, so clicks land on the
+real layout, not the drawn one.
+
+Reported twice with matching signatures: Live's frame about 476px low
+on niri/XWayland at 125% (PR 98), and Live's UI sliding down under KDE
+Plasma/NVIDIA when Live's 'Enable HiDPI Mode' setting is on (issue
+100); that toggle changes Live's DPI awareness and resizes the window
+after mapping.
+
+Gate the fast path on agreement: re-query the client rect on the CS
+thread right before the blit and compare it against the captured
+destination rect. When they match, GL present proceeds as before; when
+they do not, that frame takes swapchain_blit_gdi(), which anchors
+top-left and presents the same frame correctly under the mismatch
+(WINE_DISABLE_GL_PRESENT=1 renders correctly on the niri setup). On an
+affected configuration every frame disagrees, so the swapchain stays
+on the GDI path, behaving as if WINE_DISABLE_GL_PRESENT=1; healthy
+configurations keep the GL path and its bandwidth win. The mismatch
+branch routes to GDI explicitly rather than falling through: a
+DISCARD-effect swapchain would otherwise reach the plain GL branch and
+misplace the frame the same way.
+
+A fire-once FIXME marks the first mismatched frame; a rate-limited
+TRACE logs both rects and the backbuffer size, so an affected setup
+records which side disagrees (DPI context vs in-flight resize) toward
+a root fix in translate_drawable_coords itself.
+
+Reports: v33 (Version33), PR 98; NoskyD, issue 100.
+---
+ dlls/wined3d/swapchain.c | 56 +++++++++++++++++++++++++++++++++-------
+ 1 file changed, 47 insertions(+), 9 deletions(-)
+
+diff --git a/dlls/wined3d/swapchain.c b/dlls/wined3d/swapchain.c
+index d93ae04..0187087 100644
+--- a/dlls/wined3d/swapchain.c
++++ b/dlls/wined3d/swapchain.c
+@@ -1280,6 +1280,34 @@ static bool swapchain_present_is_partial_copy(struct wined3d_swapchain *swapchai
+     return false;
+ }
+ 
++/* The GL present blit y-flips through wined3d_texture_translate_drawable_coords(),
++ * which queries the window's client rect on this (CS) thread at execution time.
++ * dst_rect was captured on the presenting thread in the window's DPI context
++ * (wined3d_swapchain_present).  When the two disagree - a DPI-awareness
++ * mismatch between the two threads, or a window resize since the capture -
++ * the flip height no longer matches the destination rect: GL's bottom-left
++ * origin then lands the frame low, black band on top, bottom rows clipped
++ * (issue 100; the niri report on PR 98).  The GDI present path anchors
++ * top-left and shows the same frame correctly under the mismatch. */
++static bool swapchain_gl_present_size_agrees(const struct wined3d_swapchain *swapchain, const RECT *dst_rect)
++{
++    static unsigned int mismatch_count;
++    RECT client_rect;
++
++    GetClientRect(swapchain->win_handle, &client_rect);
++    if (client_rect.right - client_rect.left == dst_rect->right - dst_rect->left
++            && client_rect.bottom - client_rect.top == dst_rect->bottom - dst_rect->top)
++        return true;
++
++    if (!mismatch_count++)
++        FIXME("Present-time client rect disagrees with the captured dst rect, using GDI present for these frames.\n");
++    if (mismatch_count <= 5 || !(mismatch_count % 300))
++        TRACE("Size disagreement #%u: dst %s, cs-thread client %s, backbuffer %ux%u.\n",
++                mismatch_count, wine_dbgstr_rect(dst_rect), wine_dbgstr_rect(&client_rect),
++                swapchain->state.desc.backbuffer_width, swapchain->state.desc.backbuffer_height);
++    return false;
++}
++
+ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
+         const RECT *src_rect, const RECT *dst_rect, unsigned int swap_interval, uint32_t flags)
+ {
+@@ -1312,17 +1340,27 @@ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
+             && !(swapchain->state.desc.flags & WINED3D_SWAPCHAIN_FORCE_GDI_PRESENT)
+             && context_gl->dc != wined3d_device_gl(swapchain->device)->backup_dc)
+     {
+-        static unsigned int gl_present_count;
+-        gl_info = context_gl->gl_info;
++        if (swapchain_gl_present_size_agrees(swapchain, dst_rect))
++        {
++            static unsigned int gl_present_count;
++            gl_info = context_gl->gl_info;
+ 
+-        if (!(gl_present_count++ % 60))
+-            TRACE("GL popup present #%u: dc %p, win %p.\n",
+-                    gl_present_count, context_gl->dc, swapchain->win_handle);
++            if (!(gl_present_count++ % 60))
++                TRACE("GL popup present #%u: dc %p, win %p.\n",
++                        gl_present_count, context_gl->dc, swapchain->win_handle);
+ 
+-        swapchain_gl_set_swap_interval(swapchain, context_gl, swap_interval);
+-        wined3d_texture_load_location(back_buffer, 0, context, back_buffer->resource.draw_binding);
+-        swapchain_blit(swapchain, context, src_rect, dst_rect);
+-        gl_info->gl_ops.wgl.p_wglSwapBuffers(context_gl->dc);
++            swapchain_gl_set_swap_interval(swapchain, context_gl, swap_interval);
++            wined3d_texture_load_location(back_buffer, 0, context, back_buffer->resource.draw_binding);
++            swapchain_blit(swapchain, context, src_rect, dst_rect);
++            gl_info->gl_ops.wgl.p_wglSwapBuffers(context_gl->dc);
++        }
++        else
++        {
++            /* Not the fall-through chain below: a DISCARD-effect swapchain
++             * would otherwise reach the plain GL branch and misplace the
++             * frame the same way. */
++            swapchain_blit_gdi(swapchain, context, src_rect, dst_rect);
++        }
+     }
+     else if (context_gl->dc == wined3d_device_gl(swapchain->device)->backup_dc
+             || (swapchain->state.desc.flags & WINED3D_SWAPCHAIN_FORCE_GDI_PRESENT)

@@ -71,6 +71,8 @@ make verify
   colors.
 - `ABLETON_UI_FONT=auto|preserve|off|<family>` controls the Wine UI font.
 - `ABLETON_DCOMP=off` disables DirectComposition for one launch.
+- `WINE_X11_FORCE_OFFSCREEN_CLASS=off` disables the default Max for Live
+  selection-flicker fix for one launch.
 - `ABLETON_RT=off` disables realtime scheduling for one launch.
 - `PIPEASIO_*` variables override PipeASIO settings for one launch.
 - `ENGINE` selects the container engine used by build scripts. The default is
