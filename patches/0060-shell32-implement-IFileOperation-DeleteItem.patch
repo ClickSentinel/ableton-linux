@@ -1,0 +1,142 @@
+Subject: shell32: implement IFileOperation DeleteItem
+
+Live uses IFileOperation::DeleteItem for its shared deletion path,
+including browser deletion and pruning old project backups. Wine's
+method is a stub that returns E_NOTIMPL, although the older
+SHFileOperation delete and recycle-bin paths are implemented.
+
+Queue single-item deletes in the existing copy engine and execute them
+through SHFileOperation during PerformOperations. Preserve the modern
+FOFX_RECYCLEONDELETE flag by translating it to FOF_ALLOWUNDO, and send
+the matching progress-sink notifications.
+
+diff --git a/dlls/shell32/shlfileop.c b/dlls/shell32/shlfileop.c
+index 16074d5..8ce6702 100644
+--- a/dlls/shell32/shlfileop.c
++++ b/dlls/shell32/shlfileop.c
+@@ -1692,6 +1692,7 @@ enum copy_engine_opcode
+ enum copy_engine_opcode
+ {
+     COPY_ENGINE_MOVE,
++    COPY_ENGINE_DELETE,
+     COPY_ENGINE_REMOVE_DIRECTORY_SILENT,
+ };
+ 
+@@ -1869,6 +1870,28 @@ static HRESULT notify_post_move_item(IFileOperationProgressSink *sink, struct fi
+     return IFileOperationProgressSink_PostMoveItem(sink, op->tsf, p->item, op->folder, op->name, p->result, p->new_item);
+ }
+ 
++struct notify_delete_item_param
++{
++    IShellItem *item;
++    HRESULT result;
++};
++
++static HRESULT notify_pre_delete_item(IFileOperationProgressSink *sink, struct file_operation *operations,
++        struct copy_engine_operation *op, void *context)
++{
++    struct notify_delete_item_param *p = context;
++
++    return IFileOperationProgressSink_PreDeleteItem(sink, op->tsf, p->item);
++}
++
++static HRESULT notify_post_delete_item(IFileOperationProgressSink *sink, struct file_operation *operations,
++        struct copy_engine_operation *op, void *context)
++{
++    struct notify_delete_item_param *p = context;
++
++    return IFileOperationProgressSink_PostDeleteItem(sink, op->tsf, p->item, p->result, NULL);
++}
++
+ static void set_file_operation_progress(struct file_operation *operation, unsigned int total, unsigned int sofar)
+ {
+     operation->progress_total = total;
+@@ -1982,6 +2005,44 @@ static HRESULT copy_engine_move(struct file_operation *operation, struct copy_en
+     return COPYENGINE_S_NOT_HANDLED;
+ }
+ 
++static HRESULT copy_engine_delete(struct file_operation *operation, struct copy_engine_operation *op)
++{
++    SHFILEOPSTRUCTW file_op = {0};
++    WCHAR *path, *source;
++    unsigned int len;
++    int result;
++    HRESULT hr;
++
++    TRACE("IFileOperation DeleteItem via SHFileOperation.\n");
++
++    if (FAILED((hr = SHGetNameFromIDList(op->item_pidl, SIGDN_FILESYSPATH, &path))))
++        return hr;
++
++    len = lstrlenW(path);
++    if (!(source = malloc((len + 2) * sizeof(*source))))
++    {
++        CoTaskMemFree(path);
++        return E_OUTOFMEMORY;
++    }
++    memcpy(source, path, (len + 1) * sizeof(*source));
++    source[len + 1] = 0;
++    CoTaskMemFree(path);
++
++    file_op.wFunc = FO_DELETE;
++    file_op.pFrom = source;
++    file_op.fFlags = operation->flags;
++    if (operation->flags & FOFX_RECYCLEONDELETE)
++        file_op.fFlags |= FOF_ALLOWUNDO;
++    result = SHFileOperationW(&file_op);
++    free(source);
++
++    if (result)
++        return HRESULT_FROM_WIN32(result);
++    if (file_op.fAnyOperationsAborted)
++        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
++    return S_OK;
++}
++
+ static HRESULT perform_file_operations(struct file_operation *operation)
+ {
+     struct copy_engine_operation *op;
+@@ -2011,6 +2072,28 @@ static HRESULT perform_file_operations(struct file_operation *operation)
+                 break;
+             }
+ 
++            case COPY_ENGINE_DELETE:
++            {
++                struct notify_delete_item_param p;
++
++                if (FAILED((hr = SHCreateItemFromIDList(op->item_pidl, &IID_IShellItem, (void **)&p.item))))
++                    break;
++                if (FAILED((hr = file_operation_notify(operation, op, FALSE, &p, notify_pre_delete_item))))
++                {
++                    IShellItem_Release(p.item);
++                    return hr;
++                }
++                p.result = copy_engine_delete(operation, op);
++                if (FAILED((hr = file_operation_notify(operation, op, TRUE, &p, notify_post_delete_item))))
++                {
++                    IShellItem_Release(p.item);
++                    return hr;
++                }
++                hr = p.result;
++                IShellItem_Release(p.item);
++                break;
++            }
++
+             case COPY_ENGINE_MOVE:
+             {
+                 struct notify_move_item_param p;
+@@ -2247,9 +2330,12 @@ static HRESULT WINAPI file_operation_DeleteItem(IFileOperation *iface, IShellIte
+ static HRESULT WINAPI file_operation_DeleteItem(IFileOperation *iface, IShellItem *item,
+         IFileOperationProgressSink *sink)
+ {
+-    FIXME("(%p, %p, %p): stub.\n", iface, item, sink);
++    TRACE("(%p, %p, %p).\n", iface, item, sink);
+ 
+-    return E_NOTIMPL;
++    if (!item)
++        return E_INVALIDARG;
++
++    return add_operation(impl_from_IFileOperation(iface), COPY_ENGINE_DELETE, item, NULL, NULL, sink, 0, NULL);
+ }
+ 
+ static HRESULT WINAPI file_operation_DeleteItems(IFileOperation *iface, IUnknown *items)

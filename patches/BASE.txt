@@ -11,7 +11,7 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 55 files, numbered 0001 through 0059.
+The current Wine series contains 56 files, numbered 0001 through 0060.
 Patches 0027, 0044, 0054, and 0057 are intentionally absent.
 
 ## Applying the series
@@ -190,3 +190,8 @@ Apply them in sequence with the rest of the series.
   `wined3d_texture_translate_drawable_coords`, the one on the CS
   thread; under fractional scaling the two disagreed and 0058's gate
   fired on every frame. See `notes/ABLETON-WINE-GPU-RENDERER.md`.
+- `0060`: implement `IFileOperation::DeleteItem`. Live's shared
+  deletion path (browser deletion, pruning old project backups) uses
+  it; Wine's method was an E_NOTIMPL stub. Deletes queue in the
+  existing copy engine and run through `SHFileOperation`, with
+  FOFX_RECYCLEONDELETE translated to FOF_ALLOWUNDO (PR 108).
