@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Sourceable theme detection helpers.
 # ableton_detect_theme prints "dark" or "light" or returns 1 when no probe answers
 # (probes: XDG settings portal, GNOME gsettings).
