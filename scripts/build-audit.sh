@@ -72,6 +72,9 @@ declare -A SERIES_GAPS=(
     [0027]="retired 2026-07-14 — gitignore housekeeping, no artifact effect"
     [0044]="reserved 2026-07-24 for the issue 57 parked-pane reblit gate; shipped as 0056 instead"
     [0054]="reserved 2026-07-29 for PR 77's language-fallback font patch"
+    [0057]="reserved 2026-07-30 for PR 105's wined3d GPU naming patch"
+    [0058]="reserved 2026-07-30 for PR 102's GDI client-rect disagreement patch"
+    [0059]="reserved 2026-07-30 for PR 107's DPI-context client-rect query patch"
 )
 seq_expect=1
 for f in $(awk '{print $2}' "$SERIES" | grep -v '^pipeasio/' | sort); do
@@ -129,6 +132,7 @@ FINGERPRINTS='
 0043|ascii|lib/wine/x86_64-windows/shell32.dll|__wine_portal_show_item
 0045|ascii|lib/wine/x86_64-windows/ole32.dll|revoke for another process windows is disabled
 0055|wide|lib/wine/x86_64-windows/dxgi.dll|WINE_DISABLE_GL_PRESENT
+0060|ascii|lib/wine/x86_64-windows/shell32.dll|IFileOperation DeleteItem via SHFileOperation
 pipeasio/0001|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-clamp-sample-rate
 pipeasio/0002|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-midi-timebase
 '
