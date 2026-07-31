@@ -588,21 +588,78 @@ sync_font_substitutes() {   # family -> route the shell-dialog faces to it
     done
 }
 
+# Ableton Sans/Ableton Sans Small are Latin-only, so register a SystemLink
+# chain for the substituted family: Tahoma, then the Noto Sans CJK cuts Live
+# bundles in Resources/Fonts, then Unifont as a full-Unicode last resort.
+# Patch 0054's get_fallback_font_for_text walks it; the registry data alone
+# does nothing, since win32u consults SystemLink only when selecting a whole
+# font by charset, never when rendering a glyph.
+#
+# Taken from Live's install, read directly with fc-scan, rather than asking
+# the host's fontconfig for "some" CJK font: Live ships these because its own
+# UI is localized into Japanese and Chinese, so they are present whenever Live
+# is, and the chain is then identical on every distro.
+sync_font_fallback() {   # family -> register its SystemLink chain from what sync_ui_font linked into winfonts
+    local fam="$1" want="tahoma.ttf,Tahoma" cur pat f base fc_fam pair
+    local winfonts="$WINEPREFIX/drive_c/windows/Fonts"
+    local -a pairs=()
+    if command -v fc-scan >/dev/null 2>&1; then
+        for pat in "$winfonts"/NotoSansCJKjp-Regular.otf "$winfonts"/NotoSansCJKsc-Regular.otf \
+                   "$winfonts"/NotoSansCJKkr-Regular.otf "$winfonts"/unifont_jp-*.ttf "$winfonts"/unifont_upper-*.ttf; do
+            for f in $pat; do
+                [ -e "$f" ] || continue
+                base="${f##*/}"
+                # %{fullname}, not %{family}: win32u matches a SystemLink entry
+                # on filename plus the name-ID-1 family, and %{family} reports
+                # ID 16 first. Live's NotoSansCJKjp-Regular.otf is
+                # "Noto Sans CJK JP Regular" in ID 1, so the ID 16 name matched
+                # nothing and the entry was dropped at load with a silent
+                # "Unable to find file", dumping CJK text onto Unifont.
+                fc_fam="$(fc-scan -f '%{fullname}\n' "$f" 2>/dev/null | head -1)"
+                [ -n "$fc_fam" ] && pairs+=("$base,$fc_fam")
+            done
+        done
+    fi
+    for pair in "${pairs[@]}"; do
+        want="${want}\\0${pair}"
+    done
+    cur="$(awk -v n="\"$fam\"=" '
+        /^\[Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\FontLink\\\\SystemLink\]/ { f=1; next }
+        /^\[/ { f=0 }
+        f && index($0, n) == 1 {
+            v = substr($0, length(n) + 1)
+            sub(/^str\(7\):"/, "", v); sub(/\\0"\r?$/, "", v)
+            print v; exit
+        }' "$WINEPREFIX/system.reg" 2>/dev/null || true)"
+    [ "$cur" = "$want" ] && return 0
+    echo "ableton-live: linking Tahoma + bundled CJK/Unicode fallback fonts for '$fam'" >&2
+    "$WINE_ROOT/bin/wine" reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\FontLink\SystemLink' \
+        /v "$fam" /t REG_MULTI_SZ /d "${want}\0" /f >/dev/null 2>&1 9>&-
+}
+
 sync_ui_font() {
     local mode="${ABLETON_UI_FONT:-auto}" winfonts="$WINEPREFIX/drive_c/windows/Fonts"
     local fonts_dir="" family="" f linked=0
     [ "$mode" = preserve ] && return 0
     [ -d "$winfonts" ] || return 0
     # Links from an install that was since removed or upgraded must not linger.
-    for f in "$winfonts"/AbletonSans*; do
+    for f in "$winfonts"/AbletonSans* "$winfonts"/NotoSansCJK* "$winfonts"/unifont_*; do
         [ -L "$f" ] && [ ! -e "$f" ] && rm -f "$f"
     done
     if [ "$mode" = off ]; then
-        for f in "$winfonts"/AbletonSans*; do
+        for f in "$winfonts"/AbletonSans* "$winfonts"/NotoSansCJK* "$winfonts"/unifont_*; do
             [ -L "$f" ] && rm -f "$f"
         done
         sync_font_substitutes Tahoma
         sync_metric_fonts Tahoma
+        # Tahoma gets its chain from win32u's hardcoded substitute list, so
+        # it needs no entry here. Clear any a previous auto/named run left for
+        # the Ableton families, which are no longer selected anywhere.
+        local fam
+        for fam in "Ableton Sans" "Ableton Sans Small"; do
+            "$WINE_ROOT/bin/wine" reg delete 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\FontLink\SystemLink' \
+                /v "$fam" /f >/dev/null 2>&1 9>&- || true
+        done
         return 0
     fi
     [ -n "$live_exe_unix" ] && fonts_dir="${live_exe_unix%/Program/*}/Resources/Fonts"
@@ -624,8 +681,22 @@ sync_ui_font() {
     else
         family="$mode"
     fi
+    # Fallback faces for the chain sync_font_fallback registers below. Linked
+    # for every mode that reaches here, not just auto: a named family is as
+    # Latin-limited as Ableton Sans, so keeping these under auto left
+    # ABLETON_UI_FONT=<name> with a Tahoma-only chain and CJK back to tofu.
+    # Both weights, so bold menu items get a real bold face. The auto path has
+    # already returned by now if nothing was substituted, so this cannot leave
+    # unreferenced symlinks behind.
+    if [ -d "$fonts_dir" ]; then
+        for f in "$fonts_dir"/NotoSansCJK*.otf "$fonts_dir"/unifont_*.ttf; do
+            [ -e "$f" ] || continue
+            ln -sf "$f" "$winfonts/${f##*/}"
+        done
+    fi
     sync_font_substitutes "$family"
     sync_metric_fonts "$family"
+    sync_font_fallback "$family"
 }
 
 # Mirror the host light/dark scheme into the prefix before each launch: Live's "Follow system"
