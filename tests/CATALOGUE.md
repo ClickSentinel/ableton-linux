@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-119 tests across 8 suites. See [README.md](README.md) for how to run
+118 tests across 8 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -15,7 +15,7 @@ for which run on a PR.
 
 - [tests/repo-hygiene.bats](#repo-hygiene) — 14 test(s)
 - [tests/packaging.bats](#packaging) — 7 test(s)
-- [tests/launcher-cli.bats](#launcher-cli) — 20 test(s)
+- [tests/launcher-cli.bats](#launcher-cli) — 19 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
@@ -110,11 +110,10 @@ was covered by anything before.
 | 13 | ABLETON_VDESK wraps the launch in a virtual desktop | — |
 | 14 | a URL with no Live installed is still handed to start.exe | — |
 | 15 | a second launcher refuses while the first is bringing Live up | — |
-| 16 | the launch lock is released once Live has been exec'd | — |
-| 17 | realtime scheduling wraps the launch in chrt when rtprio is available | — |
-| 18 | ABLETON_RT=off launches without chrt even when it would succeed | — |
-| 19 | a stale wineserver is killed and the session booted before registry writes | scripts/ableton-live — reg.exe skips the wineboot wait; the FontSubstitutes HKLM write was lost this way |
-| 20 | the launcher never leaves the fake runtime for the host's wine | — |
+| 16 | realtime scheduling wraps the launch in chrt when rtprio is available | — |
+| 17 | ABLETON_RT=off launches without chrt even when it would succeed | — |
+| 18 | a stale wineserver is killed and the session booted before registry writes | scripts/ableton-live — reg.exe skips the wineboot wait; the FontSubstitutes HKLM write was lost this way |
+| 19 | the launcher never leaves the fake runtime for the host's wine | — |
 
 <a id="detect-scale"></a>
 

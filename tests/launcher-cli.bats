@@ -170,17 +170,13 @@ setup() {
     [[ "$stderr" == *"another launcher is bringing Live up"* ]]
 }
 
-@test "the launch lock is released once Live has been exec'd" {
-    install_live 12 Suite
-    run_launcher
-    [ "$status" -eq 0 ]
-    # The launcher drops fd 9 before exec so a spawned wineserver cannot pin it.
-    # If it leaked, this second acquisition would fail.
-    exec 8>"$PREFIX/.ableton-live.lock"
-    run flock -n 8
-    exec 8>&-
-    [ "$status" -eq 0 ]
-}
+# The launcher drops fd 9 (`exec 9>&-`) before the exec so a wineserver spawned
+# during bring-up cannot pin the lock for the whole session. That is deliberately
+# NOT tested here: run_launcher runs the launcher as a subprocess, so the kernel
+# closes fd 9 on exit whatever the script did, and any test written this way
+# passes with the release deleted outright. Catching a real leak needs a fake
+# wine that forks a child holding its fds, and then checks the lock while that
+# child is still alive.
 
 # --- scheduling --------------------------------------------------------------
 
