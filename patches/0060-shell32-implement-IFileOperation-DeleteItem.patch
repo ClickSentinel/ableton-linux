@@ -51,7 +51,7 @@ index 16074d5..8ce6702 100644
  static void set_file_operation_progress(struct file_operation *operation, unsigned int total, unsigned int sofar)
  {
      operation->progress_total = total;
-@@ -1982,6 +2005,42 @@ static HRESULT copy_engine_move(struct file_operation *operation, struct copy_en
+@@ -1982,6 +2005,44 @@ static HRESULT copy_engine_move(struct file_operation *operation, struct copy_en
      return COPYENGINE_S_NOT_HANDLED;
  }
  
@@ -62,6 +62,8 @@ index 16074d5..8ce6702 100644
 +    unsigned int len;
 +    int result;
 +    HRESULT hr;
++
++    TRACE("IFileOperation DeleteItem via SHFileOperation.\n");
 +
 +    if (FAILED((hr = SHGetNameFromIDList(op->item_pidl, SIGDN_FILESYSPATH, &path))))
 +        return hr;
@@ -94,7 +96,7 @@ index 16074d5..8ce6702 100644
  static HRESULT perform_file_operations(struct file_operation *operation)
  {
      struct copy_engine_operation *op;
-@@ -2011,6 +2070,28 @@ static HRESULT perform_file_operations(struct file_operation *operation)
+@@ -2011,6 +2072,28 @@ static HRESULT perform_file_operations(struct file_operation *operation)
                  break;
              }
  
@@ -123,7 +125,7 @@ index 16074d5..8ce6702 100644
              case COPY_ENGINE_MOVE:
              {
                  struct notify_move_item_param p;
-@@ -2247,9 +2328,12 @@ static HRESULT WINAPI file_operation_DeleteItem(IFileOperation *iface, IShellIte
+@@ -2247,9 +2330,12 @@ static HRESULT WINAPI file_operation_DeleteItem(IFileOperation *iface, IShellIte
  static HRESULT WINAPI file_operation_DeleteItem(IFileOperation *iface, IShellItem *item,
          IFileOperationProgressSink *sink)
  {

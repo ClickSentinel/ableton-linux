@@ -132,6 +132,7 @@ FINGERPRINTS='
 0043|ascii|lib/wine/x86_64-windows/shell32.dll|__wine_portal_show_item
 0045|ascii|lib/wine/x86_64-windows/ole32.dll|revoke for another process windows is disabled
 0055|wide|lib/wine/x86_64-windows/dxgi.dll|WINE_DISABLE_GL_PRESENT
+0060|ascii|lib/wine/x86_64-windows/shell32.dll|IFileOperation DeleteItem via SHFileOperation
 pipeasio/0001|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-clamp-sample-rate
 pipeasio/0002|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-midi-timebase
 '
@@ -175,7 +176,6 @@ STAMP_ONLY='
 0052|logic-only (DT_HIDEPREFIX on the menu bar DrawTextW call; no new string literal)
 0056|ascii|lib/wine/x86_64-windows/dxgi.dll|Re-blit skipped (hidden ancestry)
 0053|logic-only (WM_GETMINMAXINFO minimum exported as PMinSize hints; no new string literal)
-0060|logic-only (IFileOperation DeleteItem queue and execution; verified by API repro)
 '
 wide_pattern() {  # ascii string -> PCRE matching its UTF-16LE bytes
     printf '%s' "$1" | od -An -v -tx1 | tr -d '\n' | tr -s ' ' ' ' \
