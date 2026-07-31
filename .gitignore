@@ -37,3 +37,7 @@ xsettle
 
 # hang captures from tools/m4l-hang-capture.sh
 m4l-hang-*/
+
+# bytecode from tools/m4l-font-audit.py
+__pycache__/
+*.pyc

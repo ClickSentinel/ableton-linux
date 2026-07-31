@@ -82,7 +82,11 @@ cp -a vendor/winetricks vendor/winetricks-cache "$kit/vendor/"
 # and install_maxplug_fallback_fonts() in setup-prefix.sh.
 ( cd vendor && sha256sum -c bitstream-vera.sha256 )
 mkdir -p "$kit/vendor/fonts/bitstream-vera"
-install -m644 vendor/fonts/bitstream-vera/*.ttf "$kit/vendor/fonts/bitstream-vera/"
+# The notice ships beside the fonts as well as in licenses/, so the directory
+# stays self-describing if it is copied out of an extracted kit on its own.
+install -m644 vendor/fonts/bitstream-vera/*.ttf \
+              vendor/fonts/bitstream-vera/COPYRIGHT.TXT \
+              "$kit/vendor/fonts/bitstream-vera/"
 cp -a VERSION README.md TROUBLESHOOTING.md BUILDING.md "$kit/"
 install -m755 dist/cabextract-static "$kit/bin/cabextract"
 install -m755 dist/ableton-linkd "$kit/bin/ableton-linkd"
@@ -99,7 +103,7 @@ EOF
 # The Bitstream Vera license permits redistribution of the unmodified fonts, but
 # requires the copyright, trademark and permission notices travel with every
 # copy. The fonts here are byte-identical upstream 1.10 files.
-install -m644 vendor/fonts/bitstream-vera/COPYRIGHT.txt \
+install -m644 vendor/fonts/bitstream-vera/COPYRIGHT.TXT \
               "$kit/licenses/bitstream-vera-COPYRIGHT.txt"
 
 echo "== [4/5] pack + seal =="

@@ -55,10 +55,14 @@ fi
 
 # 3. The Bitstream license permits redistribution only if the notices travel
 #    with the files, so shipping the fonts without this would be a violation.
-if [ -s "$FONTDIR/COPYRIGHT.txt" ] && grep -q "Bitstream Vera is a trademark" "$FONTDIR/COPYRIGHT.txt"; then
+#    Whitespace-normalised before matching: upstream wraps the trademark notice
+#    across two lines, which a line-based grep misses.
+if [ -s "$FONTDIR/COPYRIGHT.TXT" ] &&
+   tr -s '[:space:]' ' ' < "$FONTDIR/COPYRIGHT.TXT" |
+   grep -q "Bitstream Vera is a trademark of Bitstream, Inc."; then
     ok "license notice present alongside the fonts"
 else
-    bad "COPYRIGHT.txt missing or not the Bitstream license"
+    bad "COPYRIGHT.TXT missing or not the Bitstream license"
 fi
 
 # 4. The files must really BE the Bitstream Vera families. Wine reads the family
