@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
-# Capture evidence from a hung Ableton Live process (M4L / Carbon Regulator freeze).
-#
-# Answers the question a single backtrace cannot: is the UI thread permanently
-# blocked, or is it spinning through a timed wait? It takes two winedbg stack
-# samples plus two per-thread CPU samples and diffs them.
-#
-# Run this WHILE Live is hung. It does not need the hang to be reproducible.
-#
+# Capture evidence from a hung Ableton Live process:
 #   tools/m4l-hang-capture.sh [outdir]
 #
-# See notes/FINDINGS-M4L-CARBON-REGULATOR-DEADLOCK-2026-07-29.md
+# Answers what a single backtrace cannot - whether the UI thread is parked or
+# spinning through a timed wait - by diffing two winedbg stack samples against
+# two per-thread CPU samples. Run it WHILE Live is hung; the hang need not be
+# reproducible. See notes/FINDINGS-M4L-CARBON-REGULATOR-DEADLOCK-2026-07-29.md
 
 set -uo pipefail
 

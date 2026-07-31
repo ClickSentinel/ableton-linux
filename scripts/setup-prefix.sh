@@ -313,33 +313,19 @@ fi
 
 # Repair Max for Live's font fallback chain.
 #
-# Max builds its own font list from EnumFontFamiliesEx and matches requested
-# typeface names against that list. Devices routinely name faces that do not
-# exist here - they are authored on macOS, so Geneva, Menlo, Lucida Grande and
-# Helvetica Neue all show up, plus Consolas. On Windows this never surfaces
-# because GDI's font mapper silently substitutes and never fails; under Wine the
-# lookup honestly fails, so MaxPlug walks its own fallback chain. The terminal
-# entries of that chain are hardcoded in MaxPlug.dll as "Bitstream Vera Sans",
-# "Bitstream Vera Serif" and "Bitstream Vera Sans Mono". Bitstream Vera is a
-# 2003-era family shipped by neither Wine nor Live, and modern distros ship its
-# successor DejaVu instead - so the chain runs out, and MaxPlug parks Live's UI
-# thread on a condition variable that is never signalled. Live's window freezes
-# permanently (zero CPU on the UI thread) while audio keeps playing.
+# M4L devices are authored on macOS and name faces absent here (Geneva, Menlo,
+# Lucida Grande, Helvetica Neue, Consolas). Windows' font mapper substitutes
+# silently; Wine reports the failure honestly, so MaxPlug walks its own chain,
+# which terminates at Bitstream Vera - shipped by neither Wine nor Live, and
+# superseded on modern distros by DejaVu. The chain runs out and MaxPlug parks
+# Live's UI thread on a condition variable that is never signalled: window
+# frozen at zero CPU, audio still playing.
 #
-# Two non-obvious constraints, both established by testing - see
-# notes/FINDINGS-M4L-CARBON-REGULATOR-DEADLOCK-2026-07-29.md:
-#
-#   * A FontSubstitutes alias does NOT work. Substitutes only redirect
-#     CreateFontIndirect; they never enter EnumFontFamilies output, so Max
-#     cannot see them. Aliasing the Vera names to DejaVu changed nothing.
-#   * Copying the files into the Fonts directory is not enough on its own.
-#     Wine's font list is registry-driven, so files added after the initial
-#     scan stay invisible until registered under the HKLM Fonts key.
-#     Wine reads the family name from inside the file, so the registry value
-#     name cannot be used to alias some other font either.
-#
-# Hence: install real Vera files, then register them. Idempotent, and run even
-# under --refresh, because a prefix missing this fallback hangs on M4L load.
+# Both halves below are needed. A FontSubstitutes alias only redirects
+# CreateFontIndirect and never enters EnumFontFamilies, which is what Max
+# matches against; and copied-in files stay invisible until registered, Wine's
+# font list being registry-driven. Idempotent, and runs under --refresh too.
+# See notes/FINDINGS-M4L-CARBON-REGULATOR-DEADLOCK-2026-07-29.md.
 install_maxplug_fallback_fonts() {
     local winfonts="$WINEPREFIX/drive_c/windows/Fonts"
     local src="" d n entry missing=0
@@ -357,9 +343,9 @@ install_maxplug_fallback_fonts() {
         "Bitstream Vera Serif Bold:VeraSeBd.ttf"
     )
 
-    # Prefer the vendored copy so a prefix needs no host font package; fall back
-    # to a system install if the kit was trimmed. kit_root sets $root and prints
-    # nothing, so it must be called as a statement rather than substituted.
+    # Prefer the vendored copy so no host font package is needed; fall back to a
+    # system install if the kit was trimmed. kit_root sets $root as a side
+    # effect, so it is called as a statement rather than substituted.
     if kit_root && [ -f "$root/vendor/fonts/bitstream-vera/Vera.ttf" ]; then
         src="$root/vendor/fonts/bitstream-vera"
     else
@@ -379,11 +365,10 @@ install_maxplug_fallback_fonts() {
         return 0                      # non-fatal: everything else still works
     fi
 
-    # Every step below is kept non-fatal on purpose. The script runs under
-    # `set -e`, and this is a late, optional repair: a failing `wine reg add`
-    # would otherwise abort the whole prefix setup and leave it half-configured,
-    # which is strictly worse than a configured prefix plus a loud warning.
-    # scripts/check-m4l-fonts.sh exists to catch the not-installed state later.
+    # Non-fatal throughout, deliberately: under `set -e` a failed step here
+    # would abort the whole setup and leave the prefix half-configured, which is
+    # worse than a working prefix plus a loud warning. check-m4l-fonts.sh
+    # catches the not-installed state later.
     if ! mkdir -p "$winfonts"; then
         echo "!! cannot create $winfonts; skipping the M4L font fallback repair"
         return 0
@@ -393,8 +378,7 @@ install_maxplug_fallback_fonts() {
     for entry in "${faces[@]}"; do
         n="${entry##*:}"
         [ -f "$src/$n" ] || { missing=1; continue; }
-        # -u so a refresh does not rewrite identical files every run; some cp
-        # builds lack it, hence the plain retry.
+        # -u to skip identical files on a refresh; not every cp has it.
         if cp -u "$src/$n" "$winfonts/$n" 2>/dev/null || cp "$src/$n" "$winfonts/$n"; then
             copied=$((copied + 1))
         else
@@ -403,8 +387,6 @@ install_maxplug_fallback_fonts() {
     done
     [ "$missing" -eq 1 ] && echo "   (some Vera faces absent from $src; registering what is present)"
 
-    # Files alone are not enough: Wine's font list is registry-driven and never
-    # picks up files added after its initial scan.
     for entry in "${faces[@]}"; do
         n="${entry##*:}"
         [ -f "$winfonts/$n" ] || continue

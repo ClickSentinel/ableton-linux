@@ -1,23 +1,15 @@
 #!/usr/bin/env bash
-# Regression tests for the Max for Live font fallback fix.
-#
-# The bug: M4L devices name typefaces that do not exist here (Geneva, Menlo,
-# Lucida Grande, Helvetica Neue, Consolas - all macOS faces, plus Consolas).
-# Wine reports the lookup as failed, where Windows' font mapper would silently
-# substitute, so MaxPlug walks its own fallback chain. That chain's terminal
-# entries are hardcoded in MaxPlug.dll as Bitstream Vera Sans/Serif/Sans Mono.
-# When those are absent too the chain runs out and MaxPlug parks Live's UI thread
-# on a condition variable that is never signalled: permanent freeze, audio still
-# playing. On one real install that was 13 devices and 57 racks.
-#
-# See notes/FINDINGS-M4L-CARBON-REGULATOR-DEADLOCK-2026-07-29.md
-#
-# Offline checks run anywhere (CI included). Prefix checks need a wine prefix and
-# are skipped, not failed, when one is unavailable.
-#
+# Regression tests for the Max for Live font fallback fix:
 #   scripts/check-m4l-fonts.sh
 #
-# Exit 0 all passed (skips allowed), 1 a check failed.
+# Guards that the vendored Bitstream Vera faces are present and licensed, that
+# setup-prefix.sh and make-installer.sh still install and ship them, and that
+# MaxPlug.dll still terminates its font fallback chain at those families - the
+# assumption the whole fix rests on. See
+# notes/FINDINGS-M4L-CARBON-REGULATOR-DEADLOCK-2026-07-29.md.
+#
+# Offline checks run anywhere, CI included; prefix checks are skipped rather
+# than failed when no prefix is available. Exit 0 all passed, 1 a check failed.
 
 set -uo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
