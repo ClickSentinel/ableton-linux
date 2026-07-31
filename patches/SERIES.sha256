@@ -49,6 +49,7 @@ f4d4f0cecbc8a39bbaeb6faaf416d032ee934e7ed8420aa168b39b3c42f9dd58  0049-win32u-dr
 38eb5e1c43a521eea78308bfe1e2d1d662b287eca888660acc615819aa707d84  0051-win32u-include-the-non-client-area-in-setsyscolors.patch
 f278d870c0424748a9d7a7cd5a6e9feb0837900e6382f4ee9d7cfe214c0b9fd5  0052-win32u-hide-the-menu-bar-alt-key-mnemonic-underline.patch
 d32ac8ca55853e5488292d015e35a31d23744150e04af476742e781b58abc186  0053-winex11-export-the-app-minimum-tracking-size-as-PMin.patch
+95bb7c7bce42a4d010eb4c0c0232bf65b9165860d3782f4753efb2398d7caaa2  0054-win32u-fall-back-to-a-linked-font-for-missing-glyph.patch
 5c97ce27e69ea1caffef5197a8e0f19893829c1c868e06c89e660352ad2919a1  0055-dxgi-prefer-GL-present-for-top-level-swapchain-devic.patch
 11dbb4c36378fc274e8eaa281e9bfbe43835bd0fae2682924d19aee318b673bb  0056-dxgi-gate-parked-dcomp-reblits-on-window-visibility.patch
 d41fba04c9682abf22abfcc147dbc3e1ed0b931f688d2736c60eca83670895f8  0058-wined3d-use-GDI-present-when-the-present-time-client.patch

@@ -1,0 +1,323 @@
+Subject: win32u: fall back to a linked font when the menu font is
+ missing a glyph
+
+The launcher substitutes Wine's stock win32 chrome font (menu bar, dropdowns,
+dialogs) with Ableton's own UI face (Ableton Sans/Ableton Sans Small), which
+covers Latin script only - checked directly via its cmap tables, zero glyphs
+anywhere in Cyrillic, Arabic, Hebrew, Devanagari, Thai, CJK, or Hangul. Any
+menu text needing a glyph outside that (a non-Latin locale, a Japanese
+project/track name, ...) was simply missing entirely: tofu boxes, or nothing
+at all.
+
+Wine's own font-linking (HKLM\...\FontLink\SystemLink, correctly populated
+by load_system_links - confirmed by trace) turns out to only ever be
+consulted during whole-font *selection* by system charset
+(can_select_face), never during glyph *rendering* - so registering a
+fallback family there fixes nothing on its own; the raw glyph lookup
+(freetype_get_glyph_index) only ever checks the one font actually selected,
+with no awareness of any linked fallback at all. This is the missing
+per-string consumer: if the currently selected font can't draw the item's
+text, walk its registered SystemLink fallback families (get_font_link_families,
+font.c - new, since find_gdi_font_link and the data it tracks were
+otherwise only reachable from within font.c) and temporarily select the
+first candidate that actually covers the text, sized and weighted to
+match, for the DrawTextW calls that follow.
+
+Measuring, not just drawing, needs to agree on which font is in play too:
+calc_menu_item_size sizes item->rect by measuring item->text with whatever
+font is already selected in hdc - the original (missing-glyph) font, not
+the fallback font just described. A fallback font's real glyphs are
+typically wider than the original font's notdef/tofu metrics, so
+item->rect ended up sized for the wrong font, and the DrawTextW call above
+then clipped the wider real render to fit - CJK menu items losing their
+first and last characters (menu bar, centered) or losing text off the
+right edge (popup items, left-aligned). Fixed by forward-declaring
+get_fallback_font_for_text and calling it in calc_menu_item_size the same
+way, before measuring instead of before drawing; both call sites already
+select the same plain (non-bold) menu font into hdc before their
+respective loops, so the two selections stay in lockstep.
+
+Whole-string swap, not per-character: text mixing scripts renders entirely
+in the fallback font rather than mixing faces mid-string. Real per-glyph
+fallback is a Uniscribe/DirectWrite-level feature that plain DrawTextW
+(what this file actually calls) has never had; implementing that properly
+is a much larger undertaking than this - this trades a rarer, minor
+font-consistency slip for the text actually rendering at all.
+
+Three bugs found and fixed along the way:
+- NtGdiExtGetObjectW returns the *resolved face's* full name (e.g.
+  "Ableton Sans Small Regular"), not the family name the SystemLink chain
+  is registered under ("Ableton Sans Small") - strip the known style
+  suffix and retry. Confirmed by tracing real Japanese menu text.
+- The item text passed in includes its raw '\t'-separated shortcut column
+  (see draw_menu_item); no font has an actual renderable glyph for a
+  literal tab, so it was being flagged as "missing" in every candidate
+  font tried, failing entries that were otherwise fully covered. Control
+  characters are no longer treated as glyphs needing coverage. Confirmed
+  by tracing real Japanese menu text.
+- font_missing_glyphs works per UTF-16 code unit, and a lone surrogate
+  half (0xD800-0xDFFF) is never in any font's cmap - not because the
+  glyph is missing, but because a surrogate half isn't a real character
+  on its own. Without a skip for it, any menu item holding a character
+  outside the BMP (an emoji in a Set name, say) reported "missing"
+  against the item's own font and every fallback candidate, always - a
+  guaranteed-to-fail check re-run on every single paint, in both
+  calc_menu_item_size and draw_menu_item. Surrogates get the same skip
+  control characters already get; whole-string fallback can't fix a lone
+  surrogate regardless of which font is picked, so there is nothing to
+  gain by still running the check for one.
+
+Verified live end to end: Japanese menu bar and dropdown text, including a
+previously-truncated settings label, renders in full.
+---
+ dlls/win32u/font.c           |  27 ++++++
+ dlls/win32u/menu.c           | 179 +++++++++++++++++++++++++++++++++++++++-
+ dlls/win32u/win32u_private.h |   1 +
+ 3 files changed, 205 insertions(+), 2 deletions(-)
+diff --git a/dlls/win32u/font.c b/dlls/win32u/font.c
+index dcc75e8..f1bebe6 100644
+--- a/dlls/win32u/font.c
++++ b/dlls/win32u/font.c
+@@ -1460,6 +1460,30 @@ static struct gdi_font_link *find_gdi_font_link( const WCHAR *name )
+     return NULL;
+ }
+ 
++/* Copies up to max SystemLink fallback family names registered for name into
++ * out, returns how many were copied. Plain accessor exposing what
++ * find_gdi_font_link tracks; callers do their own coverage testing and font
++ * creation through the public syscalls. */
++UINT get_font_link_families( const WCHAR *name, WCHAR out[][LF_FACESIZE], UINT max )
++{
++    struct gdi_font_link *font_link;
++    struct gdi_font_link_entry *entry;
++    UINT n = 0;
++
++    pthread_mutex_lock( &font_lock );
++    if ((font_link = find_gdi_font_link( name )))
++    {
++        LIST_FOR_EACH_ENTRY( entry, &font_link->links, struct gdi_font_link_entry, entry )
++        {
++            if (n >= max) break;
++            lstrcpynW( out[n], entry->family_name, LF_FACESIZE );
++            n++;
++        }
++    }
++    pthread_mutex_unlock( &font_lock );
++    return n;
++}
++
+ static struct gdi_font_family *find_family_from_font_links( const WCHAR *name, const WCHAR *subst,
+                                                             FONTSIGNATURE fs )
+ {
+diff --git a/dlls/win32u/menu.c b/dlls/win32u/menu.c
+index 1ff3403..a054d46 100644
+--- a/dlls/win32u/menu.c
++++ b/dlls/win32u/menu.c
+@@ -2006,6 +2006,11 @@ static void get_bitmap_item_size( struct menu_item *item, SIZE *size, HWND owner
+     }
+ }
+ 
++/* Defined below, needed here too: calc_menu_item_size must measure text with
++ * the same font draw_menu_item will actually render it in (see the call site
++ * further down for why). */
++static HFONT get_fallback_font_for_text( HDC hdc, const WCHAR *text, INT count );
++
+ /* Calculate the size of the menu item and store it in item->rect */
+ static void calc_menu_item_size( HDC hdc, struct menu_item *item, HWND owner, INT org_x, INT org_y,
+                                  BOOL menu_bar, struct menu *menu )
+@@ -2104,12 +2109,18 @@ static void calc_menu_item_size( HDC hdc, struct menu_item *item, HWND owner, IN
+     if (!(item->fType & MF_SYSMENU) && item->text)
+     {
+         LONG txt_height, txt_width;
+-        HFONT prev_font = NULL;
++        HFONT prev_font = NULL, fallback_font, prev_fallback_font = NULL;
+         RECT rc = item->rect;
+ 
+         if (item->fState & MFS_DEFAULT)
+              prev_font = NtGdiSelectFont( hdc, get_menu_font(TRUE) );
+ 
++        /* Measure with the font draw_menu_item will actually use: a fallback
++         * run is wider than the original's missing-glyph metrics, so sizing
++         * item->rect with the original clips the later render (issue #35). */
++        if ((fallback_font = get_fallback_font_for_text( hdc, item->text, -1 )))
++            prev_fallback_font = NtGdiSelectFont( hdc, fallback_font );
++
+         if (menu_bar)
+         {
+             txt_height = DrawTextW( hdc, item->text, -1, &rc, DT_SINGLELINE | DT_CALCRECT );
+@@ -2158,6 +2169,11 @@ static void calc_menu_item_size( HDC hdc, struct menu_item *item, HWND owner, IN
+             item->rect.right += 2 + txt_width;
+             item_height = max( item_height, max( txt_height + 2, menucharsize.cy + 4 ));
+         }
++        if (fallback_font)
++        {
++            NtGdiSelectFont( hdc, prev_fallback_font );
++            NtGdiDeleteObjectApp( fallback_font );
++        }
+         if (prev_font) NtGdiSelectFont( hdc, prev_font );
+     }
+     else if (menu_bar)
+@@ -2403,6 +2419,117 @@ got_bitmap:
+     NtGdiDeleteObjectApp( mem_hdc );
+ }
+ 
++/* TRUE if the font currently selected in hdc is missing a glyph anywhere in
++ * text. NtGdiGetGlyphIndicesW tests only the selected font, with no
++ * SystemLink awareness - exactly the per-font coverage test wanted here.
++ *
++ * Two kinds of code unit are skipped. Control characters, because item->text
++ * carries its '\t'-separated shortcut column and no font has a glyph for a
++ * tab. And UTF-16 surrogate halves, which are in no font's cmap because half
++ * a pair is not a character - without the skip a Set name holding an emoji
++ * fails every candidate on every paint, for a check that whole-string
++ * fallback could never satisfy anyway. */
++static BOOL font_missing_glyphs( HDC hdc, const WCHAR *text, INT count )
++{
++    WORD stack_buf[64], *buf = stack_buf;
++    BOOL missing = FALSE;
++    INT i;
++
++    if (count > (INT)ARRAY_SIZE(stack_buf) && !(buf = malloc( count * sizeof(*buf) )))
++        return FALSE;   /* can't check: leave the font alone rather than guess */
++
++    if (NtGdiGetGlyphIndicesW( hdc, text, count, buf, GGI_MARK_NONEXISTING_GLYPHS ) != GDI_ERROR)
++    {
++        for (i = 0; i < count; i++)
++        {
++            if (text[i] < ' ') continue;
++            if (text[i] >= 0xd800 && text[i] <= 0xdfff) continue;
++            if (buf[i] == 0xffff) { missing = TRUE; break; }
++        }
++    }
++    if (buf != stack_buf) free( buf );
++    return missing;
++}
++
++/* The launcher substitutes Ableton Sans onto the win32 chrome, and it is
++ * Latin-only, so any other script would render as nothing at all. win32u
++ * populates the SystemLink chain correctly but consults it only when
++ * selecting a whole font by charset, never when rendering a glyph, so the
++ * registered fallback sits unused. This is the missing per-string consumer:
++ * if the current font cannot draw text, try its registered families in turn
++ * (get_font_link_families, font.c) and return a temporary HFONT for the
++ * first that covers it, matching size and weight. Caller restores and
++ * deletes it. Returns 0 when the current font already covers the text.
++ *
++ * Whole-string, not per-glyph: real per-glyph fallback is a Uniscribe-level
++ * feature plain DrawTextW never had. Mixed-script text renders entirely in
++ * the fallback face - a cosmetic slip against rendering nothing. */
++static HFONT get_fallback_font_for_text( HDC hdc, const WCHAR *text, INT count )
++{
++    /* Sized to hold a whole SystemLink chain, not just its first few entries:
++     * get_font_link_families stops at this cap, so anything past it is
++     * silently never tried. A chain that registers per-region CJK faces
++     * ahead of a full-Unicode last resort (see scripts/ableton-live's
++     * sync_font_fallback) already reaches six, which put that last resort
++     * out of reach - the "safety net" this code documents was not actually
++     * wired up on that path. Confirmed by walking a real chain entry by
++     * entry against this same selection logic. */
++    WCHAR names[16][LF_FACESIZE];
++    HFONT cur_font, fallback = 0;
++    LOGFONTW lf;
++    UINT i, n;
++
++    if (count < 0) count = lstrlenW( text );
++    if (!count || !font_missing_glyphs( hdc, text, count )) return 0;
++
++    if (!(cur_font = NtGdiGetDCObject( hdc, NTGDI_OBJ_FONT ))) return 0;
++    if (!NtGdiExtGetObjectW( cur_font, sizeof(lf), &lf )) return 0;
++
++    n = get_font_link_families( lf.lfFaceName, names, ARRAY_SIZE(names) );
++    if (!n)
++    {
++        /* NtGdiExtGetObjectW returns the resolved face's full name ("Ableton
++         * Sans Small Regular"), not the family the chain is registered under.
++         * Strip the style suffix and retry. Char arrays rather than L"...":
++         * the unix .so builds against the host's 32-bit wchar_t, not Wine's
++         * 16-bit WCHAR (same idiom as tahoma_ttfW in font.c). */
++        static const WCHAR bold_italic[] = {' ','B','o','l','d',' ','I','t','a','l','i','c',0};
++        static const WCHAR regular_italic[] = {' ','R','e','g','u','l','a','r',' ','I','t','a','l','i','c',0};
++        static const WCHAR italic[] = {' ','I','t','a','l','i','c',0};
++        static const WCHAR bold[] = {' ','B','o','l','d',0};
++        static const WCHAR regular[] = {' ','R','e','g','u','l','a','r',0};
++        static const WCHAR *const suffixes[] = { bold_italic, regular_italic, italic, bold, regular };
++        WCHAR stripped[LF_FACESIZE];
++        UINT j;
++
++        for (j = 0; j < ARRAY_SIZE(suffixes) && !n; j++)
++        {
++            size_t face_len = lstrlenW( lf.lfFaceName );
++            size_t suf_len = lstrlenW( suffixes[j] );
++            if (face_len <= suf_len) continue;
++            if (wcsnicmp( lf.lfFaceName + face_len - suf_len, suffixes[j], suf_len )) continue;
++            lstrcpynW( stripped, lf.lfFaceName, face_len - suf_len + 1 );
++            n = get_font_link_families( stripped, names, ARRAY_SIZE(names) );
++        }
++    }
++    for (i = 0; i < n; i++)
++    {
++        HFONT candidate, prev;
++        BOOL covers;
++
++        lstrcpynW( lf.lfFaceName, names[i], LF_FACESIZE );
++        if (!(candidate = NtGdiHfontCreate( &lf, sizeof(lf), 0, 0, NULL ))) continue;
++
++        prev = NtGdiSelectFont( hdc, candidate );
++        covers = !font_missing_glyphs( hdc, text, count );
++        NtGdiSelectFont( hdc, prev );
++
++        if (covers) { fallback = candidate; break; }
++        NtGdiDeleteObjectApp( candidate );
++    }
++    return fallback;
++}
++
+ /* Draw a single menu item */
+ static void draw_menu_item( HWND hwnd, struct menu *menu, HWND owner, HDC hdc,
+                             struct menu_item *item, BOOL menu_bar, UINT odaction )
+@@ -2676,7 +2803,7 @@ static void draw_menu_item( HWND hwnd, struct menu *menu, HWND owner, HDC hdc,
+     if (item->text)
+     {
+         int i;
+-        HFONT prev_font = 0;
++        HFONT prev_font = 0, fallback_font, prev_fallback_font = 0;
+         /* Real Windows hides these mnemonic underlines until Alt is pressed
+          * (the WM_UPDATEUISTATE/UISF_HIDEACCEL "keyboard cues" system) - not
+          * implemented anywhere in this Wine tree (confirmed: no handling of
+@@ -2697,6 +2824,12 @@ static void draw_menu_item( HWND hwnd, struct menu *menu, HWND owner, HDC hdc,
+              prev_font = NtGdiSelectFont(hdc, get_menu_font( TRUE ));
+         }
+ 
++        /* see get_fallback_font_for_text: no-op (0) for the overwhelming
++         * common case of plain Latin text already covered by the current
++         * (possibly just-swapped-to-bold-above) font */
++        if ((fallback_font = get_fallback_font_for_text( hdc, item->text, -1 )))
++            prev_fallback_font = NtGdiSelectFont( hdc, fallback_font );
++
+         if (menu_bar)
+         {
+             if (item->hbmpItem)
+@@ -2746,6 +2879,11 @@ static void draw_menu_item( HWND hwnd, struct menu *menu, HWND owner, HDC hdc,
+             DrawTextW( hdc, item->text + i + 1, -1, &rect, format );
+         }
+ 
++        if (fallback_font)
++        {
++            NtGdiSelectFont( hdc, prev_fallback_font );
++            NtGdiDeleteObjectApp( fallback_font );
++        }
+         if (prev_font) NtGdiSelectFont( hdc, prev_font );
+     }
+ 
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index 1b8e7fd..15a460a 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -120,6 +120,7 @@ extern NTSTATUS send_hardware_input( HWND hwnd, UINT flags, const INPUT *input,
+ extern UINT draw_nc_menu_bar( HDC hdc, RECT *rect, HWND hwnd );
+ extern void end_menu( HWND hwnd );
+ extern HMENU get_menu( HWND hwnd );
++extern UINT get_font_link_families( const WCHAR *name, WCHAR out[][LF_FACESIZE], UINT max );
+ extern UINT get_menu_bar_height( HWND hwnd, UINT width, INT org_x, INT org_y );
+ extern BOOL get_menu_info( HMENU handle, MENUINFO *info );
+ extern INT get_menu_item_count( HMENU handle );
