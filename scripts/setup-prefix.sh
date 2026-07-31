@@ -311,6 +311,120 @@ else
     "$WINESERVER" -w
 fi
 
+# Repair Max for Live's font fallback chain.
+#
+# M4L devices are authored on macOS and name faces absent here (Geneva, Menlo,
+# Lucida Grande, Helvetica Neue, Consolas). Windows' font mapper substitutes
+# silently; Wine reports the failure honestly, so MaxPlug walks its own chain,
+# which terminates at Bitstream Vera - shipped by neither Wine nor Live, and
+# superseded on modern distros by DejaVu. The chain runs out and MaxPlug parks
+# Live's UI thread on a condition variable that is never signalled: window
+# frozen at zero CPU, audio still playing.
+#
+# Both halves below are needed. A FontSubstitutes alias only redirects
+# CreateFontIndirect and never enters EnumFontFamilies, which is what Max
+# matches against; and copied-in files stay invisible until registered, Wine's
+# font list being registry-driven. Idempotent, and runs under --refresh too.
+# See notes/FINDINGS-M4L-CARBON-REGULATOR-DEADLOCK-2026-07-29.md.
+install_maxplug_fallback_fonts() {
+    local winfonts="$WINEPREFIX/drive_c/windows/Fonts"
+    local src="" d n entry missing=0
+    # face name -> filename. Upstream Vera names are fixed, so no runtime probing.
+    local faces=(
+        "Bitstream Vera Sans:Vera.ttf"
+        "Bitstream Vera Sans Bold:VeraBd.ttf"
+        "Bitstream Vera Sans Oblique:VeraIt.ttf"
+        "Bitstream Vera Sans Bold Oblique:VeraBI.ttf"
+        "Bitstream Vera Sans Mono:VeraMono.ttf"
+        "Bitstream Vera Sans Mono Bold:VeraMoBd.ttf"
+        "Bitstream Vera Sans Mono Oblique:VeraMoIt.ttf"
+        "Bitstream Vera Sans Mono Bold Oblique:VeraMoBI.ttf"
+        "Bitstream Vera Serif:VeraSe.ttf"
+        "Bitstream Vera Serif Bold:VeraSeBd.ttf"
+    )
+
+    # Prefer the vendored copy so no host font package is needed; fall back to a
+    # system install if the kit was trimmed. kit_root sets $root as a side
+    # effect, so it is called as a statement rather than substituted.
+    if kit_root && [ -f "$root/vendor/fonts/bitstream-vera/Vera.ttf" ]; then
+        src="$root/vendor/fonts/bitstream-vera"
+    else
+        for d in /usr/share/fonts/truetype/ttf-bitstream-vera \
+                 /usr/share/fonts/bitstream-vera \
+                 /usr/share/fonts/TTF; do
+            [ -f "$d/Vera.ttf" ] && { src="$d"; break; }
+        done
+    fi
+
+    if [ -z "$src" ]; then
+        echo "!! Bitstream Vera fonts not found - Max for Live devices that request"
+        echo "   a missing typeface WILL hang Live (frozen window, audio still"
+        echo "   playing). Vendor them into vendor/fonts/bitstream-vera/ or install"
+        echo "   your distro's package (Debian/Ubuntu: ttf-bitstream-vera,"
+        echo "   Fedora: bitstream-vera-fonts, Arch: ttf-bitstream-vera)."
+        return 0                      # non-fatal: everything else still works
+    fi
+
+    # Non-fatal throughout, deliberately: under `set -e` a failed step here
+    # would abort the whole setup and leave the prefix half-configured, which is
+    # worse than a working prefix plus a loud warning. check-m4l-fonts.sh
+    # catches the not-installed state later.
+    if ! mkdir -p "$winfonts"; then
+        echo "!! cannot create $winfonts; skipping the M4L font fallback repair"
+        return 0
+    fi
+
+    local copied=0 registered=0
+    for entry in "${faces[@]}"; do
+        n="${entry##*:}"
+        [ -f "$src/$n" ] || { missing=1; continue; }
+        # -u to skip identical files on a refresh; not every cp has it.
+        if cp -u "$src/$n" "$winfonts/$n" 2>/dev/null || cp "$src/$n" "$winfonts/$n"; then
+            copied=$((copied + 1))
+        else
+            echo "!! failed to copy $n into $winfonts"
+        fi
+    done
+    [ "$missing" -eq 1 ] && echo "   (some Vera faces absent from $src; registering what is present)"
+
+    # One import rather than ten `wine reg add` calls: each spawns a wine
+    # process, and this runs on every setup and every --refresh. Backslashes are
+    # doubled and lines are CRLF because that is what .reg format wants; the
+    # values land byte-identical to what reg add wrote.
+    local reg_file fonts_key='HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+    reg_file="$(mktemp)" || { echo "!! cannot write a temporary .reg; skipping registration"; return 0; }
+    {
+        printf 'REGEDIT4\r\n\r\n'
+        printf '[%s]\r\n' "$fonts_key"
+        for entry in "${faces[@]}"; do
+            n="${entry##*:}"
+            [ -f "$winfonts/$n" ] || continue
+            printf '"%s (TrueType)"="%s"\r\n' "${entry%%:*}" 'C:\\windows\\Fonts\\'"$n"
+            registered=$((registered + 1))
+        done
+        printf '\r\n'
+    } > "$reg_file"
+
+    if [ "$registered" -gt 0 ] && ! wine reg import "$reg_file" >/dev/null 2>&1; then
+        registered=0                  # import failed: nothing landed
+    fi
+    rm -f "$reg_file"
+    "$WINESERVER" -w || true
+
+    if [ "$registered" -eq 0 ]; then
+        echo "!! MaxPlug font fallback NOT registered ($copied file(s) copied)."
+        echo "   M4L devices requesting a missing typeface will hang Live."
+        echo "   Re-run this script with Live closed, then verify with:"
+        echo "     scripts/check-m4l-fonts.sh"
+    elif [ "$registered" -lt "${#faces[@]}" ]; then
+        echo "   MaxPlug font fallback partially registered ($registered/${#faces[@]}); verify with scripts/check-m4l-fonts.sh"
+    else
+        echo "   MaxPlug font fallback installed and registered (source: $src)"
+    fi
+}
+echo "== fonts: Max for Live fallback chain =="
+install_maxplug_fallback_fonts
+
 # Live bundles the exact VC++ redistributable it was built against in its own
 # Redist folder (<Live folder>/Redist, next to Program/): present only after
 # Live's installer has run, so fresh prefixes never match here.
