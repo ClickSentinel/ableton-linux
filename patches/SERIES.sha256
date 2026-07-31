@@ -51,6 +51,6 @@ f278d870c0424748a9d7a7cd5a6e9feb0837900e6382f4ee9d7cfe214c0b9fd5  0052-win32u-hi
 d32ac8ca55853e5488292d015e35a31d23744150e04af476742e781b58abc186  0053-winex11-export-the-app-minimum-tracking-size-as-PMin.patch
 5c97ce27e69ea1caffef5197a8e0f19893829c1c868e06c89e660352ad2919a1  0055-dxgi-prefer-GL-present-for-top-level-swapchain-devic.patch
 11dbb4c36378fc274e8eaa281e9bfbe43835bd0fae2682924d19aee318b673bb  0056-dxgi-gate-parked-dcomp-reblits-on-window-visibility.patch
-0eca3953ebcfaed1b3eb77a76e3548e41d7a40a1c7da3bb92feb14be27fc08b3  0057-wined3d-describe-unlisted-GPUs-from-the-driver-s-own.patch
+0eca3953ebcfaed1b3eb77a76e3548e41d7a40a1c7da3bb92feb14be27fc08b3  0061-wined3d-describe-unlisted-GPUs-from-the-driver-s-own.patch
 b2d30d77078263b8141199195ea16b0e6df7eac04b939b9e56cd53552cfb9175  pipeasio/0001-asio-keep-graph-sample-rate-instead-of-ASE_NoClock.patch
 f25d5b4c3ee71b7e9491f91c462e2b7ddaca377b8b94c7bd95df7734f0a4b563  pipeasio/0002-asio-report-timeGetTime-in-ASIO-systemTime.patch

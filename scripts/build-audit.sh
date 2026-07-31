@@ -72,6 +72,10 @@ declare -A SERIES_GAPS=(
     [0027]="retired 2026-07-14 — gitignore housekeeping, no artifact effect"
     [0044]="reserved 2026-07-24 for the issue 57 parked-pane reblit gate; shipped as 0056 instead"
     [0054]="reserved 2026-07-29 for PR 77's language-fallback font patch"
+    [0057]="reserved 2026-07-30 for PR 88's winex11 offscreen-class patch"
+    [0058]="reserved 2026-07-30 for PR 102's GDI client-rect disagreement patch"
+    [0059]="reserved 2026-07-30 for PR 107's DPI-context client-rect query patch"
+    [0060]="reserved 2026-07-30 for PR 108's IFileOperation DeleteItem patch"
 )
 seq_expect=1
 for f in $(awk '{print $2}' "$SERIES" | grep -v '^pipeasio/' | sort); do
@@ -130,7 +134,7 @@ FINGERPRINTS='
 0045|ascii|lib/wine/x86_64-windows/ole32.dll|revoke for another process windows is disabled
 0055|wide|lib/wine/x86_64-windows/dxgi.dll|WINE_DISABLE_GL_PRESENT
 0056|ascii|lib/wine/x86_64-windows/dxgi.dll|Re-blit skipped (hidden ancestry)
-0057|ascii|lib/wine/x86_64-windows/wined3d.dll|is not in the description table
+0061|ascii|lib/wine/x86_64-windows/wined3d.dll|is not in the description table
 pipeasio/0001|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-clamp-sample-rate
 pipeasio/0002|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-midi-timebase
 '
