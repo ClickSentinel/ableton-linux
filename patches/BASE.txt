@@ -11,8 +11,8 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 52 files, numbered 0001 through 0055.
-Patches 0027, 0044, and 0054 are intentionally absent.
+The current Wine series contains 54 files, numbered 0001 through 0056.
+Patches 0027 and 0044 are intentionally absent.
 
 ## Applying the series
 
@@ -154,8 +154,16 @@ Apply them in sequence with the rest of the series.
   opposite edge, occasional spurious maximize). Found 2026-07-27 while
   enabling Live's GPU renderer. See
   `notes/ABLETON-WINE-GPU-RENDERER.md`.
-- `0054`: reserved for the language-fallback font work on PR 77. No
-  patch file is shipped.
+- `0054`: fall back to a linked font for a glyph missing from the
+  launcher's Ableton Sans menu-bar substitute (issue 35). Wine consults
+  the `SystemLink` chain only when selecting a whole font by charset,
+  never when rendering a glyph. `draw_menu_item` now tests per-string
+  coverage with `NtGdiGetGlyphIndicesW` and, on a miss, walks the
+  registered families for one that covers the whole string.
+  `calc_menu_item_size` measures with that same font: it had sized
+  `item->rect` with the original, clipping the wider fallback render
+  ("オプション" truncating to "プショ"). See
+  `notes/ABLETON-WINE-MENU-FONT-FALLBACK.md`.
 - `0055`: set `WINED3D_SWAPCHAIN_PREFER_GL_PRESENT` for top-level D3D11
   swapchain windows. Without the flag, wined3d displayed every frame of
   Live's main window through GDI: it copied the finished frame from the
