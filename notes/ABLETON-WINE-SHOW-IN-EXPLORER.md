@@ -1,8 +1,10 @@
 # Show in Explorer uses the host file manager
 
-Status: fixed in release 2026.07.22.1 by Wine patch 0043. When the XDG portal
-accepts Live's request, Show in Explorer opens the host file manager. Wine
-Explorer remains the fallback.
+Status: file targets fixed in release 2026.07.22.1 by Wine patch 0043. Folder
+targets failed on some portal setups (issue 41 follow-up, 2026-07-23). Patch
+0063 (2026-08-01) routes folder targets through the FileManager1 service; it
+is not in a release and its verification is pending. Wine Explorer remains
+the fallback.
 
 ## Request path
 
@@ -45,6 +47,36 @@ target for it. Tests on 2026-07-21 covered both `ShellExecuteExW` and
 `ShellExecuteW`. With GNOME and Nemo, file and directory targets opened in the
 host file manager. `dbus-monitor` recorded `OpenDirectory`, and Wine Explorer
 did not start.
+
+## Folder targets and patch 0063 (2026-08-01)
+
+Issue 41 follow-up, 2026-07-23: with patch 0043 the reveal works for files
+but not for folders on the reporter's setup. The 2026-07-21 tests above did
+not catch this because that backend resolved directory descriptors.
+`OpenDirectory` is only defined for files: it opens the directory containing
+a local file. What a backend does with a directory descriptor varies by
+xdg-desktop-portal version and backend.
+
+[Patch 0063](../patches/0063-comdlg32-reveal-explorer-select-folder-targets-throu.patch)
+identifies directory targets in `__wine_portal_show_item` with
+`GetFileAttributesW` and sends them to the desktop file manager's own
+`org.freedesktop.FileManager1` service on the session bus. The `ShowItems`
+method opens the parent folder with the target selected, which matches
+`explorer /select,"<folder>"` on Windows and Live's reveal on macOS. D-Bus
+activation starts the file manager when it is not running. Paths become
+`file://` URIs with every byte outside the RFC 3986 unreserved set
+percent-encoded, so non-ASCII names survive regardless of locale.
+
+Fallback order for folders: `ShowItems`, then the `OpenDirectory` portal
+call, then Wine Explorer. File targets keep the patch 0043 path unchanged.
+The `FileDialogPortal` policy covers the new call; `never` disables it
+together with the rest of the reveal.
+
+Verification is pending. Patch 0063 applies to the series and the changed
+files pass a syntax check, but the patch has not been built into a runtime
+or exercised against Live. The `tools/showexp.c` probe covers this case when
+given a folder path. `dbus-monitor` should record a `ShowItems` call on
+`org.freedesktop.FileManager1` for a folder target.
 
 ## Policy and fallback
 

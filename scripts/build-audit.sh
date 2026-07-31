@@ -136,6 +136,7 @@ FINGERPRINTS='
 0060|ascii|lib/wine/x86_64-windows/shell32.dll|IFileOperation DeleteItem via SHFileOperation
 0061|ascii|lib/wine/x86_64-windows/wined3d.dll|is not in the description table
 0062|ascii|lib/wine/x86_64-unix/winex11.so|WINE_X11_FORCE_OFFSCREEN_CLASS
+0063|ascii|lib/wine/x86_64-unix/comdlg32.so|org.freedesktop.FileManager1
 pipeasio/0001|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-clamp-sample-rate
 pipeasio/0002|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-midi-timebase
 '
