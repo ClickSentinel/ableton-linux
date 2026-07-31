@@ -11,8 +11,8 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 59 files, numbered 0001 through 0062.
-Patches 0027, 0044, and 0057 are intentionally absent.
+The current Wine series contains 60 files, numbered 0001 through 0062.
+Patches 0027 and 0044 are intentionally absent.
 
 ## Applying the series
 
@@ -92,8 +92,8 @@ Apply them in sequence with the rest of the series.
   portal. Wine Explorer remains the fallback when the portal or policy refuses
   the request. Mailbox commit: `996524ab`. See
   `notes/ABLETON-WINE-SHOW-IN-EXPLORER.md`.
-- `0044`: reserved for the issue 57 parked-pane reblit work. No patch file is
-  shipped.
+- `0044`: reserved for the issue 57 parked-pane reblit work, which shipped
+  as patch 0056 instead. No patch file is shipped under this number.
 - `0045`: reject `RevokeDragDrop` for a window owned by another process. This
   prevents a foreign-process drop-target pointer from crashing Live when a
   WebView2 plugin editor closes. Ported from `giang17/wine` commit
@@ -182,8 +182,17 @@ Apply them in sequence with the rest of the series.
 - `0056`: gate parked DirectComposition reblits on window visibility.
   A parked WebView2 composition target kept stamping its stale
   composite over live siblings (issue 57).
-- `0057`: reserved for the Intel GPU identification work on the
-  `fix/intel-gpu` branch. No patch file is shipped here yet.
+- `0057`: identify Intel GPUs from Ice Lake through Lunar Lake, plus the
+  Arc A-series cards. Without an entry wined3d reports each of them as
+  "Intel(R) HD Graphics 4000", which Live 12 rejects for D3D11, exactly
+  as 0035 describes for Battlemage. Device IDs come from the pci.ids
+  database; devices still missing fall through to 0061's synthesised
+  description instead. A table entry takes precedence over 0061, and for
+  Meteor Lake it has to: 0061 synthesises the device's real Windows
+  name, "Intel(R) Arc(tm) Graphics", and a 0061-only build stayed
+  greyed out on the issue 84 machine (PR 105 comments, 2026-07-31). The
+  "(MTL)" suffix in the table name is what passes Live's check. See
+  issue 84 and `notes/ABLETON-WINE-GPU-RENDERER.md`.
 - `0058`: fall back to the GDI present path for any frame whose
   present-time client rect disagrees with the captured destination
   rect. The direct GL path (0055) y-flips against a client rect
@@ -214,6 +223,6 @@ Apply them in sequence with the rest of the series.
   winex11's offscreen-composited path. The Live launcher selects
   `Ableton Live Window Class`, preventing M4L child visibility from
   unmapping and reparenting the full Live client when track selection
-  changes. Was proposed as 0057 on PR 88; renumbered, 0057 stays
-  reserved for `fix/intel-gpu`. See
+  changes. Was proposed as 0057 on PR 88; renumbered, and 0057 went to
+  the Intel GPU identification work it was reserved for. See
   `notes/ABLETON-WINE-M4L-SELECTION-FLICKER.md`.

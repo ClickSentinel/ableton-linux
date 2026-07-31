@@ -170,12 +170,44 @@ measurement. With 0059 there is nothing to trade: the bar is gone and
 the direct path survives. 0058 stays in as the safety net, silent, and
 as the assertion that the two contexts now agree.
 
+## Device identification (added 2026-07-30, updated 2026-08-01, issue 84)
+
+Live checks the graphics card before it enables the GPU renderer. It
+reads the device name and PCI ID that wined3d reports, and wined3d
+takes both from a device table. A card missing from that table is
+reported as "Intel(R) HD Graphics 4000", a 2012 device that Live
+rejects. On such a machine Preferences > Display & Input greys out
+"Enable GPU Renderer" with the reason text "Intel(R) HD Graphics
+4000: Unexplained slow UI at zoom-level 100% and/or crashes", and
+nothing else in this note applies.
+
+The table ended at 2018's Coffee Lake, plus one Battlemage entry from
+patch 0035. Wine patch 0057 adds the families from Ice Lake through
+Lunar Lake and the Arc A-series cards, so Live sees a current device
+name and its own check passes. Confirmed on issue 84's Meteor Lake
+laptop 2026-07-30: stickyfran built this branch and the GPU renderer
+enabled (issue 84 comments).
+
+Patch 0061 covers devices missing from the table by synthesising the
+description from the driver's own renderer string. That is not enough
+for Meteor Lake: the synthesised name, "Intel(R) Arc(tm) Graphics", is
+the device's real Windows name, and a build with 0061 alone stayed
+greyed out on the same laptop (PR 105 comments, 2026-07-31). A table
+entry takes precedence over 0061, and the "(MTL)" suffix in 0057's
+entry is what passes Live's check. A traced launch from that machine
+confirming the exact rejected name is still open.
+
+To check a machine: open Preferences > Display & Input. "Enable GPU
+Renderer" must be a switch, not greyed out with the HD 4000 reason
+text.
+
 ## Related
 
 - [Diagnosis narrative](ABLETON-WINE-GPU-RENDERER-WEBVIEW2-DIAGNOSIS.md)
 - [Learn View flicker mechanism](ABLETON-WINE-LEARNVIEW-FLICKER.md)
 - [Patch 0053](../patches/0053-winex11-export-the-app-minimum-tracking-size-as-PMin.patch)
 - [Patch 0055](../patches/0055-dxgi-prefer-GL-present-for-top-level-swapchain-devic.patch)
+- [Patch 0057](../patches/0057-wined3d-add-Intel-graphics-devices-from-Ice-Lake-to-.patch)
 - Resize trace from the diagnosis session:
   `~/Projects/Code/ableton/live-resize-trace-gpu-20260727.log`
   (machine-local)

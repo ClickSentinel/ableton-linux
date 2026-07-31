@@ -130,6 +130,7 @@ FINGERPRINTS='
 0045|ascii|lib/wine/x86_64-windows/ole32.dll|revoke for another process windows is disabled
 0055|wide|lib/wine/x86_64-windows/dxgi.dll|WINE_DISABLE_GL_PRESENT
 0056|ascii|lib/wine/x86_64-windows/dxgi.dll|Re-blit skipped (hidden ancestry)
+0057|ascii|lib/wine/x86_64-windows/wined3d.dll|Arc(tm) Graphics (MTL)
 0058|ascii|lib/wine/x86_64-windows/wined3d.dll|Present-time client rect disagrees
 0059|ascii|lib/wine/x86_64-windows/wined3d.dll|Flip client rect queried in the window DPI context
 0060|ascii|lib/wine/x86_64-windows/shell32.dll|IFileOperation DeleteItem via SHFileOperation
