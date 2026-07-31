@@ -11,7 +11,7 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 57 files, numbered 0001 through 0061.
+The current Wine series contains 58 files, numbered 0001 through 0062.
 Patches 0027, 0044, 0054, and 0057 are intentionally absent.
 
 ## Applying the series
@@ -202,3 +202,10 @@ Apply them in sequence with the rest of the series.
   the string Live rejects, which is what 0035 worked around one device at a
   time. The Vulkan back end already behaves this way. See issue 84 and
   `notes/ABLETON-WINE-GPU-RENDERER.md`.
+- `0062`: let the launcher keep one exact top-level Windows class on
+  winex11's offscreen-composited path. The Live launcher selects
+  `Ableton Live Window Class`, preventing M4L child visibility from
+  unmapping and reparenting the full Live client when track selection
+  changes. Was proposed as 0057 on PR 88; renumbered, 0057 stays
+  reserved for `fix/intel-gpu`. See
+  `notes/ABLETON-WINE-M4L-SELECTION-FLICKER.md`.
