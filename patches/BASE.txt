@@ -11,7 +11,7 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 61 files, numbered 0001 through 0063.
+The current Wine series contains 62 files, numbered 0001 through 0064.
 Patches 0027 and 0044 are intentionally absent.
 
 ## Applying the series
@@ -232,3 +232,9 @@ Apply them in sequence with the rest of the series.
   reveals failed on the setups reported in issue 41. The portal call and
   Wine Explorer remain the fallbacks. Mailbox commit: `bc577464`. See
   `notes/ABLETON-WINE-SHOW-IN-EXPLORER.md`.
+- `0064`: route explorer folder-open commands (`/e,<dir>`, `/root,<dir>`,
+  bare `<dir>`) to `org.freedesktop.FileManager1.ShowFolders`. Live's
+  library panel issues `explorer.exe /e,"<folder>"`, which 0043/0063
+  only intercepted in its `/select` form, so the library panel still
+  spawned Wine Explorer. Fallbacks: the 0063 reveal ladder, then Wine
+  Explorer. See `notes/ABLETON-WINE-SHOW-IN-EXPLORER.md`.
