@@ -1,0 +1,91 @@
+# Nightly full build of main, plus the build audit against the artifact it
+# produces. Manual runs are first-class:
+#
+#   gh workflow run nightly-build.yml --repo <owner>/ableton-linux
+#   gh workflow run nightly-build.yml --repo <owner>/ableton-linux --ref <branch>
+#
+# Why nightly rather than per-PR: ci-pr-build.yml already builds PRs that touch
+# the build, and ci-checks.yml catches a patch that stopped applying in seconds.
+# What neither catches is rot that arrives without a commit — a base image whose
+# apt packages moved, a toolchain bump, a GitHub runner image change. That shows
+# up on a clean nightly and nowhere else.
+#
+# Unlike ci-pr-build.yml this runs the build audit (scripts/build-audit.sh)
+# against the finished tarball, so every patch is verified present in the shipped
+# binaries by fingerprint, not merely applied to the source tree.
+name: nightly-build
+
+on:
+  schedule:
+    # 04:00 UTC. GitHub queues scheduled runs on a best-effort basis and skips
+    # them entirely on repos with no activity for 60 days.
+    - cron: "0 4 * * *"
+  workflow_dispatch: {}
+
+# A manual run while the nightly is mid-flight should win; two full Wine builds
+# racing each other just burns runner time.
+concurrency:
+  group: nightly-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Skips the scheduled run on forks, which do not want a nightly 40-minute
+    # build; manual dispatch still works there.
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'shibco/ableton-linux'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Restore ccache
+        uses: actions/cache@v6
+        with:
+          path: .ccache
+          key: ccache-${{ runner.os }}-${{ hashFiles('patches/**', 'Containerfile') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build container image (Buildx, GHA layer cache)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Containerfile
+          tags: ableton-wine-build:22.04
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Wine + PipeASIO + ableton-linkd
+        run: ENGINE=docker JOBS="$(nproc)" ./build.sh
+
+      # container-build.sh writes dist/ and .ccache/ as the container's root
+      # under plain `docker run`; the later steps run as the unprivileged runner.
+      - name: Fix ownership of container output
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" dist .ccache
+
+      # The reason this workflow exists rather than just re-running ci-pr-build:
+      # per-patch fingerprints against the actual shipped binaries.
+      - name: Build audit (every patch verified in the built artifact)
+        run: ./scripts/build-audit.sh
+
+      - name: ccache stats
+        if: always()
+        continue-on-error: true
+        run: docker run --rm -v "$PWD/.ccache:/ccache" -e CCACHE_DIR=/ccache ableton-wine-build:22.04 ccache -s
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-wine-build
+          path: |
+            dist/wine-d2d1-nspa-11.13-*.tar.zst
+            dist/wine-d2d1-nspa-11.13-*.tar.zst.sha256
+            dist/ableton-linkd
+            dist/BUILD-INFO-*.txt
+          if-no-files-found: error
+          retention-days: 7

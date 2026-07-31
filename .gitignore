@@ -34,3 +34,6 @@ xclose
 xdrag
 xsettle
 !/tools/learnheal.exe
+
+# test harness (vendored bats-core; see tests/run.sh)
+.bats-core/
