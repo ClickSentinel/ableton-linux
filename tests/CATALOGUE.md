@@ -7,14 +7,14 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-118 tests across 8 suites. See [README.md](README.md) for how to run
+119 tests across 8 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
 ## Contents
 
 - [tests/repo-hygiene.bats](#repo-hygiene) — 14 test(s)
-- [tests/packaging.bats](#packaging) — 7 test(s)
+- [tests/packaging.bats](#packaging) — 8 test(s)
 - [tests/launcher-cli.bats](#launcher-cli) — 19 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
@@ -69,13 +69,14 @@ staging list and checks it against what the kit's own scripts reference.
 
 | # | Test | Guards |
 | --- | --- | --- |
-| 1 | every file make-installer.sh stages into the kit exists in the repo | — |
-| 2 | every script a kit script sources is itself staged into the kit | issue label 'installer' — scripts resolve every path in a checkout, only some in the kit |
-| 3 | every sibling file a kit script executes or installs is staged too | — |
-| 4 | kit-relative desktop and vendor paths are staged wholesale | — |
-| 5 | the runtime name is identical in make-installer.sh, build.sh and install.sh | — |
-| 6 | the kit ships the GPL source and licence Ableton Link requires | licence GPLv2+ — Ableton Link has no linking exception, so the source must travel with the binary |
-| 7 | release.yml's asset list matches what make-installer.sh actually produces | — |
+| 1 | the kit staging list is still parseable out of make-installer.sh | the staging list is recovered by anchored sed, so a reformat of |
+| 2 | every file make-installer.sh stages into the kit exists in the repo | — |
+| 3 | every script a kit script sources is itself staged into the kit | issue label 'installer' — scripts resolve every path in a checkout, only some in the kit |
+| 4 | every sibling file a kit script executes or installs is staged too | — |
+| 5 | kit-relative desktop and vendor paths are staged wholesale | — |
+| 6 | the runtime name is identical in make-installer.sh, build.sh and install.sh | — |
+| 7 | the kit ships the GPL source and licence Ableton Link requires | licence GPLv2+ — Ableton Link has no linking exception, so the source must travel with the binary |
+| 8 | release.yml's asset list matches what make-installer.sh actually produces | — |
 
 <a id="launcher-cli"></a>
 
@@ -305,3 +306,4 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `scripts/detect-scale.sh DPI policy` | detect-scale: block map: gnome scales collapse onto the ceil-based matched set<br>detect-scale: block map: non-gnome scales round to plain LogPixels with no IFEO |
 | `scripts/detect-theme.sh` | detect-theme: newest prefs dir: mtime wins, not a version sort<br>detect-theme: newest prefs dir: the sort -V trap case, stated explicitly |
 | `scripts/setup-run-header.sh line 19` | repo-hygiene: the installer header survives being run by a real POSIX sh |
+| `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |

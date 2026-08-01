@@ -30,6 +30,20 @@ kit_script_names() {
         | sed 's#.*/##; s#"$##'
 }
 
+# guards: the staging list is recovered by anchored sed, so a reformat of
+# make-installer.sh shrinks it silently and every test below keeps passing over
+# whatever is left — indenting the cp block by two spaces takes it from 12 names
+# to 3, with the suite still green
+@test "the kit staging list is still parseable out of make-installer.sh" {
+    n="$(kit_script_names | wc -l)"
+    [ "$n" -ge 10 ] || {
+        echo "kit_script_names recovered only $n entries (expected at least 10)." >&2
+        echo "make-installer.sh's staging block has moved or been reformatted, so the" >&2
+        echo "packaging tests are now checking a fraction of the kit and reporting pass." >&2
+        echo "Re-anchor the sed range in kit_script_names to match the new shape." >&2
+        false; }
+}
+
 @test "every file make-installer.sh stages into the kit exists in the repo" {
     cd "$REPO"
     missing=""
