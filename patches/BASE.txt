@@ -11,7 +11,7 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 62 files, numbered 0001 through 0064.
+The current Wine series contains 63 files, numbered 0001 through 0065.
 Patches 0027 and 0044 are intentionally absent.
 
 ## Applying the series
@@ -238,3 +238,9 @@ Apply them in sequence with the rest of the series.
   only intercepted in its `/select` form, so the library panel still
   spawned Wine Explorer. Fallbacks: the 0063 reveal ladder, then Wine
   Explorer. See `notes/ABLETON-WINE-SHOW-IN-EXPLORER.md`.
+- `0065`: normalize monitor-covering geometry for one launcher-selected
+  top-level Windows class, keep its attached menu out of fullscreen layout
+  and painting, and retire an already-satisfied X11 configure request before
+  removing `_NET_WM_STATE_FULLSCREEN` on exit. The Live launcher selects
+  `Ableton Live Window Class`; other classes and ordinary windowed geometry
+  retain Wine's existing behavior. See `notes/ABLETON-WINE-FULLSCREEN.md`.
