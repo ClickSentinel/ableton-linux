@@ -15,16 +15,22 @@ viewport. The rendered controls and their input coordinates are displaced by
 the unwanted menu allowance.
 
 Patch 0065 lets the launcher select one exact top-level Windows class through
-`WINE_WIN32_FULLSCREEN_CLASS`. When that class requests a rectangle covering a
-monitor with no more than a small edge overshoot, win32u marks the window as
-fullscreen before non-client calculation and clamps the request to the exact
-monitor rectangle. The still-attached menu contributes no layout or painting
-while that mark is active. Leaving fullscreen clears the mark and restores
-ordinary menu handling.
+`WINE_WIN32_FULLSCREEN_CLASS`. When that class becomes borderless and requests
+a rectangle covering a monitor with no more than a small edge overshoot,
+win32u marks the window as fullscreen before non-client calculation and clamps
+the request to the exact monitor rectangle. The still-attached menu contributes
+no layout or painting while that mark is active.
 
-The monitor-covering check is deliberately bounded: it does not turn arbitrary
-large window requests into fullscreen, and it does not affect child windows or
-classes that the launcher did not select.
+Live can enter fullscreen through a no-size window-position pass that skips
+`WM_NCCALCSIZE`. The patch therefore enforces the monitor-sized client after
+Wine's non-client calculation and discards stale windowed valid rectangles.
+This prevents the old menu/frame strip from being copied into the fullscreen
+surface and keeps rendered controls aligned with pointer input.
+
+The monitor-covering check is deliberately bounded and requires the selected
+window to be borderless. A captioned window can fill the monitor without being
+treated as fullscreen, so ordinary windowed layout and its menu remain intact.
+Child windows and classes that the launcher did not select are unaffected.
 
 ## Fullscreen exit
 
@@ -43,8 +49,10 @@ break that wait, which is why dragging the window appeared to repair it.
 On the selected class's fullscreen-to-windowed transition, patch 0065 retires
 only a pending configure whose rectangle is already identical to the current
 compositor rectangle. It then updates `_NET_WM_STATE` before queuing the restored
-window geometry. No synthetic move, recursive `SetWindowPos`, or compositor
-specific command is involved.
+window geometry. Removing the fullscreen marker also forces a non-client
+recalculation, restoring the ordinary menu and client rectangle even when Live
+exits through another no-size pass. No synthetic move, recursive `SetWindowPos`,
+or compositor-specific command is involved.
 
 The diagnostic trace for the repaired path includes:
 
@@ -61,19 +69,7 @@ The Live launcher selects the exact main-window class by default:
 WINE_WIN32_FULLSCREEN_CLASS="Ableton Live Window Class"
 ```
 
-For a one-launch unpatched comparison:
-
-```bash
-WINE_WIN32_FULLSCREEN_CLASS=off ableton-live
-```
-
-`off` is simply a non-matching class name, so both 0065 paths remain dormant.
-Without the variable, or for every other class, Wine keeps its existing
-behavior.
-
-This patch does not change general minimum-size handling. Patch 0053 remains
-responsible for exporting Live's `WM_GETMINMAXINFO` minimum as the X11
-`PMinSize` hint.
+`WINE_WIN32_FULLSCREEN_CLASS=off` is available for A/B comparison.
 
 ## Validation
 
@@ -85,4 +81,7 @@ responsible for exporting Live's `WM_GETMINMAXINFO` minimum as the X11
   desktop panel; client content and pointer input remained aligned.
 - Each exit returned directly to normal floating geometry without a stale
   fullscreen surface, and the window could be moved and resized immediately.
-- Ordinary windowed menu layout and post-fullscreen resizing remained intact.
+- A captioned window at exactly 1920x1080 remained windowed, kept its menu, and
+  did not advertise `_NET_WM_STATE_FULLSCREEN`.
+- FabFilter Pro-Q 4 opened, rendered, accepted input, and closed normally after
+  the fullscreen changes.
