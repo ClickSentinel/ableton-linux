@@ -55,10 +55,37 @@ else
     echo "   (no .sha256 next to tarball: skipping)"
 fi
 
-if pgrep -af '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1 || \
-   pgrep -af "$OPT/$NAME" >/dev/null 2>&1; then
-    echo "!! the installed Ableton Wine is still running: close Live, wait a few seconds, and rerun" >&2
-    exit 1
+# Anything still running from the installed runtime holds the old files
+# open. Stop it all instead of refusing: Live and its helpers first, then
+# the prefix's wineserver, then force-kill whatever is left under
+# $OPT/$NAME. ableton-linkd is not part of the runtime and is handled at
+# its own install step below.
+live_up=0
+if pgrep -af '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1; then
+    live_up=1
+fi
+if [ "$live_up" -eq 1 ] || pgrep -af "$OPT/$NAME" >/dev/null 2>&1; then
+    echo "== stopping running Ableton processes =="
+    pgrep -af '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' || true
+    pgrep -af "$OPT/$NAME" || true
+    # Closing Live discards unsaved work, so ask first. Leftover wineserver
+    # and winedevice.exe without Live have nothing to save: no prompt.
+    # /dev/tty rather than stdin: the .run wrapper feeds the script through
+    # a pipe. Without a terminal there is nobody to ask; proceed.
+    if [ "$live_up" -eq 1 ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+        printf "You're updating and Live is still open. Make sure you've saved everything and press Enter to continue." > /dev/tty
+        read -r _ < /dev/tty || true
+    fi
+    pkill -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
+    if [ -x "$OPT/$NAME/bin/wineserver" ]; then
+        WINEPREFIX="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}" \
+            "$OPT/$NAME/bin/wineserver" -k 2>/dev/null || true
+    fi
+    for _ in $(seq 1 20); do
+        pgrep -f "$OPT/$NAME" >/dev/null 2>&1 || break
+        sleep 0.5
+    done
+    pkill -9 -f "$OPT/$NAME" 2>/dev/null || true
 fi
 
 echo "== stage and validate patched Wine =="
@@ -184,8 +211,21 @@ done
 # timeline survive a Live restart (notes/ABLETON-WINE-LINK-FIRSTCLASS.md).
 # The launcher auto-starts it. The .run wrapper calls setup-link.sh once after
 # this install; repository installs may call the staged script directly.
+# Stop a running daemon before replacing the binary, else the old process
+# keeps running from the deleted inode and the update takes effect only
+# after a reboot. SIGTERM is a clean exit for it, so Restart=on-failure
+# does not undo the stop.
+linkd_active=0
+if systemctl --user is-active --quiet ableton-linkd.service 2>/dev/null; then
+    linkd_active=1
+    systemctl --user stop ableton-linkd.service 2>/dev/null || true
+fi
+pkill -x ableton-linkd 2>/dev/null || true   # launcher-started instance, no unit
 install -m755 "$linkd" "$HOME/.local/share/ableton-wine/ableton-linkd"
 install -m644 "$linkd_unit" "$HOME/.local/share/ableton-wine/ableton-linkd.service"
+if [ "$linkd_active" -eq 1 ]; then
+    systemctl --user start ableton-linkd.service 2>/dev/null || true
+fi
 # Keep the setup command installed for retries after a firewall or
 # hook-removal failure.
 install -m755 "$here/setup-link.sh" "$HOME/.local/share/ableton-wine/setup-link.sh"
