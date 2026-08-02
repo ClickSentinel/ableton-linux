@@ -76,7 +76,8 @@ WINE_WIN32_FULLSCREEN_CLASS="Ableton Live Window Class"
 - The complete Wine 11.13 patch stack built successfully and the build audit
   passed 88 checks, including the win32u and winex11 0065 fingerprints.
 - `View -> Full Screen` and F11 entry/exit were exercised repeatedly on both
-  Niri with xwayland-satellite and Plasma/KWin with Xwayland.
+  Niri with xwayland-satellite and Plasma/KWin with Xwayland. Follow-up runs
+  on GNOME, Sway, and MangoWM behaved the same (PR 114 comments, 2026-08-01).
 - Fullscreen covered the 1920x1080 output without a title bar, native menu, or
   desktop panel; client content and pointer input remained aligned.
 - Each exit returned directly to normal floating geometry without a stale
@@ -85,3 +86,14 @@ WINE_WIN32_FULLSCREEN_CLASS="Ableton Live Window Class"
   did not advertise `_NET_WM_STATE_FULLSCREEN`.
 - FabFilter Pro-Q 4 opened, rendered, accepted input, and closed normally after
   the fullscreen changes.
+
+## Open checks
+
+- Multi-monitor layouts remain untested. The normalization binds to the
+  monitor that `monitor_info_from_rect` returns for the requested rectangle,
+  and a window spanning two outputs matches no monitor within the 256-pixel
+  tolerance, so the patch leaves it alone. Entering fullscreen on each
+  output of a two-monitor setup still needs a verification run.
+- Fractional display scaling remains untested in fullscreen. The marking
+  runs in thread-DPI coordinates before `map_dpi_winpos`, matching the
+  surrounding code, and needs one run on a 125% or 150% desktop.

@@ -29,6 +29,38 @@ This workaround is only needed for affected plugins. See the
 [Pianoteq investigation](notes/ABLETON-WINE-PIANOTEQ-DPI-GHOST-BUG.md) for the
 confirmed failure mode.
 
+## Live's "Enable GPU Renderer" setting is greyed out
+
+If you're experiencing performance issues or high CPU usage when idle, Live
+may not be using your GPU. By default, Live will always offload the UI to
+your GPU for maximum performance, but will only do so when it recognises
+the name of your GPU. On Linux, GPUs will 'tell' Live their name without
+any external interference, and because Live is anticipating that interference,
+it may not recognise the GPU's name and refuse to use the GPU.
+
+To confirm this problem, open **Settings > Display & Input**. 
+If **Enable GPU Renderer** is greyed out, and the note under it names a 
+graphics card that is not the one in your computer, then you're seeing this
+exact problem. 
+
+To solve it: **update this project**.
+
+Download [the latest installer](https://github.com/shibco/ableton-linux/releases/latest/download/install-ableton-latest.run)
+and run the update. It keeps your Live installation, your license, and
+your projects:
+
+```bash
+sh ~/Downloads/install-ableton-latest.run --update
+```
+
+Start Live, open **Settings > Display & Input**, and turn on **Enable GPU
+Renderer**. Live now names your real graphics card, and the setting stays
+on.
+
+If the setting is still greyed out on 2026.08.01.1 or newer,
+[open an issue](https://github.com/shibco/ableton-linux/issues) and
+include your graphics card model.
+
 ## Live 11: Max for Live fails after the first launch
 
 After running Live 11 once, close Live and run:
@@ -121,6 +153,29 @@ or CPU-governor settings. Log out and back in after it completes. Run
 Restart Live after moving it between monitors with different scale factors.
 Override automatic detection for one launch with `ABLETON_DPI_MODE`; available
 values are listed in [the build and configuration reference](BUILDING.md#environment-variables).
+
+## Full Screen shows shifted content or does not fully exit
+
+Update to a release newer than 2026.08.01.1. On 2026.08.01.1 and older,
+**View > Full Screen** and F11 show Live's content shifted, clicks land away
+from their targets, and leaving fullscreen keeps the fullscreen image on
+screen until the window is moved.
+
+Download [the latest installer](https://github.com/shibco/ableton-linux/releases/latest/download/install-ableton-latest.run)
+and run the update. It keeps your Live installation, your license, and
+your projects:
+
+```bash
+sh ~/Downloads/install-ableton-latest.run --update
+```
+
+Until you can update, drag Live's window once after leaving fullscreen to
+clear the stuck image.
+
+If fullscreen is still wrong after the update, launch once with
+`WINE_WIN32_FULLSCREEN_CLASS=off ableton-live`, then
+[open an issue](https://github.com/shibco/ableton-linux/issues) and include
+your desktop environment and whether that launch behaved differently.
 
 ## Report a problem
 
