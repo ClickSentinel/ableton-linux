@@ -10,6 +10,16 @@
   device's ID number, not its name, and the number Wine invents for a model
   it cannot identify belongs to a 2012 part Live refuses. Wine now reports
   the real device.
+- Graphics cards missing from Wine's table keep their real identity even when
+  the driver reports no video memory (Wine patch 0067). Wine reads that figure
+  from a source only NVIDIA's driver provides, so on Intel and AMD it was
+  always absent and the card fell back to the invented 2012 identity.
+- Added `WINE_D3D_FORCE_GPU_RENDERING=1`, which offers Live's GPU renderer on
+  the older Intel graphics Live refuses by model (Wine patch 0068). Run
+  `WINE_D3D_FORCE_GPU_RENDERING=1 ableton-live` to try it. Diagnostics sent to
+  Ableton then carry an inaccurate GPU model, and Live's device name marks the
+  substitution so Ableton engineering can see it, for example
+  "Intel(R) HD Graphics 4000 (reporting as Intel(R) UHD Graphics 630)".
 
 ## 2026.08.01.1
 

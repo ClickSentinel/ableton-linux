@@ -6,7 +6,10 @@
 #            ABLETON_LIVE_VERSION=11|12 (restrict discovery to one major version),
 #            ABLETON_RT=off (skip the realtime probe; run Live under normal scheduling),
 #            ABLETON_LINKD=/path/to/ableton-linkd (Ableton Link session anchor override),
-#            WINE_X11_FORCE_OFFSCREEN_CLASS=off (disable the M4L selection-flicker fix).
+#            WINE_X11_FORCE_OFFSCREEN_CLASS=off (disable the M4L selection-flicker fix),
+#            WINE_D3D_FORCE_GPU_RENDERING=1 (report a baseline Intel GPU so Live offers its
+#              GPU renderer on hardware its own list refuses; the real card name is kept and
+#              the substitution is shown in the device name Live displays).
 set -u
 # Clear inherited Wine variables so this launch uses only the patched build.
 unset WINELOADER WINEDLLPATH WINEDLLOVERRIDES WINEARCH

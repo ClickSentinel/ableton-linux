@@ -11,7 +11,7 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 63 files, numbered 0001 through 0066.
+The current Wine series contains 65 files, numbered 0001 through 0068.
 Patches 0027 and 0044 are intentionally absent; 0065 is reserved by the
 open Push 3 (PR 117) and fullscreen (PR 114) work, which both claim the
 number.
@@ -258,3 +258,24 @@ Apply them in sequence with the rest of the series.
   video memory and the synthesis declines; a table entry bypasses that
   guard. Field report: HP EliteDesk 800 G4 (i5-8500, `0x3e92`) on
   2026.08.01.1. See `notes/ABLETON-WINE-GPU-RENDERER.md`.
+- `0067`: build the synthesised description (0061) even when the driver
+  reports no video memory. The guard assumed a missing figure is worse
+  than the feature-level fallback's approximation, but on the default
+  EGL backend Mesa never supplies one: win32u fills it solely from
+  `GL_NVX_gpu_memory_info`, an NVIDIA-only extension. Every Intel and
+  AMD machine on EGL therefore took the fallback, and for Intel that
+  means fabricated device `0x0162`, which Live refuses. A neutral
+  video-memory figure stands in when the driver supplies none; a
+  machine that does report one is unaffected. See
+  `notes/ABLETON-WINE-GPU-RENDERER.md`.
+- `0068`: add `WINE_D3D_FORCE_GPU_RENDERING=1`, which reports a
+  baseline Intel device ID in place of the card's own so Live's GPU
+  gate passes on hardware its denylist covers. The card's real name is
+  kept and the substitution is named in the description, for example
+  `Intel(R) HD Graphics 4000 (reporting as Intel(R) UHD Graphics 630)`,
+  so it is visible in Live's log, its Preferences dialog and any
+  screenshot. Vendor, driver and video memory are untouched; Intel
+  only; off by default. Ableton's list was drawn against Intel's
+  Windows drivers, and Mesa's drivers for the same silicon are a
+  different implementation, so whether to take the trade is the user's
+  call. See `notes/ABLETON-WINE-GPU-RENDERER.md`.

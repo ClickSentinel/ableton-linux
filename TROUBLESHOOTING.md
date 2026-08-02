@@ -59,9 +59,21 @@ Start Live, open **Settings > Display & Input**, and turn on **Enable GPU
 Renderer**. Live now names your real graphics card, and the setting stays
 on.
 
-If the setting is still greyed out on 2026.08.01.1 or newer,
-[open an issue](https://github.com/shibco/ableton-linux/issues) and
-include your graphics card model.
+If you still have problems, you can force this with:
+
+```bash
+WINE_D3D_FORCE_GPU_RENDERING=1 ableton-live
+```
+
+If you run this flag, any diagnostics you send to Ableton will contain
+inaccurate details about your GPU. We have added additional clarification so
+crash reports, etc sent to Ableton engineering will clearly mark that your
+GPU is being 'seen' by Live as a different model.
+
+Start Live without the flag to go back.
+
+If problems continue, [open an issue](https://github.com/shibco/ableton-linux/issues)
+and include your graphics card model.
 
 ## Live 11: Max for Live fails after the first launch
 

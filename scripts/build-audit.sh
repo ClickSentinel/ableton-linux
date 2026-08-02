@@ -141,6 +141,7 @@ FINGERPRINTS='
 0064|ascii|lib/wine/x86_64-unix/comdlg32.so|ShowFolders
 0064|ascii|lib/wine/x86_64-windows/shell32.dll|__wine_portal_open_folder
 0066|ascii|lib/wine/x86_64-windows/wined3d.dll|Intel(R) UHD Graphics P630
+0068|ascii|lib/wine/x86_64-windows/wined3d.dll|WINE_D3D_FORCE_GPU_RENDERING
 pipeasio/0001|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-clamp-sample-rate
 pipeasio/0002|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-midi-timebase
 '
@@ -184,6 +185,7 @@ STAMP_ONLY='
 0052|logic-only (DT_HIDEPREFIX on the menu bar DrawTextW call; no new string literal)
 0053|logic-only (WM_GETMINMAXINFO minimum exported as PMinSize hints; no new string literal)
 0054|logic-only (per-string SystemLink font fallback in draw_menu_item, plus the calc_menu_item_size CJK-measurement fix; no new string literal)
+0067|logic-only (drops the video-memory precondition on 0061's synthesised description; reuses 0061's own string literal)
 '
 wide_pattern() {  # ascii string -> PCRE matching its UTF-16LE bytes
     printf '%s' "$1" | od -An -v -tx1 | tr -d '\n' | tr -s ' ' ' ' \

@@ -257,6 +257,39 @@ Reported 2026-08-02: HP EliteDesk 800 G4 (i5-8500, UHD 630, `0x3e92`) on
 release 2026.08.01.1, "Enable GPU Renderer" greyed out naming the
 invented HD 4000.
 
+#### Forcing the renderer past the list (2026-08-02, patches 0067 and 0068)
+
+Patch 0067 removes the video-memory precondition on 0061's synthesised
+description. The precondition assumed a missing figure was worse than
+the fallback's approximation; on the EGL backend Mesa never supplies
+one, so the assumption cost every unlisted Intel and AMD card its real
+identity. A neutral figure stands in when the driver reports none.
+Together with 0066 this ends the whack-a-mole for cards Wine can
+identify at all.
+
+Patch 0068 covers the cards Live genuinely lists.
+`WINE_D3D_FORCE_GPU_RENDERING=1` reports baseline device
+`0x3e9b` in place of the card's own, so the gate passes. Vendor, driver
+and video memory are untouched, and the description keeps the real name
+with the substitution named after it:
+
+    Intel(R) HD Graphics 4000 (reporting as Intel(R) UHD Graphics 630)
+
+The card's identity is accompanied, never replaced, so the substitution
+shows up wherever the description does: Live's `TD3dSurface: Adapter:`
+line, its Preferences dialog, and any report that carries either. Live's
+usage log records `graphics_device_name` from a separate query that
+still reports the true device, so what Ableton receives identifies the
+real card and marks the substituted one.
+
+Intel only, since no other vendor is gated this way, and off by default,
+since applications besides Live read the device ID.
+
+Whether these pre-2014 parts actually run the renderer well under Mesa
+is unknown. Ableton's list was drawn against Intel's Windows drivers,
+and the fallback for a refused user is the GDI renderer at about 59% of
+a core, so the trade is worth offering. Reports decide the default.
+
 #### Reading a machine's log
 
 ```bash
