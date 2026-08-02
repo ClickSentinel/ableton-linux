@@ -34,9 +34,11 @@ confirmed failure mode.
 If you're experiencing performance issues or high CPU usage when idle, Live
 may not be using your GPU. By default, Live will always offload the UI to
 your GPU for maximum performance, but will only do so when it recognises
-the name of your GPU. On Linux, GPUs will 'tell' Live their name without
-any external interference, and because Live is anticipating that interference,
-it may not recognise the GPU's name and refuse to use the GPU.
+your GPU. Every graphics chip identifies itself by a model number, and Live
+keeps a list of old models it refuses to use. That number reaches Live
+through Wine, and when Wine does not recognise your GPU it sends the number
+of a 2012 model instead, which is on Live's list. Live then refuses a GPU
+far newer than the one it thinks it sees.
 
 To confirm this problem, open **Settings > Display & Input**. 
 If **Enable GPU Renderer** is greyed out, and the note under it names a 

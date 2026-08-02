@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Live's GPU renderer is available on the Intel graphics built into 2015
+  through 2019 processors (Wine patch 0066). Wine's device table skipped 24
+  of those models, among them the UHD Graphics 630 in the Core i5-8400
+  through i7-8700, and reported each as "Intel(R) HD Graphics 4000", so the
+  Preferences dialog greyed out "Enable GPU Renderer". Live matches the
+  device's ID number, not its name, and the number Wine invents for a model
+  it cannot identify belongs to a 2012 part Live refuses. Wine now reports
+  the real device.
+
 ## 2026.08.01.1
 
 - Live's GPU renderer is available again on Intel graphics newer than 2019
