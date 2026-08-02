@@ -75,6 +75,8 @@ make verify
   selection-flicker fix for one launch.
 - `WINE_WIN32_FULLSCREEN_CLASS=off` disables the default Live fullscreen
   layout and exit-state fix for one launch.
+- `WINE_WIN32_RESIZABLE_CLASS=off` disables the monitor-sized Live window
+  resizability fix for one launch without disabling fullscreen normalization.
 - `ABLETON_RT=off` disables realtime scheduling for one launch.
 - `PIPEASIO_*` variables override PipeASIO settings for one launch.
 - `ENGINE` selects the container engine used by build scripts. The default is
