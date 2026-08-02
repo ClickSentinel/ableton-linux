@@ -71,7 +71,7 @@ extras="$(cd "$root/patches" && ls 00*.patch pipeasio/*.patch 2>/dev/null | grep
 declare -A SERIES_GAPS=(
     [0027]="retired 2026-07-14 — gitignore housekeeping, no artifact effect"
     [0044]="reserved 2026-07-24 for the issue 57 parked-pane reblit gate; shipped as 0056 instead"
-    [0054]="reserved 2026-07-29 for PR 77's language-fallback font patch"
+    [0057]="reserved 2026-07-30 for the Intel GPU identification fix on fix/intel-gpu"
 )
 seq_expect=1
 for f in $(awk '{print $2}' "$SERIES" | grep -v '^pipeasio/' | sort); do
@@ -129,6 +129,16 @@ FINGERPRINTS='
 0043|ascii|lib/wine/x86_64-windows/shell32.dll|__wine_portal_show_item
 0045|ascii|lib/wine/x86_64-windows/ole32.dll|revoke for another process windows is disabled
 0055|wide|lib/wine/x86_64-windows/dxgi.dll|WINE_DISABLE_GL_PRESENT
+0056|ascii|lib/wine/x86_64-windows/dxgi.dll|Re-blit skipped (hidden ancestry)
+0057|ascii|lib/wine/x86_64-windows/wined3d.dll|Arc(tm) Graphics (MTL)
+0058|ascii|lib/wine/x86_64-windows/wined3d.dll|Present-time client rect disagrees
+0059|ascii|lib/wine/x86_64-windows/wined3d.dll|Flip client rect queried in the window DPI context
+0060|ascii|lib/wine/x86_64-windows/shell32.dll|IFileOperation DeleteItem via SHFileOperation
+0061|ascii|lib/wine/x86_64-windows/wined3d.dll|is not in the description table
+0062|ascii|lib/wine/x86_64-unix/winex11.so|WINE_X11_FORCE_OFFSCREEN_CLASS
+0063|ascii|lib/wine/x86_64-unix/comdlg32.so|org.freedesktop.FileManager1
+0064|ascii|lib/wine/x86_64-unix/comdlg32.so|ShowFolders
+0064|ascii|lib/wine/x86_64-windows/shell32.dll|__wine_portal_open_folder
 pipeasio/0001|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-clamp-sample-rate
 pipeasio/0002|ascii|lib/wine/x86_64-unix/pipeasio64.dll.so|pipeasio-midi-timebase
 '
@@ -170,8 +180,8 @@ STAMP_ONLY='
 0050|logic-only (per-process sys-color cache reset on WM_SYSCOLORCHANGE; no new string literal)
 0051|logic-only (RDW_FRAME added to the SetSysColors redraw flags; no new string literal)
 0052|logic-only (DT_HIDEPREFIX on the menu bar DrawTextW call; no new string literal)
-0056|ascii|lib/wine/x86_64-windows/dxgi.dll|Re-blit skipped (hidden ancestry)
 0053|logic-only (WM_GETMINMAXINFO minimum exported as PMinSize hints; no new string literal)
+0054|logic-only (per-string SystemLink font fallback in draw_menu_item, plus the calc_menu_item_size CJK-measurement fix; no new string literal)
 '
 wide_pattern() {  # ascii string -> PCRE matching its UTF-16LE bytes
     printf '%s' "$1" | od -An -v -tx1 | tr -d '\n' | tr -s ' ' ' ' \
@@ -228,6 +238,8 @@ must() { [ -s "$tree/$1" ] && ok "$1" "present" || bad "$1" "missing/empty"; }
 must bin/wine
 must bin/wineserver
 must lib/wine/x86_64-unix/winealsa.so
+must lib/wine/x86_64-unix/winegstreamer.so
+must lib/wine/x86_64-windows/winegstreamer.dll
 must lib/wine/x86_64-unix/comdlg32.so
 must lib/wine/x86_64-windows/pipeasio64.dll
 must lib/wine/x86_64-unix/pipeasio64.dll.so
@@ -253,6 +265,10 @@ if command -v readelf >/dev/null; then
     else
         ok "pipeasio64.dll.so rpath" "none (resolves via host loader)"
     fi
+    readelf -d "$tree/lib/wine/x86_64-unix/winegstreamer.so" 2>/dev/null \
+        | grep -qF 'Shared library: [libgstreamer-1.0.so.0]' \
+        && ok "winegstreamer.so DT_NEEDED" "host libgstreamer-1.0.so.0" \
+        || bad "winegstreamer.so DT_NEEDED" "host libgstreamer-1.0.so.0 not linked"
 else
     bad "readelf" "binutils missing — cannot verify bridge DT_NEEDED (install binutils)"
 fi

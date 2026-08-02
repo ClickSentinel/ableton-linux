@@ -49,7 +49,16 @@ f4d4f0cecbc8a39bbaeb6faaf416d032ee934e7ed8420aa168b39b3c42f9dd58  0049-win32u-dr
 38eb5e1c43a521eea78308bfe1e2d1d662b287eca888660acc615819aa707d84  0051-win32u-include-the-non-client-area-in-setsyscolors.patch
 f278d870c0424748a9d7a7cd5a6e9feb0837900e6382f4ee9d7cfe214c0b9fd5  0052-win32u-hide-the-menu-bar-alt-key-mnemonic-underline.patch
 d32ac8ca55853e5488292d015e35a31d23744150e04af476742e781b58abc186  0053-winex11-export-the-app-minimum-tracking-size-as-PMin.patch
+95bb7c7bce42a4d010eb4c0c0232bf65b9165860d3782f4753efb2398d7caaa2  0054-win32u-fall-back-to-a-linked-font-for-missing-glyph.patch
 5c97ce27e69ea1caffef5197a8e0f19893829c1c868e06c89e660352ad2919a1  0055-dxgi-prefer-GL-present-for-top-level-swapchain-devic.patch
 11dbb4c36378fc274e8eaa281e9bfbe43835bd0fae2682924d19aee318b673bb  0056-dxgi-gate-parked-dcomp-reblits-on-window-visibility.patch
+cb9c7fbf965bdab40dfe304c32ae7d40918bdd7b60cd2ab4858e2540a574bbe6  0057-wined3d-add-Intel-graphics-devices-from-Ice-Lake-to-.patch
+d41fba04c9682abf22abfcc147dbc3e1ed0b931f688d2736c60eca83670895f8  0058-wined3d-use-GDI-present-when-the-present-time-client.patch
+eb85bc3dc958314b299ebe45dc690ed3e9958d7beea82647513964ca0531a1b6  0059-wined3d-query-the-flip-s-client-rect-in-the-window-s.patch
+291b923e70cdc27453b2d16979823ad5aba3476b4fb1590b18620a730d029ca6  0060-shell32-implement-IFileOperation-DeleteItem.patch
+0eca3953ebcfaed1b3eb77a76e3548e41d7a40a1c7da3bb92feb14be27fc08b3  0061-wined3d-describe-unlisted-GPUs-from-the-driver-s-own.patch
+a07f7ecb2c3a568d8eeae9a42df558cea4d8e279e5bdeb0af67a6649086973f7  0062-winex11-keep-a-selected-top-level-class-offscreen.patch
+0a7fb762e4bef288556f2118c318f6e99fe5532bb61058ccdb6d7732bf42ba27  0063-comdlg32-reveal-explorer-select-folder-targets-throu.patch
+81e02eeac88e6eda5da8044cd5bf74a197b2742f77c46da54e61dbf300031bd3  0064-shell32-route-explorer-folder-open-commands-to-the-h.patch
 b2d30d77078263b8141199195ea16b0e6df7eac04b939b9e56cd53552cfb9175  pipeasio/0001-asio-keep-graph-sample-rate-instead-of-ASE_NoClock.patch
 f25d5b4c3ee71b7e9491f91c462e2b7ddaca377b8b94c7bd95df7734f0a4b563  pipeasio/0002-asio-report-timeGetTime-in-ASIO-systemTime.patch

@@ -1,0 +1,244 @@
+From bc57746488663d282a1fb8cac92ab46354788eb7 Mon Sep 17 00:00:00 2001
+From: ableton-wine <local@ableton-wine>
+Date: Sat, 1 Aug 2026 00:26:57 +0200
+Subject: [PATCH] comdlg32: reveal explorer /select folder targets through XDG
+ FileManager1
+
+Live's Show in Explorer issues explorer.exe /select,"<path>" for folder
+targets exactly as it does for files, but patch 0043 hands every target
+to org.freedesktop.portal.OpenURI.OpenDirectory, which the portal
+defines for files: it opens the directory containing a local file.
+Directory descriptors are handled inconsistently across portal versions
+and backends, and on the reported setups the request is accepted while
+nothing useful opens: files reveal correctly, folders do not (issue 41).
+
+__wine_portal_show_item now identifies directory targets with
+GetFileAttributesW and hands them to a new comdlg32 unix entry that
+calls org.freedesktop.FileManager1.ShowItems on the session bus with
+the folder's file:// URI. ShowItems opens the parent folder with the
+target selected, matching explorer /select,"<folder>" on Windows and
+Live's reveal on macOS. D-Bus activation starts the file manager when
+it is not already running. Paths are percent-encoded byte-wise, so
+non-ASCII names survive regardless of locale.
+
+When the ShowItems call fails, for example when no file manager owns or
+activates the FileManager1 name, the folder falls through to the
+existing OpenDirectory portal call, and from there to Wine's explorer,
+unchanged. File targets keep the 0043 path untouched. The reveal stays
+behind the same FileDialogPortal policy: never disables it. shell32 is
+unchanged.
+---
+ dlls/comdlg32/cdlg32.c      |  17 ++++++
+ dlls/comdlg32/portal_dbus.c | 104 ++++++++++++++++++++++++++++++++++++
+ dlls/comdlg32/unixlib.c     |   9 +++-
+ dlls/comdlg32/unixlib.h     |   6 +++
+ 4 files changed, 135 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/comdlg32/cdlg32.c b/dlls/comdlg32/cdlg32.c
+index 24880dd..6ae5369 100644
+--- a/dlls/comdlg32/cdlg32.c
++++ b/dlls/comdlg32/cdlg32.c
+@@ -245,6 +245,7 @@ BOOL CDECL __wine_portal_show_item(const WCHAR *path)
+     WCHAR policy[32];
+     char *unix_path;
+     size_t len;
++    DWORD attrs;
+     NTSTATUS status;
+ 
+     TRACE("%s\n", debugstr_w(path));
+@@ -280,6 +281,22 @@ BOOL CDECL __wine_portal_show_item(const WCHAR *path)
+     memcpy(params.path_unix, unix_path, len + 1);
+     HeapFree(GetProcessHeap(), 0, unix_path);
+ 
++    /* Folder targets go to the file manager's FileManager1 service first;
++     * the OpenURI portal only defines OpenDirectory for files (issue 41).
++     * On failure fall through to the portal call, which some backends do
++     * resolve for directories. */
++    attrs = GetFileAttributesW(path);
++    if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY))
++    {
++        struct portal_show_folder_params folder_params;
++
++        memset(&folder_params, 0, sizeof(folder_params));
++        memcpy(folder_params.path_unix, params.path_unix, len + 1);
++        status = WINE_UNIX_CALL(unix_portal_show_folder, &folder_params);
++        TRACE("folder %s -> %#lx\n", debugstr_w(path), (unsigned long)status);
++        if (!status) return TRUE;
++    }
++
+     status = WINE_UNIX_CALL(unix_portal_open_directory, &params);
+     TRACE("%s -> %#lx\n", debugstr_w(path), (unsigned long)status);
+     return !status;
+diff --git a/dlls/comdlg32/portal_dbus.c b/dlls/comdlg32/portal_dbus.c
+index 70eff41..d18ce8d 100644
+--- a/dlls/comdlg32/portal_dbus.c
++++ b/dlls/comdlg32/portal_dbus.c
+@@ -1233,6 +1233,110 @@ NTSTATUS CDECL portal_open_directory(void *args)
+     return STATUS_SUCCESS;
+ }
+ 
++/* Percent-encode a Unix path into a file:// URI for FileManager1. Every byte
++ * outside the RFC 3986 unreserved set is escaped, so non-ASCII names survive
++ * the trip regardless of locale. */
++static char *file_uri_from_path(const char *path)
++{
++    static const char hex[] = "0123456789ABCDEF";
++    static const char prefix[] = "file://";
++    const unsigned char *p;
++    char *uri, *q;
++
++    uri = malloc(sizeof(prefix) + 3 * strlen(path));
++    if (!uri) return NULL;
++    memcpy(uri, prefix, sizeof(prefix) - 1);
++    q = uri + sizeof(prefix) - 1;
++    for (p = (const unsigned char *)path; *p; p++)
++    {
++        if ((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') ||
++            (*p >= '0' && *p <= '9') ||
++            *p == '-' || *p == '.' || *p == '_' || *p == '~' || *p == '/')
++            *q++ = *p;
++        else
++        {
++            *q++ = '%';
++            *q++ = hex[*p >> 4];
++            *q++ = hex[*p & 0x0f];
++        }
++    }
++    *q = 0;
++    return uri;
++}
++
++/* Public entry point: ShowItems (reveal a folder in the host file browser)
++ *
++ * The OpenURI portal defines OpenDirectory for files: it opens the directory
++ * containing a local file. Directory descriptors are handled inconsistently
++ * across portal versions and backends (issue 41), so folder targets go to the
++ * desktop file manager's own org.freedesktop.FileManager1 service instead.
++ * ShowItems opens the parent folder with the target selected, which is what
++ * explorer /select,"<folder>" does on Windows. D-Bus activation starts the
++ * file manager when it is not already running. */
++NTSTATUS CDECL portal_show_folder(void *args)
++{
++    struct portal_show_folder_params *params = args;
++    struct portal_context ctx = {0};
++    DBusMessage *request, *reply;
++    DBusMessageIter iter, uris;
++    DBusError error;
++    const char *startup_id = "";
++    char *uri;
++    NTSTATUS status;
++
++    TRACE("portal_show_folder: path=%s\n", params->path_unix);
++
++    status = portal_init(&ctx);
++    if (status != STATUS_SUCCESS)
++        return status;
++
++    uri = file_uri_from_path(params->path_unix);
++    if (!uri)
++    {
++        portal_cleanup(&ctx);
++        return STATUS_NO_MEMORY;
++    }
++
++    request = p_dbus_message_new_method_call(
++        "org.freedesktop.FileManager1",
++        "/org/freedesktop/FileManager1",
++        "org.freedesktop.FileManager1",
++        "ShowItems");
++    if (!request)
++    {
++        free(uri);
++        portal_cleanup(&ctx);
++        return STATUS_NO_MEMORY;
++    }
++
++    p_dbus_message_iter_init_append(request, &iter);
++    p_dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "s", &uris);
++    p_dbus_message_iter_append_basic(&uris, DBUS_TYPE_STRING, &uri);
++    p_dbus_message_iter_close_container(&iter, &uris);
++    p_dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING, &startup_id);
++    free(uri);
++
++    p_dbus_error_init(&error);
++    reply = p_dbus_connection_send_with_reply_and_block(ctx.connection, request, -1, &error);
++    p_dbus_message_unref(request);
++
++    if (!reply)
++    {
++        WARN("portal_show_folder: ShowItems failed: %s (%s)\n",
++             error.message ? error.message : "(no message)",
++             error.name ? error.name : "(no name)");
++        p_dbus_error_free(&error);
++        portal_cleanup(&ctx);
++        return STATUS_NOT_SUPPORTED;
++    }
++
++    /* ShowItems has an empty reply and no later Response signal; the reply
++     * itself means the file manager accepted the request. */
++    p_dbus_message_unref(reply);
++    portal_cleanup(&ctx);
++    return STATUS_SUCCESS;
++}
++
+ /* Public entry point: availability probe */
+ NTSTATUS CDECL portal_is_available(void *args)
+ {
+diff --git a/dlls/comdlg32/unixlib.c b/dlls/comdlg32/unixlib.c
+index 2d62039..9b6a6dd 100644
+--- a/dlls/comdlg32/unixlib.c
++++ b/dlls/comdlg32/unixlib.c
+@@ -39,6 +39,7 @@ NTSTATUS CDECL portal_open_file(void *args);
+ NTSTATUS CDECL portal_save_file(void *args);
+ NTSTATUS CDECL portal_is_available(void *args);
+ NTSTATUS CDECL portal_open_directory(void *args);
++NTSTATUS CDECL portal_show_folder(void *args);
+ 
+ /******************************************************************************
+  * Unix library entry points - function table approach
+@@ -64,12 +65,18 @@ static NTSTATUS CDECL unix_portal_open_directory_wrapper(void *args)
+     return portal_open_directory(args);
+ }
+ 
++static NTSTATUS CDECL unix_portal_show_folder_wrapper(void *args)
++{
++    return portal_show_folder(args);
++}
++
+ const unixlib_entry_t __wine_unix_call_funcs[] =
+ {
+     unix_portal_open_file_wrapper,
+     unix_portal_save_file_wrapper,
+     unix_portal_is_available_wrapper,
+     unix_portal_open_directory_wrapper,
++    unix_portal_show_folder_wrapper,
+ };
+ 
+-C_ASSERT( ARRAYSIZE(__wine_unix_call_funcs) == unix_portal_open_directory + 1 );
++C_ASSERT( ARRAYSIZE(__wine_unix_call_funcs) == unix_portal_show_folder + 1 );
+diff --git a/dlls/comdlg32/unixlib.h b/dlls/comdlg32/unixlib.h
+index e1205ec..a27fe98 100644
+--- a/dlls/comdlg32/unixlib.h
++++ b/dlls/comdlg32/unixlib.h
+@@ -56,12 +56,18 @@ struct portal_open_directory_params
+     char path_unix[PORTAL_PATH_MAX]; /* file or directory to reveal */
+ };
+ 
++struct portal_show_folder_params
++{
++    char path_unix[PORTAL_PATH_MAX]; /* directory to reveal */
++};
++
+ enum comdlg32_unix_funcs
+ {
+     unix_portal_open_file,
+     unix_portal_save_file,
+     unix_portal_is_available,
+     unix_portal_open_directory,
++    unix_portal_show_folder,
+ };
+ 
+ #endif /* __WINE_COMDLG32_UNIXLIB_H */
+-- 
+2.55.0
+

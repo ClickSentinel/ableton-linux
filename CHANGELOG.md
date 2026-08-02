@@ -1,5 +1,68 @@
 # Changelog
 
+## 2026.08.01.1
+
+- Live's GPU renderer is available again on Intel graphics newer than 2019
+  (issue 84, Wine patch 0057). Wine reported every Intel GPU from Ice Lake
+  through Lunar Lake, and the Arc A-series cards, as "Intel(R) HD Graphics
+  4000", a 2012 device that Live refuses to use, so the Preferences dialog
+  greyed out "Enable GPU Renderer". Wine now reports the real device names.
+  Reported by stickyfran.
+- Fixed Live's frame drawn too low under fractional display scaling, a black
+  band on top and the bottom rows clipped (PR 98, issue 100, Wine patches
+  0058 and 0059). The frame's destination rectangle was captured in the
+  window's DPI context, but the present-time blit re-queried the client rect
+  in the render thread's context, and at 125% or similar scaling the two
+  disagreed by the difference. Both queries now run in the window's DPI
+  context, and any frame where they still disagree takes the GDI path, which
+  renders correctly under the mismatch. Reported by v33 and NoskyD.
+- GPUs missing from Wine's device table now report their real names (Wine
+  patch 0061). Unlisted cards fell back to a guess from the OpenGL feature
+  level, so a Radeon RX 7900 XT was reported as "ATI Radeon HD 5600 Series"
+  and newer Intel GPUs as "Intel(R) HD Graphics 4000". The name, PCI IDs and
+  video memory now come from the driver's own report, as the Vulkan backend
+  already does. Contributed by Lucas Gillingham.
+- Fixed Live freezing when loading certain Max for Live devices: window
+  black and unresponsive, audio still playing. Devices authored on macOS
+  name fonts that do not exist here, and Max's own last-resort fallback is
+  Bitstream Vera, which neither Wine nor Live nor modern distributions
+  ship, so Max parked Live's UI thread waiting for a font that never came.
+  The Bitstream Vera faces are now vendored, installed and registered by
+  prefix setup. Diagnosis and fix by Lucas Gillingham.
+- Fixed a black flash of Live's whole window when selecting away from and
+  back to a Max for Live track under Xwayland (Wine patch 0062). The M4L
+  device view's child window toggled Live's client surface between two
+  rendering paths, and each toggle unmapped and remapped the full client
+  window mid-frame. The launcher now keeps Live's top-level window on the
+  offscreen-composited path (`WINE_X11_FORCE_OFFSCREEN_CLASS`). Contributed
+  by trendwhore.
+- Non-Latin menu text renders correctly (issue 35, Wine patch 0054). Live's
+  menus use its own Latin-only fonts, so Cyrillic, CJK and other non-Latin
+  menu items, project names and track names showed as boxes or nothing.
+  Menu drawing now falls back to a linked font for missing glyphs, and
+  prefix setup registers a glyph fallback chain for Live's fonts.
+  Contributed by Lucas Gillingham.
+- mp3 and video import works again (issue 44). The build silently dropped
+  Wine's GStreamer support when the GStreamer development packages were
+  missing from the build image, so Live's import path had no decoder and
+  failed without an error message. The build and the installer now fail
+  loudly when the component is missing, and GStreamer with its base and
+  good plugin sets joins the runtime requirements.
+- Deleting files from Live's browser works (Wine patch 0060). Live deletes
+  through `IFileOperation::DeleteItem`, which Wine left unimplemented, so
+  browser deletion and the pruning of old project backups failed. Deletes
+  now run through Wine's existing file operation engine and keep the
+  recycle-bin behaviour.
+- "Show in Explorer" on a folder opens the desktop file manager (issue 41,
+  Wine patches 0063 and 0064). Folder targets went through the OpenURI
+  portal's OpenDirectory method, which is defined for files, so on the
+  reported setups the reveal fell back to Wine Explorer, and the library
+  panel's folder-open form (`explorer.exe /e`) was never intercepted at
+  all. Reveals now call `org.freedesktop.FileManager1.ShowItems`, which
+  opens the parent folder with the target selected, and folder opens call
+  `ShowFolders`, which opens the folder itself; the portal and Wine
+  Explorer remain the fallbacks. File targets are unchanged.
+
 ## 2026.07.29.1
 
 - Live now uses its GPU renderer. Prefix setup removes the legacy

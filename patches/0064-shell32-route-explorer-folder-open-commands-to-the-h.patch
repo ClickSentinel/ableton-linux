@@ -1,0 +1,358 @@
+From 08f390b41aca66cd9c659992318dc662ff4d9e95 Mon Sep 17 00:00:00 2001
+From: ableton-wine <local@ableton-wine>
+Date: Sat, 1 Aug 2026 01:26:19 +0200
+Subject: [PATCH] shell32: route explorer folder-open commands to the host file
+ manager
+
+Live's library panel issues explorer.exe /e,"<folder>" for Show in
+Explorer, the folder-open form, not the /select reveal form the browser
+uses for files. Patches 0043 and 0063 only intercept /select targets,
+so the library panel still spawned Wine's explorer (issue 41 follow-up).
+
+shell32 now also recognises the folder-open forms /e,<dir>, /root,<dir>
+and a bare <dir>, and hands existing directories to a new comdlg32
+export that calls org.freedesktop.FileManager1.ShowFolders, which opens
+the folder itself as explorer /e does on Windows. When ShowFolders
+fails the target falls back to the 0063 reveal ladder (ShowItems, then
+the OpenDirectory portal), and from there to Wine's explorer. Targets
+that are not existing directories are left to Wine's explorer
+unchanged, and the same FileDialogPortal policy gates the call.
+---
+ dlls/comdlg32/cdlg32.c      | 64 +++++++++++++++++++++++++++++++++
+ dlls/comdlg32/comdlg32.spec |  2 ++
+ dlls/comdlg32/portal_dbus.c | 36 +++++++++++++------
+ dlls/comdlg32/unixlib.c     |  9 ++++-
+ dlls/comdlg32/unixlib.h     |  6 ++++
+ dlls/shell32/shlexec.c      | 71 +++++++++++++++++++++++++++++++++++++
+ 6 files changed, 176 insertions(+), 12 deletions(-)
+
+diff --git a/dlls/comdlg32/cdlg32.c b/dlls/comdlg32/cdlg32.c
+index 6ae5369..7364a45 100644
+--- a/dlls/comdlg32/cdlg32.c
++++ b/dlls/comdlg32/cdlg32.c
+@@ -301,3 +301,67 @@ BOOL CDECL __wine_portal_show_item(const WCHAR *path)
+     TRACE("%s -> %#lx\n", debugstr_w(path), (unsigned long)status);
+     return !status;
+ }
++
++/***********************************************************************
++ *              __wine_portal_open_folder (COMDLG32.@)
++ *
++ * Open a directory in the host file browser through the file manager's
++ * FileManager1 service (ShowFolders). Returns FALSE when the portal
++ * policy, the platform or the service rules it out; the caller keeps
++ * its explorer fallback.
++ */
++BOOL CDECL __wine_portal_open_folder(const WCHAR *path)
++{
++    struct portal_open_folder_params params;
++    const char *force_portal = getenv("WINE_FORCE_PORTAL");
++    WCHAR policy[32];
++    char *unix_path;
++    DWORD attrs;
++    size_t len;
++    NTSTATUS status;
++
++    TRACE("%s\n", debugstr_w(path));
++
++    if (!path || !*path) return FALSE;
++
++    /* FileDialogPortal=never turns off all portal integration; there is no
++     * per-call eligibility to check for a plain folder open. */
++    if (!(force_portal && *force_portal == '1') &&
++        wine_get_appdefaults_reg_sz(L"X11 Driver", L"FileDialogPortal", policy, sizeof(policy)) &&
++        !wcsicmp(policy, L"never"))
++    {
++        TRACE("portal disabled by policy\n");
++        return FALSE;
++    }
++
++    if (!__wine_unixlib_handle)
++    {
++        TRACE("no portal unix library (32-bit caller?)\n");
++        return FALSE;
++    }
++
++    attrs = GetFileAttributesW(path);
++    if (attrs == INVALID_FILE_ATTRIBUTES || !(attrs & FILE_ATTRIBUTE_DIRECTORY))
++        return FALSE;
++
++    unix_path = wine_get_unix_file_name(path);
++    if (!unix_path) return FALSE;
++
++    memset(&params, 0, sizeof(params));
++    len = strlen(unix_path);
++    if (len >= sizeof(params.path_unix))
++    {
++        HeapFree(GetProcessHeap(), 0, unix_path);
++        return FALSE;
++    }
++    memcpy(params.path_unix, unix_path, len + 1);
++    HeapFree(GetProcessHeap(), 0, unix_path);
++
++    status = WINE_UNIX_CALL(unix_portal_open_folder, &params);
++    TRACE("%s -> %#lx\n", debugstr_w(path), (unsigned long)status);
++    if (!status) return TRUE;
++
++    /* ShowFolders unavailable: fall back to the reveal ladder (ShowItems,
++     * then the OpenDirectory portal), which at least surfaces the folder. */
++    return __wine_portal_show_item(path);
++}
+diff --git a/dlls/comdlg32/comdlg32.spec b/dlls/comdlg32/comdlg32.spec
+index 8b06e75..455f89c 100644
+--- a/dlls/comdlg32/comdlg32.spec
++++ b/dlls/comdlg32/comdlg32.spec
+@@ -29,3 +29,5 @@
+ 
+ # Wine internal: XDG OpenURI portal reveal, used by shell32's explorer /select routing
+ @ cdecl __wine_portal_show_item(wstr)
++# Wine internal: FileManager1 folder open, used by shell32's explorer /e routing
++@ cdecl __wine_portal_open_folder(wstr)
+diff --git a/dlls/comdlg32/portal_dbus.c b/dlls/comdlg32/portal_dbus.c
+index d18ce8d..62bc5b9 100644
+--- a/dlls/comdlg32/portal_dbus.c
++++ b/dlls/comdlg32/portal_dbus.c
+@@ -1264,18 +1264,18 @@ static char *file_uri_from_path(const char *path)
+     return uri;
+ }
+ 
+-/* Public entry point: ShowItems (reveal a folder in the host file browser)
++/* Call a org.freedesktop.FileManager1 method with a single file:// URI.
+  *
+  * The OpenURI portal defines OpenDirectory for files: it opens the directory
+  * containing a local file. Directory descriptors are handled inconsistently
+  * across portal versions and backends (issue 41), so folder targets go to the
+  * desktop file manager's own org.freedesktop.FileManager1 service instead.
+  * ShowItems opens the parent folder with the target selected, which is what
+- * explorer /select,"<folder>" does on Windows. D-Bus activation starts the
+- * file manager when it is not already running. */
+-NTSTATUS CDECL portal_show_folder(void *args)
++ * explorer /select,"<folder>" does on Windows; ShowFolders opens the folder
++ * itself, which is what explorer /e,"<folder>" does. D-Bus activation starts
++ * the file manager when it is not already running. */
++static NTSTATUS file_manager_call(const char *method, const char *path)
+ {
+-    struct portal_show_folder_params *params = args;
+     struct portal_context ctx = {0};
+     DBusMessage *request, *reply;
+     DBusMessageIter iter, uris;
+@@ -1284,13 +1284,13 @@ NTSTATUS CDECL portal_show_folder(void *args)
+     char *uri;
+     NTSTATUS status;
+ 
+-    TRACE("portal_show_folder: path=%s\n", params->path_unix);
++    TRACE("file_manager_call: %s path=%s\n", method, path);
+ 
+     status = portal_init(&ctx);
+     if (status != STATUS_SUCCESS)
+         return status;
+ 
+-    uri = file_uri_from_path(params->path_unix);
++    uri = file_uri_from_path(path);
+     if (!uri)
+     {
+         portal_cleanup(&ctx);
+@@ -1301,7 +1301,7 @@ NTSTATUS CDECL portal_show_folder(void *args)
+         "org.freedesktop.FileManager1",
+         "/org/freedesktop/FileManager1",
+         "org.freedesktop.FileManager1",
+-        "ShowItems");
++        method);
+     if (!request)
+     {
+         free(uri);
+@@ -1322,7 +1322,7 @@ NTSTATUS CDECL portal_show_folder(void *args)
+ 
+     if (!reply)
+     {
+-        WARN("portal_show_folder: ShowItems failed: %s (%s)\n",
++        WARN("file_manager_call: %s failed: %s (%s)\n", method,
+              error.message ? error.message : "(no message)",
+              error.name ? error.name : "(no name)");
+         p_dbus_error_free(&error);
+@@ -1330,13 +1330,27 @@ NTSTATUS CDECL portal_show_folder(void *args)
+         return STATUS_NOT_SUPPORTED;
+     }
+ 
+-    /* ShowItems has an empty reply and no later Response signal; the reply
+-     * itself means the file manager accepted the request. */
++    /* FileManager1 methods have an empty reply and no later Response signal;
++     * the reply itself means the file manager accepted the request. */
+     p_dbus_message_unref(reply);
+     portal_cleanup(&ctx);
+     return STATUS_SUCCESS;
+ }
+ 
++/* Public entry point: ShowItems (reveal a folder in the host file browser) */
++NTSTATUS CDECL portal_show_folder(void *args)
++{
++    struct portal_show_folder_params *params = args;
++    return file_manager_call("ShowItems", params->path_unix);
++}
++
++/* Public entry point: ShowFolders (open a folder in the host file browser) */
++NTSTATUS CDECL portal_open_folder(void *args)
++{
++    struct portal_open_folder_params *params = args;
++    return file_manager_call("ShowFolders", params->path_unix);
++}
++
+ /* Public entry point: availability probe */
+ NTSTATUS CDECL portal_is_available(void *args)
+ {
+diff --git a/dlls/comdlg32/unixlib.c b/dlls/comdlg32/unixlib.c
+index 9b6a6dd..a43ab27 100644
+--- a/dlls/comdlg32/unixlib.c
++++ b/dlls/comdlg32/unixlib.c
+@@ -40,6 +40,7 @@ NTSTATUS CDECL portal_save_file(void *args);
+ NTSTATUS CDECL portal_is_available(void *args);
+ NTSTATUS CDECL portal_open_directory(void *args);
+ NTSTATUS CDECL portal_show_folder(void *args);
++NTSTATUS CDECL portal_open_folder(void *args);
+ 
+ /******************************************************************************
+  * Unix library entry points - function table approach
+@@ -70,6 +71,11 @@ static NTSTATUS CDECL unix_portal_show_folder_wrapper(void *args)
+     return portal_show_folder(args);
+ }
+ 
++static NTSTATUS CDECL unix_portal_open_folder_wrapper(void *args)
++{
++    return portal_open_folder(args);
++}
++
+ const unixlib_entry_t __wine_unix_call_funcs[] =
+ {
+     unix_portal_open_file_wrapper,
+@@ -77,6 +83,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
+     unix_portal_is_available_wrapper,
+     unix_portal_open_directory_wrapper,
+     unix_portal_show_folder_wrapper,
++    unix_portal_open_folder_wrapper,
+ };
+ 
+-C_ASSERT( ARRAYSIZE(__wine_unix_call_funcs) == unix_portal_show_folder + 1 );
++C_ASSERT( ARRAYSIZE(__wine_unix_call_funcs) == unix_portal_open_folder + 1 );
+diff --git a/dlls/comdlg32/unixlib.h b/dlls/comdlg32/unixlib.h
+index a27fe98..279ef21 100644
+--- a/dlls/comdlg32/unixlib.h
++++ b/dlls/comdlg32/unixlib.h
+@@ -61,6 +61,11 @@ struct portal_show_folder_params
+     char path_unix[PORTAL_PATH_MAX]; /* directory to reveal */
+ };
+ 
++struct portal_open_folder_params
++{
++    char path_unix[PORTAL_PATH_MAX]; /* directory to open */
++};
++
+ enum comdlg32_unix_funcs
+ {
+     unix_portal_open_file,
+@@ -68,6 +73,7 @@ enum comdlg32_unix_funcs
+     unix_portal_is_available,
+     unix_portal_open_directory,
+     unix_portal_show_folder,
++    unix_portal_open_folder,
+ };
+ 
+ #endif /* __WINE_COMDLG32_UNIXLIB_H */
+diff --git a/dlls/shell32/shlexec.c b/dlls/shell32/shlexec.c
+index b4cbdc9..2a7c4a8 100644
+--- a/dlls/shell32/shlexec.c
++++ b/dlls/shell32/shlexec.c
+@@ -1694,6 +1694,64 @@ static BOOL get_explorer_select_target( const WCHAR *params, WCHAR *target, DWOR
+     return TRUE;
+ }
+ 
++/* Open a folder in the host file browser through comdlg32's FileManager1
++ * plumbing; resolved dynamically like portal_show_item above. */
++static BOOL portal_open_folder( const WCHAR *path )
++{
++    static BOOL (CDECL *p_portal_open_folder)( const WCHAR *path );
++    static BOOL loaded;
++
++    if (!loaded)
++    {
++        HMODULE comdlg32 = LoadLibraryW( L"comdlg32.dll" );
++        if (comdlg32)
++            p_portal_open_folder = (void *)GetProcAddress( comdlg32, "__wine_portal_open_folder" );
++        loaded = TRUE;
++    }
++    return p_portal_open_folder && p_portal_open_folder( path );
++}
++
++/* Extract the target of an explorer folder-open command line: /e,<path>,
++ * /root,<path> (in either order and combination), or a bare <path>.
++ * /select targets are handled separately above; any other switch means the
++ * command is not a plain folder open and stays with Wine's explorer. */
++static BOOL get_explorer_open_target( const WCHAR *params, WCHAR *target, DWORD count )
++{
++    static const WCHAR eW[] = L"/e,";
++    static const WCHAR rootW[] = L"/root,";
++    const WCHAR *p, *end;
++    DWORD len;
++
++    if (!params) return FALSE;
++    p = params;
++    for (;;)
++    {
++        while (*p == ' ') p++;
++        if (!wcsnicmp( p, eW, ARRAY_SIZE(eW) - 1 )) p += ARRAY_SIZE(eW) - 1;
++        else if (!wcsnicmp( p, rootW, ARRAY_SIZE(rootW) - 1 )) p += ARRAY_SIZE(rootW) - 1;
++        else break;
++    }
++    if (*p == '/') return FALSE;
++
++    if (*p == '"')
++    {
++        p++;
++        end = wcschr( p, '"' );
++        if (!end) end = p + lstrlenW( p );
++    }
++    else
++    {
++        end = p + lstrlenW( p );
++        while (end > p && end[-1] == ' ') end--;
++    }
++    if (end <= p) return FALSE;
++    len = end - p;
++    if (len >= count) return FALSE;
++    memcpy( target, p, len * sizeof(WCHAR) );
++    target[len] = 0;
++    return TRUE;
++}
++
+ /*************************************************************************
+  *	SHELL_execute [Internal]
+  */
+@@ -1943,6 +2001,7 @@ static BOOL SHELL_execute( LPSHELLEXECUTEINFOW sei, SHELL_ExecuteW32 execfunc )
+     if (is_explorer_command( lpFile ))
+     {
+         WCHAR target[MAX_PATH];
++        DWORD attrs;
+ 
+         if (get_explorer_select_target( wszParameters, target, ARRAY_SIZE(target) ) &&
+             GetFileAttributesW( target ) != INVALID_FILE_ATTRIBUTES &&
+@@ -1952,6 +2011,18 @@ static BOOL SHELL_execute( LPSHELLEXECUTEINFOW sei, SHELL_ExecuteW32 execfunc )
+             retval = 33;
+             goto end;
+         }
++        /* Folder-open forms: explorer /e,<dir>, /root,<dir>, or a bare <dir>.
++         * Only an existing directory is diverted; explorer's other duties
++         * stay with Wine's explorer. */
++        if (get_explorer_open_target( wszParameters, target, ARRAY_SIZE(target) ) &&
++            (attrs = GetFileAttributesW( target )) != INVALID_FILE_ATTRIBUTES &&
++            (attrs & FILE_ATTRIBUTE_DIRECTORY) &&
++            portal_open_folder( target ))
++        {
++            TRACE( "explorer folder open %s handled by FileManager1\n", debugstr_w(target) );
++            retval = 33;
++            goto end;
++        }
+     }
+ 
+     wcmd = wcmdBuffer;
+-- 
+2.55.0
+
