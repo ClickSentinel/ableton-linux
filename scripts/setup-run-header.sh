@@ -336,12 +336,18 @@ if [ "$manual_install" -eq 0 ]; then
         fi
     fi
     if [ -n "$live_exe" ]; then
-        say "-- starting the Ableton installer; from here just click through its window"
-        # run from the installer's own directory so its relative payload lookups resolve
+        say "-- installing Ableton Live; a progress window opens, no clicks needed"
+        say "   (Live is large, so this can take several minutes)"
+        # run from the installer's own directory so its relative payload lookups resolve.
+        # Ableton's installer is Inno Setup: /SILENT keeps the progress bar but asks
+        # nothing, /SUPPRESSMSGBOXES /NORESTART cover the rest. The audiodriver task
+        # installs Ableton's Windows USB kernel driver, which cannot load under Wine
+        # (audio goes through PipeASIO), so deselect it with /MERGETASKS.
         if ( cd "$(dirname -- "$live_exe")" && \
                  WINEPREFIX="$HOME/.wine-ableton" \
                  "$HOME/.local/opt/$RUNTIME_NAME/bin/wine" \
-                 "./$(basename -- "$live_exe")" ); then
+                 "./$(basename -- "$live_exe")" \
+                 /SILENT /SUPPRESSMSGBOXES /NORESTART '/MERGETASKS=!audiodriver' ); then
             live_installed=1
         else
             say "!! the Ableton installer exited with an error; instructions below"
@@ -364,7 +370,9 @@ else
     say "       (no unzip? try: bsdtar -xf FILE.zip -C ~/live-installer)"
     say "  2) run the installer through this Wine, from inside that directory:"
     say "       cd ~/live-installer && WINEPREFIX=~/.wine-ableton \\"
-    say "           ~/.local/opt/$RUNTIME_NAME/bin/wine ./*.exe"
+    say "           ~/.local/opt/$RUNTIME_NAME/bin/wine ./*.exe \\"
+    say "           /SILENT /SUPPRESSMSGBOXES /NORESTART '/MERGETASKS=!audiodriver'"
+    say "     (the flags let it install by itself and skip a Windows-only driver)"
 fi
 say "Launch Live:   ~/.local/bin/ableton-live"
 say "Then, inside Live:"
