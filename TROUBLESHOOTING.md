@@ -29,6 +29,38 @@ This workaround is only needed for affected plugins. See the
 [Pianoteq investigation](notes/ABLETON-WINE-PIANOTEQ-DPI-GHOST-BUG.md) for the
 confirmed failure mode.
 
+## Live's "Enable GPU Renderer" setting is greyed out
+
+If you're experiencing performance issues or high CPU usage when idle, Live
+may not be using your GPU. By default, Live will always offload the UI to
+your GPU for maximum performance, but will only do so when it recognises
+the name of your GPU. On Linux, GPUs will 'tell' Live their name without
+any external interference, and because Live is anticipating that interference,
+it may not recognise the GPU's name and refuse to use the GPU.
+
+To confirm this problem, open **Settings > Display & Input**. 
+If **Enable GPU Renderer** is greyed out, and the note under it names a 
+graphics card that is not the one in your computer, then you're seeing this
+exact problem. 
+
+To solve it: **update this project**.
+
+Download [the latest installer](https://github.com/shibco/ableton-linux/releases/latest/download/install-ableton-latest.run)
+and run the update. It keeps your Live installation, your license, and
+your projects:
+
+```bash
+sh ~/Downloads/install-ableton-latest.run --update
+```
+
+Start Live, open **Settings > Display & Input**, and turn on **Enable GPU
+Renderer**. Live now names your real graphics card, and the setting stays
+on.
+
+If the setting is still greyed out on 2026.08.01.1 or newer,
+[open an issue](https://github.com/shibco/ableton-linux/issues) and
+include your graphics card model.
+
 ## Live 11: Max for Live fails after the first launch
 
 After running Live 11 once, close Live and run:
