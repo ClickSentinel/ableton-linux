@@ -18,7 +18,8 @@ the two channels can share a Wine prefix.
 | --- | --- |
 | Phase 0, prerequisites | done — PR #3, gate green, 126 tests |
 | Q1 second prefix | answered — clone the authorised prefix |
-| Q2 recency or risk | open |
+| Q2 what the channel is for | answered — so stable can slow down |
+| Q3 promote or rebuild | **open — affects a stated invariant** |
 | Phase 1, channel plumbing | unblocked |
 | Phase 2, publishing | not started |
 | Phase 3, switching | not started |
@@ -38,15 +39,41 @@ wrong twice over: it was never tested, and it confused per-machine
 authorisation with per-install activation. The answer turned out not to be
 "authorise twice" but "do not create a second prefix at all — copy the first".
 
-**Q2. Is the second channel about recency or about risk?**
+Q2 is answered: the second channel exists so that **stable can become less
+frequent**. Eleven releases shipped between 2026-07-14 and 2026-08-01, one
+every 1.7 days, but that cadence is a symptom of having one channel — every fix
+has to reach stable because there is nowhere else for it to go. An earlier
+draft read the same number as evidence against a second channel. That inverted
+cause and effect.
 
-Eleven releases shipped between 2026-07-14 and 2026-08-01 — one every 1.7
-days. Stable already ships more often than most projects' nightlies, so a
-channel differentiated by *frequency* buys almost nothing. A channel
-differentiated by *risk* — where a new patch reaches testers without entering
-the stable stream — is worth having, and implies publish-on-merge rather than a
-cron, a name like `unstable` rather than `nightly`, and a link to
-`beta/tester-kit/`, which already exists and which this plan has so far ignored.
+What follows from it: the fast channel publishes on merge to main rather than
+on a cron, since the trigger is "a change landed", not "it is 04:00". Stable
+publishes when someone decides a set of changes is ready. And stable's meaning
+changes from "the newest work" to "a curated set", which is a heavier gate than
+it carries today.
+
+The sequencing consequence is easy to miss: **stable cannot slow down until the
+fast channel is actually shipping**, or there is a window where nobody gets
+fixes quickly. Phases 2 and 3 are prerequisites for the cadence change, not
+optional follow-ups to it.
+
+**Q3. Is a stable release promoted from a fast-channel build, or rebuilt?**
+
+The open question, and the one that touches an existing invariant. `release.sh`
+and `release.yml` both state that CI never builds a release: the maintainer
+builds and verifies locally, and the bits released are the bits verified.
+
+Promotion — tagging a fast-channel artifact that has soaked — is the more
+rigorous option, because the bits users tested are the bits that ship. But the
+fast channel is CI-built, so promotion makes stable CI-built too, and that
+invariant goes.
+
+Rebuilding preserves it: the fast channel stays CI-built and disposable, stable
+is still built by hand at tag time, and what soaks is the *set of changes*
+rather than the artifact. Weaker, but it changes nothing about how stable is
+produced today.
+
+This is shibco's call, not a technical one — it is about where trust sits.
 
 ## Prefix coupling
 
