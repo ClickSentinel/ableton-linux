@@ -10,6 +10,14 @@
 # annotations placed directly above a test. Same shape as
 # `build-audit.sh --freeze` for patches/SERIES.sha256.
 set -euo pipefail
+# The generated file is compared byte-for-byte by `--check`, so every sort below
+# has to order the same way everywhere. Without a pinned locale it does not: a
+# UTF-8 collation ignores punctuation at the first level and orders "wins, even
+# with no primary line" before "wins when it is marked non-primary", while C
+# compares bytes and puts the space before the comma, reversing them. The
+# catalogue then passes on the machine that wrote it and fails on the runner.
+# Same reason install.sh and make-installer.sh pin it.
+export LC_ALL=C.UTF-8
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 cd "$root"

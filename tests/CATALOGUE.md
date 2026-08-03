@@ -320,7 +320,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | --- | --- |
 | `commit 9cba3b0` | launcher: gray text: the dark fallback lands on classic GrayText |
 | `commit e221cc4` | release: VERSION has a matching CHANGELOG entry at the top |
-| `commit f0fc05e` | detect-scale: cosmic probe: a disabled lid never wins, even with no primary line<br>detect-scale: cosmic probe: a disabled lid never wins when it is marked non-primary |
+| `commit f0fc05e` | detect-scale: cosmic probe: a disabled lid never wins when it is marked non-primary<br>detect-scale: cosmic probe: a disabled lid never wins, even with no primary line |
 | `commit f84eaa4` | repo-hygiene: runtime name: every live file agrees on one wine-d2d1-nspa version |
 | `issue #106` | repo-hygiene: desktop entries validate after substitution |
 | `issue #32` | launcher: gray text: the blend is 45% towards MenuText, per channel, not symmetric |
