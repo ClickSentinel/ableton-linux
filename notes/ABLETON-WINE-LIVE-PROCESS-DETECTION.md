@@ -68,22 +68,54 @@ that enforces staging all exist already — `packaging.bats` asserts that every
 script a kit script sources is itself staged, so that invariant applies the
 moment anything sources it.
 
-Two named predicates, not one, because the breadth difference is deliberate:
+The implementation is not to be designed — it already exists on
+`fix/ableton-linkd-better-installer` (PR #120) and is better than a pattern
+match can be. `runtime_pids()` walks `/proc/[0-9]*`, resolves each `exe`
+symlink, and keeps the pids whose binary lives under the runtime root:
 
-- `live_running` — a Live process for this prefix. The launch serialisation
-  and re-sync guards want this.
-- `runtime_busy` — anything executing out of the installed runtime, including
-  `Push2DisplayProcess.exe`. The installer's swap gate wants this, and
-  flattening it into `live_running` would make the installer weaker.
+```sh
+for d in /proc/[0-9]*; do
+    case "$(readlink "$d/exe" 2>/dev/null)" in
+        "$OPT/$NAME"/*) printf '%s\n' "${d#/proc/}" ;;
+    esac
+done
+```
 
-Plus `live_pid` for `bench-run.sh` and `m4l-hang-capture.sh`, and
-`wineserver_running` / `linkd_running` for the remaining duplicates. One
-pattern, one self-exclusion idiom, no hardcoded major.
+Its own comment carries the reason every `pgrep -f` site here is structurally
+incomplete: Wine's in-prefix helpers show a Windows path in argv
+(`C:\windows\system32\...`), so **no command-line pattern reaches them**. The
+`exe` link is the real binary — the preloader every in-prefix process runs
+from — so the match is exact rather than a guess, immune to self-matching, and
+unaffected by Live's version naming.
+
+Both predicates are there too. `ableton_up()` takes `/proc` first and keeps
+`pgrep` as an explicit second opinion, because detection failing open means
+installing over a running runtime. `live_up` walks only runtime-scoped pids and
+reads their cmdline, so a Live under an unrelated Wine install is neither
+prompted for nor killed.
+
+So the consolidation is promote-and-delete, not design-and-write: lift these
+into the shared helper once PR #120 lands, then remove the five other dialects.
+`live_pid` for `bench-run.sh` and `m4l-hang-capture.sh` falls out of
+`runtime_pids` directly.
+
+This does not make every `pgrep` site wrong. Live's own process does carry a
+visible cmdline, so the launcher's liveness guard works; what `pgrep` misses is
+the support processes, which is precisely why the installer needed `/proc` and
+the launcher did not. Same split, different requirements.
+
+One constraint the better implementation introduces: `/proc/PID/exe` cannot be
+stubbed through `PATH` the way `pgrep` can, so the helper needs a seam —
+reading `${ABLETON_PROC_ROOT:-/proc}` lets tests point it at a fixture tree of
+fake `exe` symlinks. Without it the accurate implementation is also the
+untestable one, trading one hermeticity problem for another.
 
 ## Sequencing
 
-`pr119-installer-family` is editing `install.sh` and merges soon. Doing the
-consolidation after it lands avoids a conflict in the file that matters most.
+PR119 has landed. The blocking dependency is now PR #120
+(`fix/ableton-linkd-better-installer`), which owns the `/proc`-based
+implementation this consolidation promotes; doing the work before it lands
+would mean writing the wrong version and then replacing it.
 But the helper's shape should be settled before then, because `install.sh`
 holds the broadest predicate and is therefore the one that constrains the
 design — agreeing `runtime_busy` after the fact means revisiting the installer
