@@ -8,14 +8,16 @@
 #   /etc/security/limits.d/90-ableton-rt.conf   rtprio 95, memlock unlimited,
 #                                               nice -19 for the RT group
 #   /etc/sysctl.d/90-ableton-rt.conf            vm.swappiness = 10
-#   /etc/systemd/system/ableton-cpufreq-performance.service
 # The limits grant the rtprio rights the launcher's opportunistic
 # `chrt -r 10` probes for (scripts/ableton-live), so installing this profile is
 # what turns that probe on.
 #
 # Host state changed besides the drop-ins: the invoking user is added to the RT
-# group, the running kernel's swappiness/governor are applied immediately, and
-# the governor unit (plus rtirq.service when installed) is enabled.
+# group, the running kernel's swappiness is applied immediately, and
+# rtirq.service is enabled when installed. Earlier versions also set the
+# performance CPU governor here and enabled a boot-time unit reapplying it;
+# that is now session-scoped (the launcher holds the "performance" power
+# profile while Live runs), and this script removes the old unit when found.
 #
 # Reported, NEVER performed (host policy — do these by hand):
 #   - threadirqs kernel parameter (bootloader edit) — advised when missing
@@ -38,7 +40,8 @@ RT_GROUP="${ABLETON_RT_GROUP:-audio}"
 DESTDIR="${DESTDIR:-}"
 LIMITS="$DESTDIR/etc/security/limits.d/90-ableton-rt.conf"
 SYSCTL="$DESTDIR/etc/sysctl.d/90-ableton-rt.conf"
-GOV_UNIT="$DESTDIR/etc/systemd/system/ableton-cpufreq-performance.service"
+# Installed by versions of this script before 2026-08; removed in step 3.
+OLD_GOV_UNIT=/etc/systemd/system/ableton-cpufreq-performance.service
 
 sudo=()
 if [ "$(id -u)" -ne 0 ]; then
@@ -87,37 +90,34 @@ if [ -z "$DESTDIR" ]; then
     echo "   applied to the running kernel (sysctl --system)"
 fi
 
-echo "== [3/5] CPU governor: performance =="
-write_unit=1
-if [ -z "$DESTDIR" ]; then
-    applied=0
-    for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
-        [ -e "$g" ] || continue
-        echo performance | "${sudo[@]}" tee "$g" >/dev/null
-        applied=$((applied + 1))
-    done
-    if [ "$applied" -gt 0 ]; then
-        echo "   set performance on $applied cpufreq governor(s)"
-    else
-        echo "-- no cpufreq scaling_governor on this host — skipping the governor unit"
-        write_unit=0
-    fi
-fi
-if [ "$write_unit" -eq 1 ]; then
-    install_dropin "$GOV_UNIT" <<'EOF'
-[Unit]
-Description=ableton-linux: performance CPU governor
-[Service]
-Type=oneshot
-ExecStart=/bin/sh -c 'echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor'
-[Install]
-WantedBy=multi-user.target
-EOF
-    echo "   wrote $GOV_UNIT"
-    if [ -z "$DESTDIR" ]; then
+echo "== [3/5] CPU speed: session-scoped, not boot policy =="
+# Earlier versions set the performance governor here and enabled a unit that
+# reapplied it at every boot: a permanent battery cost for hosts that run
+# Live occasionally. The launcher now holds the "performance" power profile
+# through power-profiles-daemon only while Live runs (ABLETON_POWER=off skips
+# the hold for one launch). This step only removes what earlier versions
+# installed.
+if [ -n "$DESTDIR" ]; then
+    echo "   staged mode — nothing to stage (the launcher holds the profile per session)"
+else
+    if [ -f "$OLD_GOV_UNIT" ]; then
+        "${sudo[@]}" systemctl disable "$(basename "$OLD_GOV_UNIT")" >/dev/null 2>&1 || true
+        "${sudo[@]}" rm -f "$OLD_GOV_UNIT"
         "${sudo[@]}" systemctl daemon-reload
-        "${sudo[@]}" systemctl enable "$(basename "$GOV_UNIT")" >/dev/null
-        echo "   enabled $(basename "$GOV_UNIT")"
+        echo "   removed the boot-time performance-governor unit an earlier version installed"
+        echo "   (the governor keeps today's setting until reboot; from now on your"
+        echo "    desktop's power settings own it outside Live sessions)"
+    else
+        echo "   nothing to remove"
+    fi
+    if command -v powerprofilesctl >/dev/null 2>&1; then
+        echo "   powerprofilesctl found: the launcher raises CPU speed while Live runs"
+    else
+        cat <<'EOF'
+-- NOTE: powerprofilesctl not found — the launcher cannot raise CPU speed for
+   Live sessions. Install power-profiles-daemon (or tuned-ppd), or manage the
+   governor yourself through your desktop's power settings.
+EOF
     fi
 fi
 

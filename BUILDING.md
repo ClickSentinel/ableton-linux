@@ -36,7 +36,8 @@ Configure Ableton Link networking with:
 ./scripts/setup-link.sh
 ```
 
-This requests `sudo` for the multicast route and firewall allowance.
+This requests `sudo` only when an active firewall needs the UDP 20808
+allowance, or when a hook from an earlier setup version needs removing.
 
 ## Build the single-file installer
 
@@ -76,6 +77,10 @@ make verify
 - `WINE_WIN32_FULLSCREEN_CLASS=off` disables the default Live fullscreen
   layout and exit-state fix for one launch.
 - `ABLETON_RT=off` disables realtime scheduling for one launch.
+- `ABLETON_POWER=off` keeps the computer's power mode unchanged for one
+  launch.
+- `ABLETON_LINKD_LINGER` sets how many seconds `ableton-linkd` waits with no
+  Link peers before it exits. The default is 900; 0 keeps it running.
 - `PIPEASIO_*` variables override PipeASIO settings for one launch.
 - `ENGINE` selects the container engine used by build scripts. The default is
   `podman`.

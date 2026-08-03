@@ -144,9 +144,19 @@ For advanced host tuning from a repository checkout, run:
 ./scripts/setup-realtime.sh
 ```
 
-The script requests `sudo` before changing realtime permissions, swappiness,
-or CPU-governor settings. Log out and back in after it completes. Run
+The script asks for `sudo`, gives your user account permission to run audio
+at realtime priority, and tells the system to avoid moving Live's memory to
+swap. Log out and back in after it completes. Run
 `ABLETON_RT=off ableton-live` to compare normal scheduling.
+
+While Live runs, the launcher also holds the computer in its fastest power
+mode, and releases it when Live exits, so battery use stays normal while
+Live is closed. This uses the `power-profiles-daemon` service, which GNOME
+and KDE ship by default. Run `ABLETON_POWER=off ableton-live` to compare a
+launch without it.
+
+Releases before 2026.08 kept the CPU at full speed from every boot instead.
+Running `setup-realtime.sh` again removes that old boot setting.
 
 ## Display scaling is wrong
 
