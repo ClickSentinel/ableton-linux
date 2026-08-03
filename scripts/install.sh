@@ -58,36 +58,67 @@ fi
 # Anything still running from the installed runtime holds the old files
 # open. Stop it all instead of refusing: ask the prefix's wineserver to
 # take the whole session down (Live and its helpers are its clients), and
-# pkill only what survives that or runs when no wineserver binary is
-# there to call. ableton-linkd is not part of the runtime and is handled
-# at its own install step below.
+# signal the processes directly only when that is unavailable or leaves
+# something behind. ableton-linkd is not part of the runtime and is
+# handled at its own install step below.
+
+# Every process running from the installed runtime. Wine's in-prefix
+# helpers show a Windows path in argv (C:\windows\system32\...), so no
+# command-line pattern reaches them, and a pattern also catches unrelated
+# processes that merely mention the path. /proc/PID/exe is the binary
+# itself: bin/wineserver, or the wine-preloader every in-prefix process
+# runs from.
+runtime_pids()
+{
+    local d
+    for d in /proc/[0-9]*; do
+        case "$(readlink "$d/exe" 2>/dev/null)" in
+            "$OPT/$NAME"/*) printf '%s\n' "${d#/proc/}" ;;
+        esac
+    done
+}
+# Live's exe resolves to the same wine-preloader, so runtime_pids covers
+# it; the name match stays as a second opinion, since detection failing
+# open here means installing over a running runtime.
 ableton_up()
 {
-    # Two patterns: Live's exe processes do not carry the runtime path on
-    # their command line, the support processes do.
-    pgrep -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1 || \
-        pgrep -f "$OPT/$NAME" >/dev/null 2>&1
+    [ -n "$(runtime_pids)" ] || \
+        pgrep -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1
 }
+# Live itself, as opposed to the support processes: the prompt below is
+# about unsaved work and only Live has any. Scoped to this runtime, so a
+# Live under an unrelated Wine install is neither prompted for nor killed.
 live_up=0
-if pgrep -af '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1; then
-    live_up=1
-fi
-if [ "$live_up" -eq 1 ] || pgrep -af "$OPT/$NAME" >/dev/null 2>&1; then
+for p in $(runtime_pids); do
+    case "$(tr -s '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)" in
+        *"Ableton Live"*.exe*) live_up=1; break ;;
+    esac
+done
+if ableton_up; then
     echo "== stopping running Ableton processes =="
-    pgrep -af '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' || true
-    pgrep -af "$OPT/$NAME" || true
-    # Closing Live discards unsaved work, so ask first. Leftover wineserver
-    # and winedevice.exe without Live have nothing to save: no prompt.
-    # /dev/tty rather than stdin: the .run wrapper feeds the script through
-    # a pipe. Without a terminal there is nobody to ask; proceed. The -r/-w
-    # tests pass even with no controlling terminal (they check the device
-    # mode, not an open), so the open itself is the real gate: when it
-    # fails, the group falls through to || true instead of tripping set -e.
-    if [ "$live_up" -eq 1 ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
-        {
-            printf "You're updating and Live is still open. Make sure you've saved everything and press Enter to continue."
-            read -r _
-        } 2>/dev/null < /dev/tty > /dev/tty || true
+    runtime_pids | while read -r p; do
+        printf '%s %s\n' "$p" "$(tr -s '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)"
+    done
+    # Closing Live discards unsaved work, so require an explicit yes.
+    # -r and -w cannot ask that: they stat a 0666 device node and pass
+    # even with no controlling terminal, and the printf would then fail
+    # ENXIO and abort the install under set -e. Opening it is the only
+    # honest test. A timeout, an EOF or a missing terminal all mean
+    # nobody consented, so refuse. Leftover wineserver and winedevice.exe
+    # without Live have nothing to save and never reach this.
+    if [ "$live_up" -eq 1 ]; then
+        if { : >/dev/tty; } 2>/dev/null; then
+            printf "Live is still open and updating will close it. Save your work, then press Enter to continue (Ctrl-C to abort): " > /dev/tty
+            if ! read -r -t 60 _ < /dev/tty; then
+                printf '\n' > /dev/tty 2>/dev/null || true
+                echo "!! no confirmation after 60s: close Live and rerun" >&2
+                exit 1
+            fi
+        else
+            echo "!! Live is running and there is no terminal to confirm on:" >&2
+            echo "   close Live, or rerun this installer from a terminal" >&2
+            exit 1
+        fi
     fi
     if [ -x "$OPT/$NAME/bin/wineserver" ]; then
         WINEPREFIX="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}" \
@@ -98,14 +129,14 @@ if [ "$live_up" -eq 1 ] || pgrep -af "$OPT/$NAME" >/dev/null 2>&1; then
         done
     fi
     if ableton_up; then
+        runtime_pids | xargs -r kill 2>/dev/null || true
         pkill -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
-        pkill -f "$OPT/$NAME" 2>/dev/null || true
         for _ in $(seq 1 10); do
             ableton_up || break
             sleep 0.5
         done
+        runtime_pids | xargs -r kill -9 2>/dev/null || true
         pkill -9 -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
-        pkill -9 -f "$OPT/$NAME" 2>/dev/null || true
     fi
 fi
 
