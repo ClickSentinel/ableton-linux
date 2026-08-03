@@ -138,7 +138,10 @@ load ../helpers/launcher
 
 @test "cpu topology: an affinity-constrained run reports the allowed count" {
     command -v taskset >/dev/null || skip "taskset not installed"
-    [ "$(getconf _NPROCESSORS_ONLN)" -ge 2 ] || skip "needs at least 2 CPUs"
+    # Strictly more than 2: the function prints only when allowed < online, so
+    # on a 2-CPU host pinning both CPUs is not a constraint and it correctly
+    # says nothing. -ge would run the test on the one machine it cannot pass.
+    [ "$(getconf _NPROCESSORS_ONLN)" -gt 2 ] || skip "needs more than 2 CPUs for 2 to be a constraint"
     # Not a synthetic fixture: the function reads /proc/self/status, so the only
     # honest way to test the cpuset branch is to actually be constrained.
     run taskset -c 0,1 bash -c \
@@ -149,7 +152,10 @@ load ../helpers/launcher
 
 @test "cpu topology: a contiguous affinity range counts inclusively" {
     command -v taskset >/dev/null || skip "taskset not installed"
-    [ "$(getconf _NPROCESSORS_ONLN)" -ge 4 ] || skip "needs at least 4 CPUs"
+    # Strictly more than 4, for the same reason: a 4-CPU GitHub runner pinned to
+    # 0-3 is unconstrained, the function prints nothing, and this test failed on
+    # exactly that host while passing on every developer machine.
+    [ "$(getconf _NPROCESSORS_ONLN)" -gt 4 ] || skip "needs more than 4 CPUs for 0-3 to be a constraint"
     # 0-3 is four CPUs, not three: the range arithmetic is hi-lo+1 and an
     # off-by-one here under-reports every constrained machine.
     run taskset -c 0-3 bash -c \
