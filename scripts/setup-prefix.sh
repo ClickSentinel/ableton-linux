@@ -618,7 +618,11 @@ wine reg add "$push2_key" /v libusb-1.0 /t REG_SZ /d builtin /f
 wine reg query "$push2_key" /v libusb-1.0
 
 # Ableton's tlsetupfx.exe (kernel USB driver installer) faults under Wine and pops a winedbg
-# dialog mid-install; this runtime has no IFEO Debugger hook to neuter it, so nothing is set here.
+# dialog mid-install - twice, on every Live 11 install. The fault is harmless: the installer
+# records it (0x80070643), carries on, and Live installs fine (issue 111), but two unexplained
+# "Program Error" boxes make a working install look broken. Suppress the dialog only: winedbg
+# still runs and still writes the backtrace to stderr.
+wine reg add 'HKCU\Software\Wine\WineDbg' /v ShowCrashDialog /t REG_DWORD /d 0 /f
 
 # winemenubuilder's entries assume `wine` on PATH (never true here) and are dead buttons: disable
 # it and delete entries it already wrote for this prefix (matched by WINEPREFIX=; install.sh's entries can't match).
