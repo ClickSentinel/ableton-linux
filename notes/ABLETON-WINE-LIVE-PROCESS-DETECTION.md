@@ -112,10 +112,9 @@ untestable one, trading one hermeticity problem for another.
 
 ## Sequencing
 
-PR119 has landed. The blocking dependency is now PR #120
-(`fix/ableton-linkd-better-installer`), which owns the `/proc`-based
-implementation this consolidation promotes; doing the work before it lands
-would mean writing the wrong version and then replacing it.
+PR #120 has landed, so nothing blocks this. The implementation it promotes is
+in `install.sh` on main today; the work is to lift it out and delete the five
+other dialects.
 The shape no longer needs agreeing — PR #120 settles it. What should be agreed
 *before* it lands is the `${ABLETON_PROC_ROOT:-/proc}` seam, because retro-
 fitting testability into a helper several scripts already source is harder than
@@ -128,11 +127,17 @@ because they fail visibly to whoever is running them.
 
 ## Status
 
-Open, and intended to be resolved rather than filed and forgotten. All six
-dialects are still in tracked code on main as described; the only change made
-so far is to the test harness, not the scripts. The work is sequenced behind
-PR #120, which is where the implementation it adopts lives — a scheduling
-decision, not a deferral.
+Unblocked and not started. PR #120 landed the `/proc` implementation inside
+`install.sh`; the remaining five dialects are untouched, and the only other
+change so far is to the test harness.
+
+One consequence already surfaced. PR #120's three new runtime-scoped sites
+hardcoded `$OPT/$NAME`, which collided with this branch's `ABLETON_WINE_ROOT`
+work: resolved naively, `runtime_pids` would have scanned the default path
+while the install swapped the overridden one, so the gate would find nothing
+and the wrong wineserver would be stopped. That is the shape of every future
+collision here — a safety predicate and a path resolver that must agree — and
+it is the argument for one helper rather than six.
 
 ## Limits
 
