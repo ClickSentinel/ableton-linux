@@ -17,9 +17,9 @@ the two channels can share a Wine prefix.
 | Item | State |
 | --- | --- |
 | Phase 0, prerequisites | done — PR #3, gate green, 126 tests |
-| Q1 second-prefix test | **open — gates Phase 1** |
+| Q1 second prefix | answered — clone the authorised prefix |
 | Q2 recency or risk | open |
-| Phase 1, channel plumbing | blocked on Q1 |
+| Phase 1, channel plumbing | unblocked |
 | Phase 2, publishing | not started |
 | Phase 3, switching | not started |
 | Container layout | ready to propose, independent of channels |
@@ -32,17 +32,11 @@ catalogue generator made locale-independent.
 
 ## Open questions
 
-**Q1. Can a second Wine prefix authorise Live on the same machine?**
-
-This decides the whole architecture and is cheap to answer: make a scratch
-prefix, install Live, see whether the existing authorisation takes. Ableton
-binds to a hardware ID, so a second prefix on one machine will probably
-re-authorise without consuming an activation — in which case per-channel
-prefixes are viable and Q1's dependent problems disappear.
-
-An earlier draft of this note asserted the opposite as settled fact. That was
-wrong: it was never tested, and the reasoning confused per-machine
-authorisation with per-install activation.
+Q1 is answered — see *Prefix cloning* below. An earlier draft asserted that a
+second prefix was impossible because Ableton limits activations. That was
+wrong twice over: it was never tested, and it confused per-machine
+authorisation with per-install activation. The answer turned out not to be
+"authorise twice" but "do not create a second prefix at all — copy the first".
 
 **Q2. Is the second channel about recency or about risk?**
 
@@ -72,10 +66,50 @@ shared prefix, switching to it updates the prefix, and switching back updates
 it again — a Wine downgrade, which is unsupported. That invalidates
 "switch back instantly and offline" in exactly the case a beta exists for.
 
-Three ways out, pending Q1: keep both channels on one Wine base and route base
-bumps through stable only; give each channel its own prefix; or allow it and
-warn on switch-back, accepting an unsupported prefix state. The third is not
-worth shipping.
+Resolved by giving each channel its own prefix. Each then carries its own
+`.update-timestamp`, matched to its own runtime, so no cross-version update
+happens in either direction and the downgrade never arises. What made that
+affordable is cloning rather than creating.
+
+## Prefix cloning
+
+A second prefix is made by copying the authorised one, not by running
+`setup-prefix.sh` again. Measured 2026-08-03:
+
+| Evidence | Consequence |
+| --- | --- |
+| `[Software\\Ableton\\Keys]` in `user.reg` | licence state lives inside the prefix |
+| `MachineGuid` in `system.reg` | machine identity is generated per prefix — a fresh one differs, a copy does not |
+| `dosdevices/c: -> ../drive_c`, relative | the prefix does not depend on its own path |
+| no `wine-ableton` string in either hive | nor does it name it anywhere |
+| `Documents -> $HOME/Documents` | projects are shared through the symlink, not duplicated |
+
+So a fresh prefix would demand re-authorisation precisely because `MachineGuid`
+is regenerated, and a copy does not. The copy is the same licence on the same
+machine, not a second seat, and the documentation should say so.
+
+Cost, on the development machine: an 11G prefix on ext4, which has no reflink,
+so this is a real 11G copy against 47G free at 90% used. One clone fits; a
+third channel would not. Write it as `cp -a --reflink=auto` regardless — the
+flag costs nothing on ext4 and makes the copy near-instant and near-free on
+btrfs or XFS.
+
+Three requirements follow. Use `cp -a` and never `-L`: following symlinks would
+pull `~/Documents` into the copy and balloon it far past the measured size.
+Stage to a temporary path and rename on success, so an interrupted copy cannot
+leave something that looks like a valid prefix. And check free space against the
+measured source size first, refusing with real numbers rather than failing
+halfway through.
+
+Treat the second prefix as disposable: re-cloning from stable is the reset
+path, which makes a wrecked channel a minute's work rather than a support
+conversation. That argues against keeping the two in sync — let it go stale and
+re-clone on demand.
+
+Live preferences and installed packs then diverge per channel, which is VS
+Code Insiders' model and is the property that closes the prefix-policy hazard a
+shared prefix could never fully close: a channel cannot corrupt the other's
+settings.
 
 ## Layout
 
@@ -195,14 +229,23 @@ and failed-install namespace, which is flat and distinguished only by string
 parsing; a channel named `rollback` would be indistinguishable from a rollback
 directory. The container removes the class rather than defending against it.
 
-**Fully separate installations, VS Code's model.** Not rejected outright — Q1
-may revive it. Rejected only as an assumption, since the reason first given for
-dismissing it was wrong.
+**A shared prefix across channels.** The original design. Broken by the
+timestamp coupling above as soon as the channels sit on different Wine bases,
+which the in-flight 11.14 bump makes the normal case rather than the exception.
+
+**Re-running `setup-prefix.sh` for the second channel.** Produces a fresh
+`MachineGuid` and so demands re-authorisation. Cloning is what makes per-channel
+prefixes viable at all.
 
 ## Limits
 
-Nothing here is implemented beyond Phase 0. The prefix-coupling measurement is
-from one machine and one prefix. Q1 is untested. The claim that per-channel
-prefixes would cost only disk assumes projects live outside the prefix, which
-holds because `Documents` is a symlink to the real home, but has not been
-checked against Live's own preference and licence file locations.
+Nothing here is implemented beyond Phase 0. The prefix measurements are from one
+machine, one prefix and one filesystem; an 11G prefix on ext4 with 47G free is
+not a general case, and a user with a large pack library on a fuller disk is the
+case the free-space precheck exists for.
+
+The cloning evidence shows the licence state and machine identity are in the
+prefix and that the prefix is path-independent. It does not prove Live tolerates
+being run from a copied prefix — that needs one end-to-end test: clone, launch
+from the clone, confirm it is still authorised. Everything above is inference
+from where the keys live, not observation of Live accepting them.
