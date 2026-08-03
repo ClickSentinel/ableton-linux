@@ -88,6 +88,10 @@ So a fresh prefix would demand re-authorisation precisely because `MachineGuid`
 is regenerated, and a copy does not. The copy is the same licence on the same
 machine, not a second seat, and the documentation should say so.
 
+Verified end to end on 2026-08-03, not merely inferred from where the keys sit:
+a `cp -a` clone of the live prefix was launched with `ABLETON_WINEPREFIX`
+pointing at it, and Live opened still authorised.
+
 Cost, on the development machine: an 11G prefix on ext4, which has no reflink,
 so this is a real 11G copy against 47G free at 90% used. One clone fits; a
 third channel would not. Write it as `cp -a --reflink=auto` regardless — the
@@ -244,8 +248,8 @@ machine, one prefix and one filesystem; an 11G prefix on ext4 with 47G free is
 not a general case, and a user with a large pack library on a fuller disk is the
 case the free-space precheck exists for.
 
-The cloning evidence shows the licence state and machine identity are in the
-prefix and that the prefix is path-independent. It does not prove Live tolerates
-being run from a copied prefix — that needs one end-to-end test: clone, launch
-from the clone, confirm it is still authorised. Everything above is inference
-from where the keys live, not observation of Live accepting them.
+Cloning is confirmed for one prefix on one machine: one clone, launched once,
+authorised. It has not been exercised across a Live update, a pack install, or
+a reboot, and nothing yet tests what happens when the two prefixes have drifted
+for weeks. The disposable-clone policy above is what keeps that from mattering,
+but it is a policy, not a proof.
