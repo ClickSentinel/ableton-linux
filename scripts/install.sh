@@ -56,10 +56,18 @@ else
 fi
 
 # Anything still running from the installed runtime holds the old files
-# open. Stop it all instead of refusing: Live and its helpers first, then
-# the prefix's wineserver, then force-kill whatever is left under
-# $OPT/$NAME. ableton-linkd is not part of the runtime and is handled at
-# its own install step below.
+# open. Stop it all instead of refusing: ask the prefix's wineserver to
+# take the whole session down (Live and its helpers are its clients), and
+# pkill only what survives that or runs when no wineserver binary is
+# there to call. ableton-linkd is not part of the runtime and is handled
+# at its own install step below.
+ableton_up()
+{
+    # Two patterns: Live's exe processes do not carry the runtime path on
+    # their command line, the support processes do.
+    pgrep -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1 || \
+        pgrep -f "$OPT/$NAME" >/dev/null 2>&1
+}
 live_up=0
 if pgrep -af '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1; then
     live_up=1
@@ -71,21 +79,34 @@ if [ "$live_up" -eq 1 ] || pgrep -af "$OPT/$NAME" >/dev/null 2>&1; then
     # Closing Live discards unsaved work, so ask first. Leftover wineserver
     # and winedevice.exe without Live have nothing to save: no prompt.
     # /dev/tty rather than stdin: the .run wrapper feeds the script through
-    # a pipe. Without a terminal there is nobody to ask; proceed.
+    # a pipe. Without a terminal there is nobody to ask; proceed. The -r/-w
+    # tests pass even with no controlling terminal (they check the device
+    # mode, not an open), so the open itself is the real gate: when it
+    # fails, the group falls through to || true instead of tripping set -e.
     if [ "$live_up" -eq 1 ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
-        printf "You're updating and Live is still open. Make sure you've saved everything and press Enter to continue." > /dev/tty
-        read -r _ < /dev/tty || true
+        {
+            printf "You're updating and Live is still open. Make sure you've saved everything and press Enter to continue."
+            read -r _
+        } 2>/dev/null < /dev/tty > /dev/tty || true
     fi
-    pkill -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
     if [ -x "$OPT/$NAME/bin/wineserver" ]; then
         WINEPREFIX="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}" \
             "$OPT/$NAME/bin/wineserver" -k 2>/dev/null || true
+        for _ in $(seq 1 20); do
+            ableton_up || break
+            sleep 0.5
+        done
     fi
-    for _ in $(seq 1 20); do
-        pgrep -f "$OPT/$NAME" >/dev/null 2>&1 || break
-        sleep 0.5
-    done
-    pkill -9 -f "$OPT/$NAME" 2>/dev/null || true
+    if ableton_up; then
+        pkill -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
+        pkill -f "$OPT/$NAME" 2>/dev/null || true
+        for _ in $(seq 1 10); do
+            ableton_up || break
+            sleep 0.5
+        done
+        pkill -9 -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
+        pkill -9 -f "$OPT/$NAME" 2>/dev/null || true
+    fi
 fi
 
 echo "== stage and validate patched Wine =="
