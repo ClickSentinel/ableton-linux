@@ -648,12 +648,14 @@ cat <<EOF
 Remaining steps (you supply Ableton + your own license):
 
   1. Install Live (any edition) through THIS wine (plain wine reads
-     WINEPREFIX, not the ABLETON_* launcher variables). The flags let the
-     installer run by itself and skip Ableton's Windows USB audio driver,
-     which does nothing on Linux:
+     WINEPREFIX, not the ABLETON_* launcher variables). For Live 12 the flags
+     let the installer run by itself and skip Ableton's Windows USB audio
+     driver, which does nothing on Linux:
        WINEPREFIX=$WINEPREFIX \\
-       $WINE_ROOT/bin/wine "/path/to/Ableton Live NN Edition Installer.exe" \\
+       $WINE_ROOT/bin/wine "/path/to/Ableton Live 12 Edition Installer.exe" \\
        /SILENT /SUPPRESSMSGBOXES /NORESTART '/MERGETASKS=!audiodriver'
+     Live 11's installer is a different kind and ignores those flags; run it
+     without them and click through its window.
 
   2. Launch:            ableton-live
   3. Authorize Live with your own account (binds to this prefix's MachineGuid).
