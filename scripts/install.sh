@@ -95,10 +95,7 @@ for p in $(runtime_pids); do
     esac
 done
 if ableton_up; then
-    echo "== stopping running Ableton processes =="
-    runtime_pids | while read -r p; do
-        printf '%s %s\n' "$p" "$(tr -s '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)"
-    done
+    echo "== stopping running Ableton processes ($(runtime_pids | wc -l)) =="
     # Closing Live discards unsaved work, so require an explicit yes.
     # -r and -w cannot ask that: they stat a 0666 device node and pass
     # even with no controlling terminal, and the printf would then fail
