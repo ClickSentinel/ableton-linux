@@ -43,10 +43,41 @@ cleanup()
 }
 trap cleanup EXIT
 
-# tarball: prefer dist/ (freshly built), else a release tarball dropped in root
-tarball="$(ls "$root"/dist/${NAME}-*.tar.zst 2>/dev/null | sort -V | tail -1 || true)"
-[ -z "$tarball" ] && tarball="$(ls "$root"/${NAME}-*.tar.zst 2>/dev/null | sort -V | tail -1 || true)"
-[ -n "$tarball" ] || { echo "!! no ${NAME}-*.tar.zst found: run ./build.sh first, or drop a release tarball in $root/dist/"; exit 1; }
+# Newest runtime tarball in $1, or empty. The glob is deliberately not the
+# selector: the build also emits ${NAME}-<version>-debug.tar.zst beside the
+# runtime, and `sort -V` orders that suffix *after* the plain version, so a
+# glob piped straight to `tail -1` picks the debug tree whenever both are
+# present. That tree carries bin/ and lib/ but no share/ and no wineboot, so
+# `wine --version` still answers while any real launch dies with "could not
+# exec the wine loader" - a failure that looks nothing like its cause. Match
+# the dated release form only and let every suffixed variant fall out.
+pick_runtime_tarball() {
+    local dir="$1" f base
+    # NAME carries dots (11.13); escape them so they match literally.
+    local re="^${NAME//./\\.}-[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]+\.tar\.zst\$"
+    local -a found=()
+    for f in "$dir"/"$NAME"-*.tar.zst; do
+        [ -e "$f" ] || continue          # no match: the glob came back literal
+        base="${f##*/}"
+        [[ "$base" =~ $re ]] || continue
+        found+=("$f")
+    done
+    [ "${#found[@]}" -gt 0 ] || return 0
+    printf '%s\n' "${found[@]}" | sort -V | tail -1
+}
+
+# tarball: prefer dist/ (freshly built), else a release tarball dropped in root.
+# ABLETON_RUNTIME_TARBALL pins one outright, for testing a second channel or a
+# bisect build without moving files out of the way first.
+if [ -n "${ABLETON_RUNTIME_TARBALL:-}" ]; then
+    tarball="$ABLETON_RUNTIME_TARBALL"
+    [ -f "$tarball" ] || { echo "!! ABLETON_RUNTIME_TARBALL is not a file: $tarball" >&2; exit 1; }
+else
+    tarball="$(pick_runtime_tarball "$root/dist")"
+    [ -n "$tarball" ] || tarball="$(pick_runtime_tarball "$root")"
+fi
+[ -n "$tarball" ] || { echo "!! no ${NAME}-<version>.tar.zst found: run ./build.sh first, or drop a release tarball in $root/dist/" >&2; exit 1; }
+echo "   runtime: $(basename "$tarball")"
 
 echo "== verify checksum =="
 if [ -f "$tarball.sha256" ]; then

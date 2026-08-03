@@ -23,10 +23,25 @@ SUITES=(
     tests/launcher-cli.bats
     tests/unit/detect-scale.bats
     tests/unit/detect-theme.bats
+    tests/unit/install.bats
     tests/unit/launcher.bats
     tests/patch-stack.bats
     tests/release.bats
 )
+
+# The list above is hand-ordered on purpose (CI order, not alphabetical), which
+# means a new suite has to be added by hand — and a suite left out is invisible
+# to both the catalogue and `--check`, so the document keeps passing while it
+# quietly stops describing the tests it claims to. Fail instead: a catalogue
+# that reads complete and is not is the failure mode this file exists to avoid.
+missing=()
+while IFS= read -r f; do
+    case " ${SUITES[*]} " in *" $f "*) ;; *) missing+=("$f") ;; esac
+done < <(find tests -name '*.bats' | sort)
+if [ "${#missing[@]}" -gt 0 ]; then
+    printf '!! suite missing from SUITES in %s: %s\n' "$0" "${missing[*]}" >&2
+    exit 1
+fi
 
 # The file header: contiguous comment lines after the shebang, minus the "#".
 suite_blurb() {

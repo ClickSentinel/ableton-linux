@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-119 tests across 8 suites. See [README.md](README.md) for how to run
+126 tests across 9 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -18,6 +18,7 @@ for which run on a PR.
 - [tests/launcher-cli.bats](#launcher-cli) — 19 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
+- [tests/unit/install.bats](#install) — 7 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
@@ -191,6 +192,32 @@ unreadable chrome, which is exactly the kind of thing that reaches users.
 | 21 | live theme file: fails when the fallback .ask is not installed either | — |
 | 22 | live theme file: a theme named in Preferences.cfg beats the default | — |
 
+<a id="install"></a>
+
+## tests/unit/install.bats
+
+
+scripts/install.sh — which tarball an install actually unpacks.
+
+Everything else install.sh does needs a real tree to stage and promote. This
+one decision is pure string work, and it is the one place where a wrong
+answer is silent: the debug tree passes `wine --version` and then fails at
+launch with "could not exec the wine loader", which reads as a broken build
+rather than a mis-picked file. A second release channel puts more artifacts
+in the same directory, so the selector has to be right before that lands.
+
+  ./tests/run.sh tests/unit/install.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | the runtime wins over a debug tree sitting beside it | sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/ |
+| 2 | the newest dated runtime wins when several are present | — |
+| 3 | the same-day counter orders numerically, not lexically | — |
+| 4 | a debug tree on its own selects nothing, so the caller fails loudly | — |
+| 5 | an undated or suffixed artifact is not mistaken for the runtime | the beta channel — a nightly artifact must never be taken for the stable runtime |
+| 6 | an empty directory selects nothing rather than erroring | — |
+| 7 | a missing directory selects nothing rather than erroring | — |
+
 <a id="launcher"></a>
 
 ## tests/unit/launcher.bats
@@ -306,4 +333,6 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `scripts/detect-scale.sh DPI policy` | detect-scale: block map: gnome scales collapse onto the ceil-based matched set<br>detect-scale: block map: non-gnome scales round to plain LogPixels with no IFEO |
 | `scripts/detect-theme.sh` | detect-theme: newest prefs dir: mtime wins, not a version sort<br>detect-theme: newest prefs dir: the sort -V trap case, stated explicitly |
 | `scripts/setup-run-header.sh line 19` | repo-hygiene: the installer header survives being run by a real POSIX sh |
+| `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | install: the runtime wins over a debug tree sitting beside it |
+| `the beta channel` | install: an undated or suffixed artifact is not mistaken for the runtime |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
