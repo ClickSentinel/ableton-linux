@@ -19,7 +19,7 @@ the two channels can share a Wine prefix.
 | Phase 0, prerequisites | done — PR #3, gate green, 126 tests |
 | Q1 second prefix | answered — clone the authorised prefix |
 | Q2 what the channel is for | answered — so stable can slow down |
-| Q3 promote or rebuild | **open — affects a stated invariant** |
+| Q3 promote or rebuild | answered — support both, provenance recorded |
 | Phase 1, channel plumbing | unblocked |
 | Phase 2, publishing | not started |
 | Phase 3, switching | not started |
@@ -59,21 +59,38 @@ optional follow-ups to it.
 
 **Q3. Is a stable release promoted from a fast-channel build, or rebuilt?**
 
-The open question, and the one that touches an existing invariant. `release.sh`
-and `release.yml` both state that CI never builds a release: the maintainer
-builds and verifies locally, and the bits released are the bits verified.
+Both, chosen per release. `release.sh` and `release.yml` both state that CI
+never builds a release — the maintainer builds and verifies locally, and the
+bits released are the bits verified. Promotion ends that invariant; rebuilding
+preserves it. Rather than trade one for the other permanently, keep both paths
+and record which one produced any given release.
 
-Promotion — tagging a fast-channel artifact that has soaked — is the more
-rigorous option, because the bits users tested are the bits that ship. But the
-fast channel is CI-built, so promotion makes stable CI-built too, and that
-invariant goes.
+Promotion is close to free, because `make-installer.sh` already is the
+primitive: its own header says *repackaging only; Wine is not rebuilt*. Feeding
+it a specific tarball plus the stable VERSION produces a stable installer with
+no Wine build. What stands in the way is that it cannot currently be pointed at
+one — `make-installer.sh:20` falls back to `ls | sort -V | tail -1`, the same
+selection defect fixed in `install.sh`, which orders a `-debug` suffix last.
+The build audit on line 27 means a wrong pick fails loudly rather than shipping,
+so this is a blocker for promotion rather than a live hazard.
 
-Rebuilding preserves it: the fast channel stays CI-built and disposable, stable
-is still built by hand at tag time, and what soaks is the *set of changes*
-rather than the artifact. Weaker, but it changes nothing about how stable is
-produced today.
+Three constraints keep "both" honest rather than merely ambiguous.
 
-This is shibco's call, not a technical one — it is about where trust sits.
+The verification must not fork. `build-audit.sh` already runs inside
+`make-installer.sh`, and the release workflow's verify job re-downloads and
+checks every published asset. Both paths keep both gates, so what differs is
+where the bits came from, never how thoroughly they were checked.
+
+Provenance must be recorded, not inferred. A promoted release states in
+BUILD-INFO that it was promoted and from which build; a rebuilt one states it
+was built locally. Without that the trust question Q3 exists to settle becomes
+unanswerable after the fact, which is worse than picking either option.
+
+Promotion is verifiable rather than asserted, and this is the argument for
+allowing it at all: the runtime tarball is byte-identical to the one already
+published on the fast channel, so its sha256 is unchanged and anyone can
+compare the two releases. The installer wrapper is rebuilt — it embeds VERSION
+and the payload hash — but the Wine tree inside it is provably the tested one.
 
 ## Prefix coupling
 
