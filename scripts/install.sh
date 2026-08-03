@@ -36,12 +36,22 @@ cleanup()
         if [ -n "$launcher_backup" ] && [ -e "$launcher_backup" ]; then
             cp -a "$launcher_backup" "$BIN/ableton-live" || true
         fi
-        echo "!! install failed; previous runtime restored" >&2
+        if [ "$promoted" -eq 1 ] || [ -n "$backup" ] || [ -n "$launcher_backup" ]; then
+            echo "!! install failed; previous runtime restored" >&2
+        else
+            echo "!! install aborted; nothing was changed" >&2
+        fi
     fi
     [ -z "$stage" ] || rm -rf "$stage"
     exit "$rc"
 }
 trap cleanup EXIT
+# Without these, a signal reaches the EXIT trap with $? still 0 and the
+# rollback above is skipped: an interrupt between the two promotion mv's
+# would leave no runtime installed and say nothing. The confirmation
+# prompt is a 60 second window inviting exactly that Ctrl-C.
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # tarball: prefer dist/ (freshly built), else a release tarball dropped in root
 tarball="$(ls "$root"/dist/${NAME}-*.tar.zst 2>/dev/null | sort -V | tail -1 || true)"
