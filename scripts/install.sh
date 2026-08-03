@@ -105,25 +105,28 @@ for p in $(runtime_pids); do
     esac
 done
 if ableton_up; then
-    echo "== stopping running Ableton processes ($(runtime_pids | wc -l)) =="
+    echo "== stop processes using the installed runtime =="
+    echo "   $(runtime_pids | wc -l) found"
     # Closing Live discards unsaved work, so require an explicit yes.
     # -r and -w cannot ask that: they stat a 0666 device node and pass
     # even with no controlling terminal, and the printf would then fail
     # ENXIO and abort the install under set -e. Opening it is the only
-    # honest test. A timeout, an EOF or a missing terminal all mean
-    # nobody consented, so refuse. Leftover wineserver and winedevice.exe
-    # without Live have nothing to save and never reach this.
+    # honest test. Anything but y - a timeout, an EOF, a bare Enter, a
+    # missing terminal - means nobody consented, so refuse. Leftover
+    # wineserver and winedevice.exe without Live have nothing to save and
+    # never reach this.
     if [ "$live_up" -eq 1 ]; then
         if { : >/dev/tty; } 2>/dev/null; then
-            printf "Live is still open and updating will close it. Save your work, then press Enter to continue (Ctrl-C to abort): " > /dev/tty
-            if ! read -r -t 60 _ < /dev/tty; then
-                printf '\n' > /dev/tty 2>/dev/null || true
-                echo "!! no confirmation after 60s: close Live and rerun" >&2
-                exit 1
-            fi
+            echo "!! Live is running. Updating will force-close it. Save your work before continuing." >&2
+            printf "Force-close Live? [y/N] " > /dev/tty
+            ans=""
+            read -r -t 60 ans < /dev/tty || printf '\n' > /dev/tty 2>/dev/null || true
+            case "$ans" in
+                y|Y|yes|Yes|YES) ;;
+                *) exit 1 ;;
+            esac
         else
-            echo "!! Live is running and there is no terminal to confirm on:" >&2
-            echo "   close Live, or rerun this installer from a terminal" >&2
+            echo "!! Live is running; no terminal to confirm on. Close Live, or rerun from a terminal." >&2
             exit 1
         fi
     fi
