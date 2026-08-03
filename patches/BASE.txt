@@ -11,7 +11,7 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 81 files, numbered 0001 through 0089.
+The current Wine series contains 82 files, numbered 0001 through 0089.
 Patches 0027 and 0044 are intentionally absent. Numbers 0066 through 0068
 and 0072 through 0074 are reserved by open pull requests and will enter this
 branch as those merge.
@@ -246,6 +246,14 @@ Apply them in sequence with the rest of the series.
   removing `_NET_WM_STATE_FULLSCREEN` on exit. The Live launcher selects
   `Ableton Live Window Class`; other classes and ordinary windowed geometry
   retain Wine's existing behavior. See `notes/ABLETON-WINE-FULLSCREEN.md`.
+- `0066`: release winex11's local cursor-clipping state (pointer grab,
+  clipping flags) whenever the process can observe that the X input focus
+  left it: the unfocused clip early-out, the clip-window FocusOut, and
+  FocusOut events showing another client holding the focus, ahead of the
+  reparenting/WM_STATE guards. Stops a cross-process embedded device host
+  (M4L) stranded mid-embed from synthesizing pointer input out of raw
+  XInput2 deltas over Live's cursor stream (issue 122).
+  See `notes/ABLETON-WINE-M4L-INPUT-INJECTION.md`.
 - `0069`: keep `WINE_SWP_RESIZABLE` when the launcher-selected top-level
   window still has both `WS_CAPTION` and
   `WS_THICKFRAME`, even if its restored geometry covers the monitor. Genuine

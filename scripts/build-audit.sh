@@ -146,6 +146,7 @@ FINGERPRINTS='
 0064|ascii|lib/wine/x86_64-windows/shell32.dll|__wine_portal_open_folder
 0065|ascii|lib/wine/x86_64-unix/win32u.so|WINE_WIN32_FULLSCREEN_CLASS
 0065|ascii|lib/wine/x86_64-unix/winex11.so|WINE_WIN32_FULLSCREEN_CLASS
+0066|ascii|lib/wine/x86_64-unix/winex11.so|lost X focus to another client while clipping
 0069|ascii|lib/wine/x86_64-unix/win32u.so|WINE_WIN32_RESIZABLE_CLASS
 0071|ascii|lib/wine/x86_64-windows/wined3d.dll|Sustained present-size mismatch
 0075|ascii|lib/wine/x86_64-windows/kernel32.dll|UnregisterApplicationRecoveryCallback
