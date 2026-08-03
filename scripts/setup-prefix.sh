@@ -270,7 +270,12 @@ case "$dpi_mode" in
 esac
 
 echo "== [1/5] initialise prefix at $WINEPREFIX =="
-wineboot -u
+# While updating the prefix, wineboot offers Wine's Mono and Gecko installers. This runtime
+# vendors neither, so on a machine with no cached package it opens a modal "Wine Mono
+# Installer" prompt; nothing answers it in an unattended run and the wineserver -w below then
+# never returns. Live needs neither - ableton-live and max9 already disable both on every
+# launch - so disable them here and wineboot stops asking.
+WINEDLLOVERRIDES="mscoree,mshtml=" wineboot -u
 "$WINESERVER" -w
 
 if [ "$refresh" -eq 1 ]; then
