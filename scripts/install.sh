@@ -13,6 +13,14 @@ OPT="$HOME/.local/opt"
 BIN="$HOME/.local/bin"
 APPS="$HOME/.local/share/applications"
 NAME="wine-d2d1-nspa-11.13"
+# Where this install lands. scripts/ableton-live and scripts/setup-prefix.sh
+# already honour ABLETON_WINE_ROOT; install.sh and uninstall.sh hardcoded it,
+# which is the only reason two runtimes could not sit side by side. Staging,
+# the dated rollbacks and the still-running check all follow the target, so an
+# overridden root gets the same safety net as the default one.
+WINE_ROOT="${ABLETON_WINE_ROOT:-$OPT/$NAME}"
+WINE_ROOT_DIR="$(dirname "$WINE_ROOT")"
+WINE_ROOT_BASE="$(basename "$WINE_ROOT")"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 stage=""
 backup=""
@@ -24,14 +32,14 @@ cleanup()
     rc=$?
     trap - EXIT
     if [ "$rc" -ne 0 ]; then
-        failed="$OPT/${NAME}.failed-$stamp"
-        if [ "$promoted" -eq 1 ] && [ -e "$OPT/$NAME" ]; then
-            mv "$OPT/$NAME" "$failed" || true
+        failed="$WINE_ROOT.failed-$stamp"
+        if [ "$promoted" -eq 1 ] && [ -e "$WINE_ROOT" ]; then
+            mv "$WINE_ROOT" "$failed" || true
         fi
-        if [ -n "$backup" ] && [ -e "$backup" ] && [ ! -e "$OPT/$NAME" ]; then
-            mv "$backup" "$OPT/$NAME" || true
+        if [ -n "$backup" ] && [ -e "$backup" ] && [ ! -e "$WINE_ROOT" ]; then
+            mv "$backup" "$WINE_ROOT" || true
         elif [ -n "$backup" ] && [ -e "$backup" ]; then
-            echo "!! $OPT/$NAME still present; backup left at $backup" >&2
+            echo "!! $WINE_ROOT still present; backup left at $backup" >&2
         fi
         if [ -n "$launcher_backup" ] && [ -e "$launcher_backup" ]; then
             cp -a "$launcher_backup" "$BIN/ableton-live" || true
@@ -87,14 +95,14 @@ else
 fi
 
 if pgrep -af '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1 || \
-   pgrep -af "$OPT/$NAME" >/dev/null 2>&1; then
+   pgrep -af "$WINE_ROOT" >/dev/null 2>&1; then
     echo "!! the installed Ableton Wine is still running: close Live, wait a few seconds, and rerun" >&2
     exit 1
 fi
 
 echo "== stage and validate patched Wine =="
-mkdir -p "$OPT"
-stage="$(mktemp -d "$OPT/.${NAME}.install.XXXXXX")"
+mkdir -p "$WINE_ROOT_DIR"
+stage="$(mktemp -d "$WINE_ROOT_DIR/.${WINE_ROOT_BASE}.install.XXXXXX")"
 tar -C "$stage" -I zstd -xf "$tarball"
 candidate="$stage/$NAME"
 for required in \
@@ -171,14 +179,14 @@ else
 fi
 
 echo "== promote runtime with dated rollback =="
-if [ -e "$OPT/$NAME" ]; then
-    backup="$OPT/${NAME}-rollback-$stamp"
+if [ -e "$WINE_ROOT" ]; then
+    backup="$WINE_ROOT-rollback-$stamp"
     [ ! -e "$backup" ] || { echo "!! rollback path already exists: $backup" >&2; exit 1; }
-    mv "$OPT/$NAME" "$backup"
+    mv "$WINE_ROOT" "$backup"
 fi
-mv "$candidate" "$OPT/$NAME"
+mv "$candidate" "$WINE_ROOT"
 promoted=1
-"$OPT/$NAME/bin/wine" --version
+"$WINE_ROOT/bin/wine" --version
 
 echo "== install launcher -> $BIN/ableton-live =="
 mkdir -p "$BIN"
