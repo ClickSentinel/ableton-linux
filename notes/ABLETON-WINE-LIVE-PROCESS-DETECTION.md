@@ -23,6 +23,16 @@ without a PATH shim.
 | `bench-run.sh` (56) | `pgrep -f 'Ableton Live.*\.exe' \| head -n 1`, wants a PID |
 | `tools/m4l-hang-capture.sh` (24) | `pgrep -f 'Ableton Live [0-9]+ .*\.exe' \| head -1` |
 
+Process detection is the sharpest case but not the largest. The runtime
+preamble is duplicated wider: `WINE_ROOT="${ABLETON_WINE_ROOT:-...}"` appears in
+seven scripts, `export WINEPREFIX=...` in five, and `WINESERVER` and the `PATH`
+prepend in three each. Channels make that cluster urgent rather than untidy — a
+one-line default becomes marker-read, validate, map, and fall back, and seven
+copies of that is not maintainable. Some duplication is irreducible, though:
+`here="$(cd "$(dirname "$0")" && pwd)"` appears five times because a script must
+locate itself before it can source anything, and `setup-run-header.sh` runs
+before anything is installed at all.
+
 The same fragmentation exists one layer down. `wineserver` is found by
 `pgrep -x wineserver` in `check-m4l-fonts.sh` and `check-ntsync.sh` but by
 `pgrep -f "$WINE_ROOT.*bin/wineserver"` in `bench-run.sh` — only the second is
