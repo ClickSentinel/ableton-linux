@@ -10,7 +10,7 @@ bats_require_minimum_version 1.5.0
 load helpers/common
 
 # Files that are sourced, not executed, so they have no shebang of their own.
-SOURCED="scripts/detect-scale.sh scripts/detect-theme.sh scripts/ableton-profile.sh"
+SOURCED="scripts/detect-scale.sh scripts/detect-theme.sh scripts/ableton-profile.sh scripts/runtime-env.sh"
 # The single-file installer header declares #!/bin/sh and then re-execs itself
 # into bash on line 19; shellcheck reads the shebang and not the re-exec.
 BASH_DIALECT="scripts/setup-run-header.sh"

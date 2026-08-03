@@ -33,6 +33,7 @@ SUITES=(
     tests/unit/detect-theme.bats
     tests/unit/install.bats
     tests/unit/launcher.bats
+    tests/unit/runtime-env.bats
     tests/patch-stack.bats
     tests/release.bats
 )

@@ -278,6 +278,9 @@ install -m755 "$here/ableton-live" "$BIN/ableton-live"
 echo "== install detection libs -> ~/.local/share/ableton-wine =="
 # The launcher sources these on every start (DPI auto-calibration, light/dark theme sync).
 mkdir -p "$HOME/.local/share/ableton-wine"
+# The launchers live in ~/.local/bin with no sibling lib, so the shared
+# resolver has to be here for them to source.
+install -m644 "$here/runtime-env.sh" "$HOME/.local/share/ableton-wine/runtime-env.sh"
 install -m644 "$here/detect-scale.sh" "$HOME/.local/share/ableton-wine/detect-scale.sh"
 install -m644 "$here/detect-theme.sh" "$HOME/.local/share/ableton-wine/detect-theme.sh"
 # setsyscolors.exe repaints the top bar mid-session when the Live theme changes;

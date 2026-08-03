@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-126 tests across 9 suites. See [README.md](README.md) for how to run
+135 tests across 10 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -20,6 +20,7 @@ for which run on a PR.
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/install.bats](#install) — 7 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 9 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
 
@@ -257,6 +258,31 @@ End-to-end launch behaviour is in tests/launcher-cli.bats.
 | 19 | windowmetrics: a value in another section is not picked up | — |
 | 20 | windowmetrics: a missing user.reg is silent, not an error cascade | — |
 
+<a id="runtime-env"></a>
+
+## tests/unit/runtime-env.bats
+
+
+scripts/runtime-env.sh — the shared runtime and prefix resolution.
+
+Seven scripts resolved these paths independently until this existed. The
+resolvers are pure so they can be tested here rather than through a launcher
+sandbox, which is the whole reason they echo instead of assigning.
+
+  ./tests/run.sh tests/unit/runtime-env.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | runtime root: defaults under the user's own opt directory | — |
+| 2 | runtime root: ABLETON_WINE_ROOT wins, so a bisect or VM run can pin one | — |
+| 3 | prefix: defaults to ~/.wine-ableton | — |
+| 4 | prefix: ABLETON_WINEPREFIX wins, which the clone workflow depends on | — |
+| 5 | root and prefix are independent: overriding one leaves the other alone | — |
+| 6 | the resolvers are pure: calling them exports and unsets nothing | — |
+| 7 | binding exports the prefix, the server, and the runtime's bin on PATH | — |
+| 8 | binding clears inherited Wine settings that would reach the wrong build | the four cleared here are the launchers' long-standing set |
+| 9 | binding leaves the sync backends alone, unlike setup-prefix.sh's own unset | setup-prefix.sh clears these two itself; folding them in would drop a |
+
 <a id="patch-stack"></a>
 
 ## tests/patch-stack.bats
@@ -333,6 +359,8 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `scripts/detect-scale.sh DPI policy` | detect-scale: block map: gnome scales collapse onto the ceil-based matched set<br>detect-scale: block map: non-gnome scales round to plain LogPixels with no IFEO |
 | `scripts/detect-theme.sh` | detect-theme: newest prefs dir: mtime wins, not a version sort<br>detect-theme: newest prefs dir: the sort -V trap case, stated explicitly |
 | `scripts/setup-run-header.sh line 19` | repo-hygiene: the installer header survives being run by a real POSIX sh |
+| `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | install: the runtime wins over a debug tree sitting beside it |
 | `the beta channel` | install: an undated or suffixed artifact is not mistaken for the runtime |
+| `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
