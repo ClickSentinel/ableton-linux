@@ -116,10 +116,11 @@ PR119 has landed. The blocking dependency is now PR #120
 (`fix/ableton-linkd-better-installer`), which owns the `/proc`-based
 implementation this consolidation promotes; doing the work before it lands
 would mean writing the wrong version and then replacing it.
-But the helper's shape should be settled before then, because `install.sh`
-holds the broadest predicate and is therefore the one that constrains the
-design — agreeing `runtime_busy` after the fact means revisiting the installer
-a second time.
+The shape no longer needs agreeing — PR #120 settles it. What should be agreed
+*before* it lands is the `${ABLETON_PROC_ROOT:-/proc}` seam, because retro-
+fitting testability into a helper several scripts already source is harder than
+building it in, and because without it the consolidation would delete five
+testable-in-principle dialects in favour of one that cannot be tested at all.
 
 The beta tester kit and `tools/` can follow separately; they are diagnostics,
 not shipped paths, and their version-pinned patterns are the least urgent
@@ -127,11 +128,11 @@ because they fail visibly to whoever is running them.
 
 ## Status
 
-Open, and intended to be resolved rather than filed and forgotten. Nothing in
-this note has been consolidated: all six dialects are still in tracked code as
-described. The only change made so far is to the test harness, not the
-scripts. The work is sequenced behind `pr119-installer-family` for the reason
-given above, which is a scheduling decision, not a deferral.
+Open, and intended to be resolved rather than filed and forgotten. All six
+dialects are still in tracked code on main as described; the only change made
+so far is to the test harness, not the scripts. The work is sequenced behind
+PR #120, which is where the implementation it adopts lives — a scheduling
+decision, not a deferral.
 
 ## Limits
 
