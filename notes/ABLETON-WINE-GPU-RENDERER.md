@@ -239,15 +239,19 @@ name, but stands down when the driver reports no video memory. Wine
 reaches the driver through EGL or GLX and picks EGL by default
 (`use_egl = TRUE`, `dlls/winex11.drv/x11drv_main.c`). On EGL it reads
 video memory only from `GL_NVX_gpu_memory_info`
-(`dlls/win32u/opengl.c`), which NVIDIA's driver provides and Mesa does
-not. Intel and AMD machines on EGL report zero, 0061 stands down, and
-the invented `0x0162` goes through. A table entry is immune, being
-consulted first.
+(`dlls/win32u/opengl.c`). A driver that does not expose that extension
+reports zero, 0061 stands down, and the invented `0x0162` goes through.
+A table entry is immune, being consulted first.
 
-The maintainer's machine reports its real card, which implies it uses
-GLX. What decides the interface per machine is not established, and that
-is why the fault looks intermittent across similar hardware. No
-`WINEDEBUG=+d3d` trace from an affected machine has been captured.
+Mesa implements the extension per driver, not universally. Measured
+2026-08-03 on an RX 7900 XT, Mesa 26.1.6, fresh prefix with no `UseEGL`
+override and `trace:wgl:egl_init` in the log: radeonsi on EGL reported
+20 GB, so 0061 fires there and the card keeps its real identity. That
+also rules out the earlier reading of the maintainer's machine as
+implying GLX — a machine can report its real card on EGL. Whether iris
+exposes the extension is untested; no `WINEDEBUG=+d3d` trace from an
+affected machine has been captured, so what the reporting EliteDesk
+actually did is still open.
 
 Patch 0066 closes the first gap. The second needs its own change, so
 that an unidentified card never inherits a refused identity, with a
@@ -261,11 +265,12 @@ invented HD 4000.
 
 Patch 0067 removes the video-memory precondition on 0061's synthesised
 description. The precondition assumed a missing figure was worse than
-the fallback's approximation; on the EGL backend Mesa never supplies
-one, so the assumption cost every unlisted Intel and AMD card its real
-identity. A neutral figure stands in when the driver reports none.
-Together with 0066 this ends the whack-a-mole for cards Wine can
-identify at all.
+the fallback's approximation; where the driver supplies none, that
+assumption costs an unlisted card its real identity for an attribute
+that has nothing to do with identifying it. A neutral figure stands in
+when the driver reports none, so the outcome no longer depends on which
+drivers implement `GL_NVX_gpu_memory_info`. Together with 0066 this ends
+the whack-a-mole for cards Wine can identify at all.
 
 Patch 0068 covers the cards Live genuinely lists.
 `WINE_D3D_FORCE_GPU_RENDERING=1` reports baseline device
