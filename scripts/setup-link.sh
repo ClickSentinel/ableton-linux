@@ -8,14 +8,17 @@
 # its interface with IP_MULTICAST_IF, which bypasses the routing-table lookup
 # that makes routeless multicast sends fail with ENETUNREACH. Versions 1 and 2
 # of this script added a 224.0.0.0/4 route and a NetworkManager hook to keep
-# it alive; version 3 removed both. sudo is used only to open the firewall
-# port when a firewall is active and to remove the old hook where one exists.
+# it alive; version 3 removed both. Version 4 stopped enabling the
+# ableton-linkd user unit: the launchers start a session-scoped daemon that
+# exits on its own, and the unit stays registered as the explicit opt-in for
+# an always-on anchor. sudo is used only to open the firewall port when a
+# firewall is active and to remove the old hook where one exists.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 # Bump whenever this script's system-level effects change (firewall rule, unit
 # handling): forces one re-run on hosts with a stale marker so an existing
 # install picks up the fix instead of silently keeping old behavior.
-LINK_SETUP_VERSION=3
+LINK_SETUP_VERSION=4
 
 if pgrep -f "Ableton Live.*\.exe" >/dev/null 2>&1; then
     echo "!! Live is running: close it before changing Link networking" >&2
@@ -71,7 +74,15 @@ fi
 echo "== [3/3] Ableton Link service =="
 # The daemon and its unit ship in the .run installer; a missing binary is a
 # skip, not a failure because the firewall setup above stands on its own.
+# Since version 4 the unit is registered but not enabled: the launchers start
+# ableton-linkd per session, and it exits on its own once no peer is left
+# (see --linger in the daemon). Enabling the unit is the explicit opt-in for
+# an always-on anchor, so this script never touches an enablement made after
+# the version-4 migration below.
 linkd="${ABLETON_LINKD:-$HOME/.local/share/ableton-wine/ableton-linkd}"
+marker="$HOME/.local/share/ableton-wine/link-configured"
+prior_version="$(sed -n 2p "$marker" 2>/dev/null || true)"
+case "$prior_version" in ''|*[!0-9]*) prior_version=0 ;; esac
 anchor=skipped
 if [ ! -x "$linkd" ]; then
     echo "   ableton-linkd not found (looked at $linkd): skipping" >&2
@@ -87,24 +98,34 @@ else
         unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
         mkdir -p "$unit_dir"
         cp "$unit_src" "$unit_dir/ableton-linkd.service"
+        anchor=session
         if command -v systemctl >/dev/null 2>&1 \
-           && systemctl --user daemon-reload \
-           && systemctl --user enable --now ableton-linkd.service; then
-            anchor=enabled
-        else
-            echo "   systemd user service unavailable; the Live launcher will start ableton-linkd"
-            anchor=launcher
+           && systemctl --user daemon-reload 2>/dev/null; then
+            # One-time migration: setups 1-3 enabled the unit at login for
+            # everyone. Nobody chose that, so move those hosts to the session
+            # model; an enablement recorded after version 4 was a choice and
+            # stays.
+            if [ "$prior_version" -lt 4 ] \
+               && systemctl --user is-enabled --quiet ableton-linkd.service 2>/dev/null; then
+                systemctl --user disable --now ableton-linkd.service >/dev/null 2>&1 || true
+                echo "   earlier setups ran ableton-linkd from login; disabled that"
+            fi
         fi
     fi
 fi
+# A daemon from before the migration predates the idle exit and would run
+# until reboot; stop it so the session model applies now. Live is closed
+# (checked at the top), so no session loses its anchor.
+if [ "$prior_version" -lt 4 ] && pkill -x ableton-linkd 2>/dev/null; then
+    echo "   stopped the running always-on ableton-linkd"
+fi
 
 echo
-if [ "$anchor" = enabled ]; then
-    echo "OK: Link setup complete; ableton-linkd.service enabled"
-elif [ "$anchor" = launcher ]; then
-    echo "OK: Link setup complete; the Live launcher will start ableton-linkd"
+if [ "$anchor" = session ]; then
+    echo "OK: Link setup complete; the launchers start ableton-linkd with Live"
+    echo "    (always-on anchor instead: systemctl --user enable --now ableton-linkd.service)"
 else
     echo "OK: Link setup complete; ableton-linkd anchor skipped"
 fi
 mkdir -p "$HOME/.local/share/ableton-wine"
-printf 'configured\n%s\n' "$LINK_SETUP_VERSION" > "$HOME/.local/share/ableton-wine/link-configured"
+printf 'configured\n%s\n' "$LINK_SETUP_VERSION" > "$marker"
