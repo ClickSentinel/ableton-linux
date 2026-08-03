@@ -68,9 +68,8 @@ that enforces staging all exist already — `packaging.bats` asserts that every
 script a kit script sources is itself staged, so that invariant applies the
 moment anything sources it.
 
-The implementation is not to be designed — it already exists on
-`fix/ableton-linkd-better-installer` (PR #120) and is better than a pattern
-match can be. `runtime_pids()` walks `/proc/[0-9]*`, resolves each `exe`
+The implementation is not to be designed — PR #120 landed it on main, and it
+is better than a pattern match can be. `runtime_pids()` walks `/proc/[0-9]*`, resolves each `exe`
 symlink, and keeps the pids whose binary lives under the runtime root:
 
 ```sh
@@ -95,7 +94,7 @@ reads their cmdline, so a Live under an unrelated Wine install is neither
 prompted for nor killed.
 
 So the consolidation is promote-and-delete, not design-and-write: lift these
-into the shared helper once PR #120 lands, then remove the five other dialects.
+into the shared helper, then remove the five other dialects.
 `live_pid` for `bench-run.sh` and `m4l-hang-capture.sh` falls out of
 `runtime_pids` directly.
 
@@ -115,10 +114,10 @@ untestable one, trading one hermeticity problem for another.
 PR #120 has landed, so nothing blocks this. The implementation it promotes is
 in `install.sh` on main today; the work is to lift it out and delete the five
 other dialects.
-The shape no longer needs agreeing — PR #120 settles it. What should be agreed
-*before* it lands is the `${ABLETON_PROC_ROOT:-/proc}` seam, because retro-
-fitting testability into a helper several scripts already source is harder than
-building it in, and because without it the consolidation would delete five
+The shape no longer needs agreeing — PR #120 settles it. The one thing to
+settle before the lift is the `${ABLETON_PROC_ROOT:-/proc}` seam: retrofitting
+testability into a helper several scripts already source is harder than
+building it in, and without it the consolidation would delete five
 testable-in-principle dialects in favour of one that cannot be tested at all.
 
 The beta tester kit and `tools/` can follow separately; they are diagnostics,
