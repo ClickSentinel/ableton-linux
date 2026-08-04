@@ -12,8 +12,8 @@
   the real device.
 - Graphics cards missing from Wine's table keep their real identity even when
   the driver reports no video memory (Wine patch 0067). Wine reads that figure
-  from a source only NVIDIA's driver provides, so on Intel and AMD it was
-  always absent and the card fell back to the invented 2012 identity.
+  from an optional graphics-driver feature, and a driver that does not offer it
+  used to cost the card its identity, falling back to the invented 2012 one.
 - Added `WINE_D3D_FORCE_GPU_RENDERING=1`, which offers Live's GPU renderer on
   the older Intel graphics Live refuses by model (Wine patch 0068). Run
   `WINE_D3D_FORCE_GPU_RENDERING=1 ableton-live` to try it. Diagnostics sent to

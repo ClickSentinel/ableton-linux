@@ -29,15 +29,15 @@ this way, and it leaves a card that already reports the baseline alone.
 Off by default: applications other than Live read the device ID too, so
 this belongs to a user who has decided they want it.
 ---
- dlls/wined3d/adapter_gl.c | 62 +++++++++++++++++++++++++++++++++++++++
- dlls/wined3d/wined3d_gl.h |  5 ++++
- 2 files changed, 67 insertions(+)
+ dlls/wined3d/adapter_gl.c | 73 +++++++++++++++++++++++++++++++++++++++
+ dlls/wined3d/wined3d_gl.h |  5 +++
+ 2 files changed, 78 insertions(+)
 
 diff --git a/dlls/wined3d/adapter_gl.c b/dlls/wined3d/adapter_gl.c
-index 40b9753..65b301d 100644
+index 40b9753..9ce2732 100644
 --- a/dlls/wined3d/adapter_gl.c
 +++ b/dlls/wined3d/adapter_gl.c
-@@ -1053,6 +1053,65 @@ static const struct wined3d_gpu_description *synthesise_gpu_description(struct w
+@@ -1053,6 +1053,74 @@ static const struct wined3d_gpu_description *synthesise_gpu_description(struct w
      return &ctx->synthetic_gpu_description;
  }
  
@@ -69,6 +69,8 @@ index 40b9753..65b301d 100644
 +{
 +    const struct wined3d_gpu_description *baseline;
 +    const char *env;
++    size_t tail;
++    int room;
 +
 +    if (!(env = getenv("WINE_D3D_FORCE_GPU_RENDERING")) || strcmp(env, "1"))
 +        return gpu_description;
@@ -85,8 +87,15 @@ index 40b9753..65b301d 100644
 +            || gpu_description->device == CARD_INTEL_UHD630_1)
 +        return gpu_description;
 +
-+    snprintf(ctx->forced_description, sizeof(ctx->forced_description), "%s (reporting as %s)",
-+            gpu_description->description, baseline->description);
++    /* DXGI_ADAPTER_DESC1 truncates the description at 128 characters and the
++     * disclosure is its tail, so bound the card's own name to leave room:
++     * whatever else is lost, the substitution must still be readable. */
++    tail = strlen(" (reporting as )") + strlen(baseline->description);
++    room = sizeof(ctx->forced_description) > tail + 1
++            ? (int)(sizeof(ctx->forced_description) - 1 - tail) : 0;
++
++    snprintf(ctx->forced_description, sizeof(ctx->forced_description), "%.*s (reporting as %s)",
++            room, gpu_description->description, baseline->description);
 +
 +    ctx->forced_gpu_description = *gpu_description;
 +    ctx->forced_gpu_description.device = baseline->device;
@@ -103,18 +112,20 @@ index 40b9753..65b301d 100644
  static const struct wined3d_gpu_description *query_gpu_description(const struct wined3d_gl_info *gl_info,
          struct wined3d_caps_gl_ctx *ctx, const char *gl_renderer)
  {
-@@ -1085,6 +1144,9 @@ static const struct wined3d_gpu_description *query_gpu_description(const struct
-     if ((gpu_description_override = wined3d_get_user_override_gpu_description(vendor, device)))
-         gpu_description = gpu_description_override;
- 
-+    if (gpu_description)
-+        gpu_description = substitute_gpu_device_id(ctx, gpu_description);
+@@ -3882,6 +3950,11 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter_gl *adapter_gl,
+             return FALSE;
+         }
+     }
++    /* Both branches above settle a description, and the feature-level fallback
++     * settles the fabricated CARD_INTEL_IVBD that the substitution exists to
++     * replace, so substitute here rather than inside query_gpu_description. */
++    caps_gl_ctx->gpu_description = substitute_gpu_device_id(caps_gl_ctx, caps_gl_ctx->gpu_description);
 +
-     return gpu_description;
- }
+     fixup_extensions(gl_info, caps_gl_ctx, gl_renderer_str, gl_vendor);
  
+     adapter->vram_bytes_used = 0;
 diff --git a/dlls/wined3d/wined3d_gl.h b/dlls/wined3d/wined3d_gl.h
-index 8510773..f5fc241 100644
+index 8510773..7d3aa62 100644
 --- a/dlls/wined3d/wined3d_gl.h
 +++ b/dlls/wined3d/wined3d_gl.h
 @@ -819,6 +819,11 @@ struct wined3d_caps_gl_ctx
@@ -122,10 +133,10 @@ index 8510773..f5fc241 100644
      struct wined3d_gpu_description synthetic_gpu_description;
      char synthetic_description[128];
 +    /* Backing store for a description whose device ID was substituted under
-+     * WINE_D3D_FORCE_GPU_RENDERING. Holds two card names and the connecting
-+     * text, and DXGI_ADAPTER_DESC1 truncates at 128 characters anyway. */
++     * WINE_D3D_FORCE_GPU_RENDERING. Sized to DXGI_ADAPTER_DESC1's field so
++     * that what fits here is what the application reads. */
 +    struct wined3d_gpu_description forced_gpu_description;
-+    char forced_description[192];
++    char forced_description[128];
      UINT64 vram_bytes;
  };
  
