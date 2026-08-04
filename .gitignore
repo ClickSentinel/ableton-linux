@@ -43,3 +43,6 @@ m4l-hang-*/
 # bytecode from tools/m4l-font-audit.py
 __pycache__/
 *.pyc
+
+# test harness (vendored bats-core; see tests/run.sh)
+.bats-core/

@@ -109,13 +109,29 @@ kit_script_names() {
         false; }
 }
 
-@test "the runtime name is identical in make-installer.sh, build.sh and install.sh" {
+# build.sh still carries the literal because it names the container's output
+# before any of this is sourced; the consumers resolve it instead. The pairing
+# that matters is unchanged — what build.sh produces is what install.sh looks
+# for — so it is asserted against the resolver rather than against a grep of
+# each script, which is what a shared resolver makes impossible to skew.
+@test "the runtime name build.sh produces is the one the resolver hands out" {
     cd "$REPO"
-    mk="$(grep -oE 'NAME="wine-d2d1-nspa-[0-9.]+"' "$MK" | head -1)"
+    . scripts/runtime-env.sh
     bs="$(grep -oE 'wine-d2d1-nspa-[0-9.]+' build.sh | head -1)"
-    is="$(grep -oE 'wine-d2d1-nspa-[0-9.]+' scripts/install.sh | head -1)"
-    [ "${mk#NAME=\"}" = "$bs\"" ] || { echo "make-installer '$mk' vs build.sh '$bs'" >&2; false; }
-    [ "$bs" = "$is" ] || { echo "build.sh '$bs' vs install.sh '$is'" >&2; false; }
+    [ -n "$bs" ] || { echo "build.sh names no runtime" >&2; false; }
+    [ "$(ableton_runtime_name)" = "$bs" ] || {
+        echo "resolver '$(ableton_runtime_name)' vs build.sh '$bs'" >&2; false; }
+}
+
+@test "the installer scripts carry no runtime-name literal of their own" {
+    cd "$REPO"
+    wrong=""
+    for f in scripts/install.sh scripts/make-installer.sh scripts/build-audit.sh; do
+        grep -qE 'NAME="wine-d2d1-nspa-[0-9.]+"' "$f" && wrong="$wrong $f"
+    done
+    [ -z "$wrong" ] || {
+        echo "these re-introduced a local literal instead of sourcing runtime-env.sh:$wrong" >&2
+        false; }
 }
 
 # guards: licence GPLv2+ — Ableton Link has no linking exception, so the source must travel with the binary

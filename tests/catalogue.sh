@@ -31,7 +31,7 @@ SUITES=(
     tests/launcher-cli.bats
     tests/unit/detect-scale.bats
     tests/unit/detect-theme.bats
-    tests/unit/install.bats
+    tests/unit/runtime-env.bats
     tests/unit/launcher.bats
     tests/patch-stack.bats
     tests/release.bats
