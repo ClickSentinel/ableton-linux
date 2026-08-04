@@ -17,6 +17,7 @@ GmbH** and respects the Ableton terms of service.
 - Experimental Live 11, Max for Live, and Max 9 support
 - Push 1 and Push 2 support (Push 3 and Move support coming soon!)
 - Local-network Ableton Link support
+- Experimental support for Ableton's forthcoming Extensions SDK
 - Compatibility with Ableton's Splice integration
 - Automatic recovery when in-use audio hardware or startup-detected MIDI
   controllers briefly disconnect
