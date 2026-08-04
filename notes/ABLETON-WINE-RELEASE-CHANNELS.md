@@ -37,6 +37,27 @@ this work three times in a single session — once silently rescoping a safety
 gate — and a four-deep stack against a moving base is where that stops being
 survivable.
 
+## Combining the phases
+
+Audited 2026-08-04 by merging all three branches into one tree and running the
+suite: 148 tests, all passing. Two things that merge is worth knowing about.
+
+`.github/workflows/nightly-build.yml` conflicts add/add. Phase 2 carries the
+original, which builds and uploads an Actions artifact; phase 1 carries the
+rewrite that publishes. Phase 1's supersedes it — take that side.
+
+`packaging.bats` needed a fix for the two to coexist. It asserted the installer
+name by grepping `make-installer.sh` for a source literal, so phase 1 renaming
+the variable that builds the filename failed it even though a release build
+still produces the identical name. It now evaluates the naming lines and
+compares the result, which passes whether or not the label exists. That fix
+lives on phase 2 and phase 3 has it merged.
+
+Worth recording how it was found, because the first check of the same thing
+missed it: an earlier verification merged the phase 1 branch's *committed*
+state while the change under test was still uncommitted in a working tree, and
+reported a pass on a tree that did not contain it.
+
 ## Phase 1 requirements
 
 Everything needed for a user to download and run a nightly. Five items, all in
