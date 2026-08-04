@@ -208,9 +208,19 @@ echo "== [6/8] package =="
 stack_stamp="$PREFIX_ROOT/ABLETON-WINE-PATCH-STACK.txt"
 ( cd "$SRC/patches" && sha256sum 00*.patch pipeasio/*.patch ) > "$stack_stamp"
 stack_sha="$(sha256sum "$stack_stamp" | awk '{print $1}')"
+
+# The commit of THIS repository that produced the build. patch-head below is
+# the HEAD of the patched Wine tree and names no object here, so without this a
+# built runtime cannot say what source made it — which is why a nightly and the
+# release it was built after are indistinguishable by dist-version alone.
+# /src is mounted read-only; rev-parse does not write, and safe.directory goes
+# to the container's own HOME.
+git config --global --add safe.directory "$SRC" 2>/dev/null || true
+source_commit="$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)"
 build_info="$PREFIX_ROOT/ABLETON-WINE-BUILD-INFO.txt"
 {
     echo "dist-version: $VERSION"
+    echo "source-commit: $source_commit"
     echo "wine:         $("$PREFIX_ROOT/bin/wine" --version)"
     echo "base:         giang17/wine d2d1-dcomp-11.13 @ 5c23dd1c"
     echo "prefix:       $CONFIGURE_PREFIX (configure-time only; tarball is relocatable, see relocation gate)"
