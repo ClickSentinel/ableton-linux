@@ -63,6 +63,19 @@ BUILD-INFO, so `stable-rollback-<stamp>` becomes `versions/<id>` under its real
 identity. Duplicates — the same build installed twice — collapse to one entry,
 because identical ids mean identical bits.
 
+A rollback whose identity cannot be read does not enter the store either, and
+this is not hypothetical: the 1.2G outlier on the development machine turned
+out to be a debug tree — `bin/` and `lib/`, an `ABLETON-WINE-DEBUG-INFO.txt`
+and no `share/` — left behind when the `sort -V` tarball selection installed
+one and the next install rolled it back. It carries no `dist-version` at all,
+so there is no name to key it by.
+
+Refusing the whole migration over it would be wrong: it is debris in the
+history, not the live runtime, and anyone who ever hit that bug would be
+blocked. Unreadable rollbacks move aside exactly as `.failed-*` does. The live
+tree is different — if *that* cannot be named the migration must still refuse,
+because installing over an unidentifiable runtime is the ambiguous case.
+
 `.failed-*` directories do not enter the store. They are debris from an
 interrupted install and their contents are not a trustworthy runtime; they move
 to `<container>/failed-<stamp>` so uninstall still finds them and nothing is
