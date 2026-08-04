@@ -97,3 +97,83 @@ ableton_live_pids() {
 ableton_live_running() {
     [ -n "$(ableton_live_pids)" ]
 }
+
+# --- layout migration --------------------------------------------------------
+# One-time move from the flat layout (~/.local/opt/wine-d2d1-nspa-11.13) to the
+# container (~/.local/opt/ableton-wine/<channel>). Only install.sh calls this;
+# it is here because it has to agree with the resolvers above about where a
+# runtime lives, and those two drifting apart is the failure this whole file
+# exists to prevent.
+
+# The directory installs live under. A seam for the tests; nothing else sets it.
+ableton_opt_dir() {
+    printf '%s\n' "${ABLETON_OPT_DIR:-$HOME/.local/opt}"
+}
+
+ableton_container_root() {
+    printf '%s\n' "$(ableton_opt_dir)/ableton-wine"
+}
+
+# The pre-container install path. Carries the Wine version, which is exactly
+# why it is being retired: a base bump moved every user's directory.
+ableton_legacy_root() {
+    printf '%s\n' "$(ableton_opt_dir)/wine-d2d1-nspa-11.13"
+}
+
+_ableton_same_path() {
+    [ "$(realpath -m "$1" 2>/dev/null)" = "$(realpath -m "$2" 2>/dev/null)" ]
+}
+
+# Migrate, or explain why not. Idempotent, and refuses rather than guessing
+# whenever both locations hold a real tree and either could be the live one.
+#
+# The caller must already have established that nothing is running from the
+# runtime: this renames the directory a running Wine is executing from.
+ableton_migrate_layout() {
+    local legacy container target link d base
+    legacy="$(ableton_legacy_root)"
+    container="$(ableton_container_root)"
+    target="$container/stable"
+
+    if [ -n "${ABLETON_WINE_ROOT:-}" ]; then
+        echo "   layout: ABLETON_WINE_ROOT is set; leaving the install where it is"
+        return 0
+    fi
+
+    if [ -d "$target" ] && [ ! -L "$target" ]; then
+        if [ -L "$legacy" ]; then
+            link="$(readlink "$legacy")"
+            _ableton_same_path "$(dirname "$legacy")/$link" "$target" || {
+                echo "!! $legacy points at $link, not the installed runtime;" \
+                     "remove it and rerun" >&2; return 1; }
+            return 0                                   # steady state
+        fi
+        [ ! -e "$legacy" ] || {
+            echo "!! both $target and $legacy hold a runtime; cannot tell which" \
+                 "is live. Remove whichever is stale and rerun" >&2; return 1; }
+        ln -s "ableton-wine/stable" "$legacy"          # link lost, put it back
+        echo "   layout: restored the compatibility link at $legacy"
+        return 0
+    fi
+
+    # -e follows symlinks, so a dangling link reads as absent here and would
+    # fall through to a silent no-op. Test both, and let the check below name it.
+    if [ ! -e "$legacy" ] && [ ! -L "$legacy" ]; then
+        return 0                                       # fresh install, nothing to move
+    fi
+    [ ! -L "$legacy" ] || {
+        echo "!! $legacy is a symlink but there is no runtime at $target;" \
+             "remove it and rerun" >&2; return 1; }
+
+    mkdir -p "$container"
+    mv "$legacy" "$target"
+    # The dated rollbacks travel too. Left behind they are invisible to the
+    # container-scoped uninstall and orphan several GB apiece.
+    for d in "$legacy"-rollback-* "$legacy".failed-*; do
+        [ -e "$d" ] || continue
+        base="${d##*/}"
+        mv "$d" "$container/stable${base#"${legacy##*/}"}"
+    done
+    ln -s "ableton-wine/stable" "$legacy"
+    echo "   layout: moved the runtime to $target (compatibility link kept)"
+}

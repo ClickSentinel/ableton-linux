@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-141 tests across 10 suites. See [README.md](README.md) for how to run
+152 tests across 11 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -20,6 +20,7 @@ for which run on a PR.
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/install.bats](#install) — 7 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
+- [tests/unit/migrate-layout.bats](#migrate-layout) — 11 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 15 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
@@ -258,6 +259,38 @@ End-to-end launch behaviour is in tests/launcher-cli.bats.
 | 19 | windowmetrics: a value in another section is not picked up | — |
 | 20 | windowmetrics: a missing user.reg is silent, not an error cascade | — |
 
+<a id="migrate-layout"></a>
+
+## tests/unit/migrate-layout.bats
+
+
+scripts/runtime-env.sh — the flat-to-container layout migration.
+
+This renames the directory an existing user's Wine runs from, so every row of
+the decision table gets a test, including the ones that must refuse. The rule
+throughout is that ambiguity is an error: two real trees, or a link pointing
+somewhere unexpected, mean the script cannot know which install is live, and
+guessing wrong swaps a runtime out from under a running Live.
+
+Nothing here touches a real install: ABLETON_OPT_DIR points the resolvers at
+a throwaway tree.
+
+  ./tests/run.sh tests/unit/migrate-layout.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | a flat install moves into the container and keeps a compatibility link | — |
+| 2 | the compatibility link is relative, so it survives a moved home | — |
+| 3 | dated rollback and failed-install directories move with the runtime | uninstall.sh cleans by sibling glob; rollbacks left outside the |
+| 4 | runtimes from other Wine bases are left alone | 11.11 and 11.14 trees coexist on the maintainer's machine and are not |
+| 5 | a fresh install migrates nothing and leaves no compatibility link | — |
+| 6 | running it twice is a no-op, not a second move | — |
+| 7 | a lost compatibility link is put back rather than reported as migrating | — |
+| 8 | an overridden runtime root is left exactly where the user pinned it | — |
+| 9 | two real runtimes refuse, naming both, rather than guessing | the destructive row of the decision table — guessing here swaps a |
+| 10 | a compatibility link pointing somewhere unexpected refuses | — |
+| 11 | a dangling link with no runtime behind it refuses instead of migrating | — |
+
 <a id="runtime-env"></a>
 
 ## tests/unit/runtime-env.bats
@@ -350,6 +383,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 
 | Reference | Tests |
 | --- | --- |
+| `11.11 and 11.14 trees coexist on the maintainer's machine and are not` | migrate-layout: runtimes from other Wine bases are left alone |
 | `commit 9cba3b0` | launcher: gray text: the dark fallback lands on classic GrayText |
 | `commit e221cc4` | release: VERSION has a matching CHANGELOG entry at the top |
 | `commit f0fc05e` | detect-scale: cosmic probe: a disabled lid never wins when it is marked non-primary<br>detect-scale: cosmic probe: a disabled lid never wins, even with no primary line |
@@ -369,6 +403,8 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | install: the runtime wins over a debug tree sitting beside it |
 | `the beta channel` | install: an undated or suffixed artifact is not mistaken for the runtime |
+| `the destructive row of the decision table` | migrate-layout: two real runtimes refuse, naming both, rather than guessing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
+| `uninstall.sh cleans by sibling glob; rollbacks left outside the` | migrate-layout: dated rollback and failed-install directories move with the runtime |
