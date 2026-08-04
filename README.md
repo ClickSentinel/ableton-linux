@@ -39,7 +39,7 @@ Additionally, you need:
 
 - glibc 2.35 or newer
 - PipeWire 0.3.56 or newer (we recommend 1.6 or newer for audio performance)
-- GStreamer with its base and good plugin sets (for mp3 and video import)
+- GStreamer with its base and good plugin sets
 - `tar` and `zstd`
 - your installation files and activation details from Ableton
 
