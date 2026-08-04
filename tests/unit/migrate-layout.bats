@@ -147,3 +147,52 @@ plant_runtime() {
     [[ "$stderr$output" == *"symlink"* ]]
     [ ! -e "$TARGET" ]
 }
+
+# --- removal -----------------------------------------------------------------
+# The other half of the layout: uninstall has to find everything the container
+# holds, and nothing it does not own.
+
+@test "removal takes the container and everything inside it" {
+    plant_runtime "$TARGET"
+    plant_runtime "$ABLETON_OPT_DIR/ableton-wine/stable-rollback-20260802T194734Z"
+    plant_runtime "$ABLETON_OPT_DIR/ableton-wine/beta"
+    ableton_remove_runtimes
+    [ ! -e "$ABLETON_OPT_DIR/ableton-wine" ]
+}
+
+# guards: rm -rf on a symlink takes the link, not the tree — the container
+# removal above is what takes the tree
+@test "removal takes the compatibility symlink without following it" {
+    plant_runtime "$TARGET"
+    ln -s "ableton-wine/stable" "$LEGACY"
+    ableton_remove_runtimes
+    [ ! -e "$LEGACY" ] && [ ! -L "$LEGACY" ]
+}
+
+# guards: an install that never migrated has no container at all
+@test "removal handles a flat install that never migrated" {
+    plant_runtime "$LEGACY"
+    plant_runtime "$LEGACY-rollback-20260802T194734Z"
+    plant_runtime "$LEGACY.failed-20260801T101010Z"
+    ableton_remove_runtimes
+    [ ! -e "$LEGACY" ]
+    [ -z "$(find "$ABLETON_OPT_DIR" -maxdepth 1 -name "$NAME*")" ]
+}
+
+# guards: 11.11 and 11.14 trees are not this installer's to delete
+@test "removal leaves runtimes from other Wine bases alone" {
+    plant_runtime "$TARGET"
+    other="$ABLETON_OPT_DIR/${NAME%.*}.11"
+    plant_runtime "$other"
+    ableton_remove_runtimes
+    [ -f "$other/bin/wine" ]
+}
+
+@test "removal with a pinned root takes only that root" {
+    plant_runtime "$TARGET"
+    pinned="$BATS_TEST_TMPDIR/pinned"
+    plant_runtime "$pinned"
+    ABLETON_WINE_ROOT="$pinned" ableton_remove_runtimes
+    [ ! -e "$pinned" ]
+    [ -f "$TARGET/bin/wine" ]
+}

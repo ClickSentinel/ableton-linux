@@ -194,3 +194,34 @@ ableton_migrate_layout() {
     ln -s "ableton-wine/stable" "$legacy"
     echo "   layout: moved the runtime to $target (compatibility link kept)"
 }
+
+# Remove every runtime this installer owns. Lives here rather than in
+# uninstall.sh because it has to agree with the resolvers above about where
+# runtimes are, and because deleting trees is worth testing — which needs it to
+# be a function with a seam, not inline in a script that also stops systemd
+# units and rewrites the desktop database.
+ableton_remove_runtimes() {
+    local container legacy d
+    if [ -n "${ABLETON_WINE_ROOT:-}" ]; then
+        # The user pinned a path; remove that and nothing else.
+        rm -rf "$ABLETON_WINE_ROOT" && echo "removed $ABLETON_WINE_ROOT"
+    else
+        # One directory holds every channel and every dated rollback, so this is a
+        # single removal rather than a sibling glob. That glob is what would orphan
+        # multi-GB rollback directories the moment a suffix joined the runtime name.
+        container="$(ableton_container_root)"
+        [ ! -e "$container" ] || { rm -rf "$container" && echo "removed $container"; }
+
+        # An install that never migrated still has the flat layout, and a migrated
+        # one leaves the compatibility symlink behind. rm -rf on a symlink removes
+        # the link, not its target — which the container removal above already took.
+        legacy="$(ableton_legacy_root)"
+        if [ -e "$legacy" ] || [ -L "$legacy" ]; then
+            rm -rf "$legacy" && echo "removed $legacy"
+        fi
+        for d in "$legacy"-rollback-* "$legacy".failed-*; do
+            [ -e "$d" ] || continue     # unmatched glob stays literal; skip, don't abort
+            rm -rf "$d" && echo "removed $d"
+        done
+    fi
+}

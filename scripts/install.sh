@@ -157,6 +157,23 @@ if ableton_runtime_busy; then
     fi
 fi
 
+# The layout migration belongs here and nowhere else: after the stop above,
+# which needs $WINE_ROOT to still name where the running processes are
+# executing from, and before the staging below, which must target where the
+# runtime will now live. It refuses rather than guesses whenever both locations
+# hold a real tree, and set -e turns that into an aborted install.
+#
+# A later failure does not undo it, and does not need to: the migration only
+# moves a tree that stays valid, and re-running is a no-op.
+ableton_migrate_layout
+
+# Re-resolve. The snapshot at the top named the pre-migration location, and the
+# tree may have just moved out from under it. The cleanup trap reads these same
+# variables, so it picks the new values up too.
+WINE_ROOT="$(ableton_wine_root)"
+WINE_ROOT_DIR="$(dirname "$WINE_ROOT")"
+WINE_ROOT_BASE="$(basename "$WINE_ROOT")"
+
 echo "== stage and validate patched Wine =="
 mkdir -p "$WINE_ROOT_DIR"
 stage="$(mktemp -d "$WINE_ROOT_DIR/.${WINE_ROOT_BASE}.install.XXXXXX")"

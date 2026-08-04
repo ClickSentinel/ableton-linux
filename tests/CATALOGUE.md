@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-157 tests across 11 suites. See [README.md](README.md) for how to run
+164 tests across 11 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -18,9 +18,9 @@ for which run on a PR.
 - [tests/launcher-cli.bats](#launcher-cli) — 19 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
-- [tests/unit/install.bats](#install) — 7 test(s)
+- [tests/unit/install.bats](#install) — 9 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/migrate-layout.bats](#migrate-layout) — 11 test(s)
+- [tests/unit/migrate-layout.bats](#migrate-layout) — 16 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 19 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
@@ -220,6 +220,8 @@ in the same directory, so the selector has to be right before that lands.
 | 5 | an undated or suffixed artifact is not mistaken for the runtime | the beta channel — a nightly artifact must never be taken for the stable runtime |
 | 6 | an empty directory selects nothing rather than erroring | — |
 | 7 | a missing directory selects nothing rather than erroring | — |
+| 8 | the layout migration runs after the process stop, not before | the migration renames the directory running processes execute from, |
+| 9 | the runtime root is re-resolved after the migration, before staging | staging and promotion must target where the runtime now lives, not |
 
 <a id="launcher"></a>
 
@@ -291,6 +293,11 @@ a throwaway tree.
 | 9 | two real runtimes refuse, naming both, rather than guessing | the destructive row of the decision table — guessing here swaps a |
 | 10 | a compatibility link pointing somewhere unexpected refuses | — |
 | 11 | a dangling link with no runtime behind it refuses instead of migrating | — |
+| 12 | removal takes the container and everything inside it | — |
+| 13 | removal takes the compatibility symlink without following it | rm -rf on a symlink takes the link, not the tree — the container |
+| 14 | removal handles a flat install that never migrated | an install that never migrated has no container at all |
+| 15 | removal leaves runtimes from other Wine bases alone | 11.11 and 11.14 trees are not this installer's to delete |
+| 16 | removal with a pinned root takes only that root | — |
 
 <a id="runtime-env"></a>
 
@@ -388,7 +395,9 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 
 | Reference | Tests |
 | --- | --- |
+| `11.11 and 11.14 trees are not this installer's to delete` | migrate-layout: removal leaves runtimes from other Wine bases alone |
 | `11.11 and 11.14 trees coexist on the maintainer's machine and are not` | migrate-layout: runtimes from other Wine bases are left alone |
+| `an install that never migrated has no container at all` | migrate-layout: removal handles a flat install that never migrated |
 | `an install that predates the migration must still resolve and launch` | runtime-env: runtime root: falls back to the legacy path before migrating |
 | `commit 9cba3b0` | launcher: gray text: the dark fallback lands on classic GrayText |
 | `commit e221cc4` | release: VERSION has a matching CHANGELOG entry at the top |
@@ -400,6 +409,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `issue label 'installer'` | packaging: every script a kit script sources is itself staged into the kit |
 | `licence GPLv2+` | packaging: the kit ships the GPL source and licence Ableton Link requires |
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
+| `rm -rf on a symlink takes the link, not the tree` | migrate-layout: removal takes the compatibility symlink without following it |
 | `scoping` | runtime-env: runtime pids: a process from another Wine install is ignored |
 | `scripts/ableton-live` | launcher-cli: a stale wineserver is killed and the session booted before registry writes<br>launcher: windowmetrics: a value wrapped across continuation lines is rejoined |
 | `scripts/build-audit.sh` | patch-stack: audit: every wine patch is registered in FINGERPRINTS or STAMP_ONLY |
@@ -409,10 +419,12 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `scripts/setup-run-header.sh line 19` | repo-hygiene: the installer header survives being run by a real POSIX sh |
 | `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | install: the runtime wins over a debug tree sitting beside it |
+| `staging and promotion must target where the runtime now lives, not` | install: the runtime root is re-resolved after the migration, before staging |
 | `the beta channel` | install: an undated or suffixed artifact is not mistaken for the runtime |
 | `the compatibility symlink must stay vestigial` | runtime-env: runtime root: the container wins even with the legacy symlink present |
 | `the destructive row of the decision table` | migrate-layout: two real runtimes refuse, naming both, rather than guessing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
+| `the migration renames the directory running processes execute from,` | install: the layout migration runs after the process stop, not before |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
 | `uninstall.sh cleans by sibling glob; rollbacks left outside the` | migrate-layout: dated rollback and failed-install directories move with the runtime |

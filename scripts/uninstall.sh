@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # Remove what install.sh added. The Wine prefix (~/.wine-ableton) is kept unless you pass --prefix.
 set -euo pipefail
-# Matches install.sh: ABLETON_WINE_ROOT picks a non-default runtime to remove.
-OPT="${ABLETON_WINE_ROOT:-$HOME/.local/opt/wine-d2d1-nspa-11.13}"
+# Runtime paths resolve in one place; see scripts/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" "$HOME/.local/share/ableton-wine/runtime-env.sh"; do
+    # shellcheck source=scripts/runtime-env.sh
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v ableton_wine_root >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/.local/share/ableton-wine" >&2; exit 1; }
 BIN="$HOME/.local/bin/ableton-live"
 APPS="$HOME/.local/share/applications"
 
-rm -rf "$OPT"        && echo "removed $OPT"
-for d in "$OPT"-rollback-* "$OPT".failed-*; do
-    [ -e "$d" ] || continue     # unmatched glob stays literal; skip, don't abort
-    rm -rf "$d" && echo "removed $d"
-done
+ableton_remove_runtimes
 rm -f  "$BIN"        && echo "removed $BIN"
 rm -f  "$BIN".rollback-*
 # Stop and drop the Ableton Link session anchor's user unit (setup-link.sh
