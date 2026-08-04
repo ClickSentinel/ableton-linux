@@ -22,7 +22,7 @@ That is crude, and it is enough.
 
 | Phase | What | State |
 | --- | --- | --- |
-| 1 | Nightly builds, published | built, first run in flight — `mvp/nightly-builds` |
+| 1 | Nightly builds, published | **built and verified end to end** — `mvp/nightly-builds` |
 | 2 | Test suite and `ci-checks` | done, unmerged — `ci/test-suite-merge` |
 | 3 | Script consolidation | partly done — `refactor/runtime-env` |
 | 4 | Channels proper | designed; the migration is built on phase 3's branch |
@@ -86,6 +86,32 @@ present in the shipped binaries by fingerprint. That is the right check for a
 runtime artifact — `ci-checks` guards scripts and repo hygiene, which is not
 what a nightly tarball gets wrong. Gating on the audit alone is what keeps
 phase 1 independent of phase 2.
+
+## Phase 1 verification
+
+Run on 2026-08-04 against `ClickSentinel/ableton-linux`, built from
+`7193ece`. What the pipeline produced was installed on a real machine with a
+licensed Live, not merely inspected.
+
+The label reaches every place it has to: the installer's own header reports
+`ableton-wine-setup-2026.08.04.1+nightly.7193ece`, the extracted kit's
+`VERSION` carries the same string, and so does
+`~/.local/share/ableton-wine/VERSION` after installing — so a nightly cannot
+report itself as the release it was built from.
+
+`/releases/latest/` returns 404 on a repository whose only release is the
+nightly prerelease, which is the load-bearing fact behind two download URLs
+coexisting: the stable link keeps resolving to the newest real release and
+ignores this entirely. The `+` in asset names survives GitHub intact.
+
+The runtime installed over an existing licensed prefix, updated it in place,
+and Live launched still authorised. That is the claim the whole shared-prefix
+scope rests on, and it is the only part of it that could not be established by
+inspection.
+
+Two things remain unexercised: the skip-if-unchanged path has never returned
+false against a real published nightly, and nobody has yet installed the
+release back over a nightly.
 
 ## Phase 1 limitations
 
