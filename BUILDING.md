@@ -56,6 +56,24 @@ Verify pinned source inputs with:
 make verify
 ```
 
+## Tests
+
+```bash
+make test          # or: ./tests/run.sh
+./tests/run.sh unit
+./tests/run.sh tests/patch-stack.bats
+```
+
+Takes about twenty seconds and needs no build, no Wine prefix, no display and
+no network. `bats` is resolved from `$BATS`, then `PATH`, then a pinned clone
+in `.bats-core/` that the runner creates on first use.
+
+This is also what runs `shellcheck` over every shipped script, so running it
+before opening a pull request is how you find a lint failure at your desk
+rather than in CI. If ShellCheck flags something you believe is correct, the
+repo's convention is a `# shellcheck disable=SCxxxx` with the reason on the
+same line — there are four, and each says why.
+
 ## Environment variables
 
 - `ABLETON_WINE_ROOT` selects the Wine runtime. The default is
