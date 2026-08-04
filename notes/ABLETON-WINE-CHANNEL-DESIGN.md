@@ -1,9 +1,10 @@
 # Release channels: how the pieces work
 
-The design behind [ABLETON-WINE-RELEASE-CHANNELS.md](ABLETON-WINE-RELEASE-CHANNELS.md),
-split out when the two together passed 400 lines. That file carries the plan,
-the phase states and what has been verified; this one carries the reasoning and
-the measurements, which change far less often.
+Companion to the phase plan in `ABLETON-WINE-RELEASE-CHANNELS.md`, split out
+when the two together passed 400 lines. That one carries what is being done and
+where it stands; this one carries the reasoning and the measurements behind it,
+which change far less often. Deliberately written to stand on its own, so it
+can travel with the branch implementing a piece of it.
 
 ## Prefix coupling
 
