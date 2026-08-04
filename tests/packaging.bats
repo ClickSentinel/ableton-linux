@@ -149,3 +149,34 @@ kit_script_names() {
     grep -qF 'install-ableton-latest.run' .github/workflows/release.yml
     grep -qF 'install-ableton-latest.run' scripts/release.sh
 }
+
+# guards: lifting runtime_pids into the lib renamed it, and a replace that only
+# matched the $(...) form left three pipeline calls pointing at a function that
+# no longer existed — silently killing nothing before swapping the runtime
+@test "every shell function a script calls is actually defined" {
+    cd "$REPO"
+    # Underscores are the tell: shell functions here use them, external commands
+    # do not (update-desktop-database, sha256sum, readelf). So an underscore word
+    # in command position is a function call, and it has to resolve somewhere —
+    # in the file itself or in a lib the file sources.
+    defined="$(grep -hoE '^[a-z][a-z0-9_]*\(\)' scripts/* 2>/dev/null | tr -d '()' | sort -u)"
+    missing=""
+    while read -r f; do
+        # Drop comments, glob forms, and anything shaped like an assignment —
+        # shell variables and the `key = value` lines of the heredoc configs
+        # both sit at line start and would otherwise read as calls.
+        body="$(grep -vE '^[[:space:]]*#|^[[:space:]]*[a-z][a-z0-9_]*[[:space:]]*=' "$f" \
+                | sed 's/[a-z0-9_]*\*//g')"
+        calls="$( { printf '%s\n' "$body" | grep -oE '^[[:space:]]*[a-z][a-z0-9_]*_[a-z0-9_]*[[:space:]]*[|)]?[[:space:]]*$|^[[:space:]]*[a-z][a-z0-9_]*_[a-z0-9_]*[[:space:]]+' 
+                   printf '%s\n' "$body" | grep -oE '\$\([a-z][a-z0-9_]*_[a-z0-9_]*' ; } \
+                 | sed 's/^[[:space:]]*//; s/[[:space:]|)]*$//; s/^\$(//' | sort -u)"
+        for fn in $calls; do
+            printf '%s\n' "$defined" | grep -qx "$fn" && continue
+            command -v "$fn" >/dev/null 2>&1 && continue   # a real external command
+            missing="$missing$f: $fn"$'\n'
+        done
+    done < <(git ls-files 'scripts/*')
+    [ -z "$missing" ] || {
+        echo "calls that resolve to no function or command:" >&2
+        printf '%s' "$missing" >&2; false; }
+}

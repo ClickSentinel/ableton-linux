@@ -22,8 +22,40 @@
 # The installed runtime. ABLETON_WINE_ROOT overrides it - the tests, the
 # regression VMs and anyone bisecting a build rely on that, so it stays the
 # outermost say regardless of what channel support later resolves underneath.
+# The directory installs live under. A seam for the tests; nothing else sets it.
+ableton_opt_dir() {
+    printf '%s\n' "${ABLETON_OPT_DIR:-$HOME/.local/opt}"
+}
+
+ableton_container_root() {
+    printf '%s\n' "$(ableton_opt_dir)/ableton-wine"
+}
+
+# The pre-container install path. Carries the Wine version, which is exactly
+# why it is being retired: a base bump moved every user's directory.
+ableton_legacy_root() {
+    printf '%s\n' "$(ableton_opt_dir)/wine-d2d1-nspa-11.13"
+}
+
 ableton_wine_root() {
-    printf '%s\n' "${ABLETON_WINE_ROOT:-$HOME/.local/opt/wine-d2d1-nspa-11.13}"
+    local container
+    # An explicit pin always wins: the tests, the regression VMs and anyone
+    # bisecting a build rely on it, and it is what tells the migration to leave
+    # an install where its owner put it.
+    if [ -n "${ABLETON_WINE_ROOT:-}" ]; then
+        printf '%s\n' "$ABLETON_WINE_ROOT"
+        return
+    fi
+    # Prefer the container once it exists. The legacy path survives as a
+    # compatibility symlink, so resolving through it would still work — but it
+    # would make the shim load-bearing rather than vestigial, and a later
+    # release could not drop it without a second migration.
+    container="$(ableton_container_root)/stable"
+    if [ -d "$container" ]; then
+        printf '%s\n' "$container"
+        return
+    fi
+    ableton_legacy_root
 }
 
 # The Ableton prefix. Separate from the runtime on purpose: a channel switch
@@ -104,21 +136,6 @@ ableton_live_running() {
 # it is here because it has to agree with the resolvers above about where a
 # runtime lives, and those two drifting apart is the failure this whole file
 # exists to prevent.
-
-# The directory installs live under. A seam for the tests; nothing else sets it.
-ableton_opt_dir() {
-    printf '%s\n' "${ABLETON_OPT_DIR:-$HOME/.local/opt}"
-}
-
-ableton_container_root() {
-    printf '%s\n' "$(ableton_opt_dir)/ableton-wine"
-}
-
-# The pre-container install path. Carries the Wine version, which is exactly
-# why it is being retired: a base bump moved every user's directory.
-ableton_legacy_root() {
-    printf '%s\n' "$(ableton_opt_dir)/wine-d2d1-nspa-11.13"
-}
 
 _ableton_same_path() {
     [ "$(realpath -m "$1" 2>/dev/null)" = "$(realpath -m "$2" 2>/dev/null)" ]

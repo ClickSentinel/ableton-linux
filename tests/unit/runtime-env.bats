@@ -144,3 +144,37 @@ proc_setup() {
     ! ableton_runtime_busy
     ! ableton_live_running
 }
+
+# --- container vs legacy resolution ------------------------------------------
+# The layout migration moves the runtime into a container directory. The
+# resolver has to answer correctly on both sides of that move, because an
+# install that has not migrated yet still has to launch.
+
+@test "runtime root: the container wins once it exists" {
+    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
+    mkdir -p "$ABLETON_OPT_DIR/ableton-wine/stable"
+    [ "$(ableton_wine_root)" = "$ABLETON_OPT_DIR/ableton-wine/stable" ]
+}
+
+# guards: an install that predates the migration must still resolve and launch
+@test "runtime root: falls back to the legacy path before migrating" {
+    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
+    mkdir -p "$ABLETON_OPT_DIR"
+    [ "$(ableton_wine_root)" = "$(ableton_legacy_root)" ]
+}
+
+# guards: the compatibility symlink must stay vestigial — resolving through it
+# would make it load-bearing, and no later release could drop it
+@test "runtime root: the container wins even with the legacy symlink present" {
+    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
+    mkdir -p "$ABLETON_OPT_DIR/ableton-wine/stable"
+    ln -s "ableton-wine/stable" "$(ableton_legacy_root)"
+    [ "$(ableton_wine_root)" = "$ABLETON_OPT_DIR/ableton-wine/stable" ]
+}
+
+@test "runtime root: an explicit pin beats the container" {
+    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
+    mkdir -p "$ABLETON_OPT_DIR/ableton-wine/stable"
+    ABLETON_WINE_ROOT=/tmp/pinned
+    [ "$(ableton_wine_root)" = "/tmp/pinned" ]
+}

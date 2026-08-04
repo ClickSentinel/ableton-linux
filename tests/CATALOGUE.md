@@ -7,21 +7,21 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-152 tests across 11 suites. See [README.md](README.md) for how to run
+157 tests across 11 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
 ## Contents
 
 - [tests/repo-hygiene.bats](#repo-hygiene) — 14 test(s)
-- [tests/packaging.bats](#packaging) — 8 test(s)
+- [tests/packaging.bats](#packaging) — 9 test(s)
 - [tests/launcher-cli.bats](#launcher-cli) — 19 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/install.bats](#install) — 7 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 11 test(s)
-- [tests/unit/runtime-env.bats](#runtime-env) — 15 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 19 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
 
@@ -80,6 +80,7 @@ staging list and checks it against what the kit's own scripts reference.
 | 6 | the runtime name is identical in make-installer.sh, build.sh and install.sh | — |
 | 7 | the kit ships the GPL source and licence Ableton Link requires | licence GPLv2+ — Ableton Link has no linking exception, so the source must travel with the binary |
 | 8 | release.yml's asset list matches what make-installer.sh actually produces | — |
+| 9 | every shell function a script calls is actually defined | lifting runtime_pids into the lib renamed it, and a replace that only |
 
 <a id="launcher-cli"></a>
 
@@ -321,6 +322,10 @@ sandbox, which is the whole reason they echo instead of assigning.
 | 13 | live pids: Live is told apart from the support processes around it | — |
 | 14 | a lingering wineserver means busy, but not that Live is running | the launcher's stale-wineserver kill — a lingering server must still |
 | 15 | an idle machine is neither busy nor running Live | — |
+| 16 | runtime root: the container wins once it exists | — |
+| 17 | runtime root: falls back to the legacy path before migrating | an install that predates the migration must still resolve and launch |
+| 18 | runtime root: the container wins even with the legacy symlink present | the compatibility symlink must stay vestigial — resolving through it |
+| 19 | runtime root: an explicit pin beats the container | — |
 
 <a id="patch-stack"></a>
 
@@ -384,6 +389,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | Reference | Tests |
 | --- | --- |
 | `11.11 and 11.14 trees coexist on the maintainer's machine and are not` | migrate-layout: runtimes from other Wine bases are left alone |
+| `an install that predates the migration must still resolve and launch` | runtime-env: runtime root: falls back to the legacy path before migrating |
 | `commit 9cba3b0` | launcher: gray text: the dark fallback lands on classic GrayText |
 | `commit e221cc4` | release: VERSION has a matching CHANGELOG entry at the top |
 | `commit f0fc05e` | detect-scale: cosmic probe: a disabled lid never wins when it is marked non-primary<br>detect-scale: cosmic probe: a disabled lid never wins, even with no primary line |
@@ -393,6 +399,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `issue #38` | launcher-cli: a .als set goes straight to the Live exe, never through start.exe<br>launcher-cli: clips and packs route the same way as sets, case-insensitively |
 | `issue label 'installer'` | packaging: every script a kit script sources is itself staged into the kit |
 | `licence GPLv2+` | packaging: the kit ships the GPL source and licence Ableton Link requires |
+| `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
 | `scoping` | runtime-env: runtime pids: a process from another Wine install is ignored |
 | `scripts/ableton-live` | launcher-cli: a stale wineserver is killed and the session booted before registry writes<br>launcher: windowmetrics: a value wrapped across continuation lines is rejoined |
 | `scripts/build-audit.sh` | patch-stack: audit: every wine patch is registered in FINGERPRINTS or STAMP_ONLY |
@@ -403,6 +410,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | install: the runtime wins over a debug tree sitting beside it |
 | `the beta channel` | install: an undated or suffixed artifact is not mistaken for the runtime |
+| `the compatibility symlink must stay vestigial` | runtime-env: runtime root: the container wins even with the legacy symlink present |
 | `the destructive row of the decision table` | migrate-layout: two real runtimes refuse, naming both, rather than guessing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |

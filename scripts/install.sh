@@ -15,7 +15,7 @@ NAME="wine-d2d1-nspa-11.13"
 # Where this install lands. scripts/ableton-live and scripts/setup-prefix.sh
 # already honour ABLETON_WINE_ROOT; install.sh and uninstall.sh hardcoded it,
 # which is the only reason two runtimes could not sit side by side. Staging,
-# the dated rollbacks, and — since PR #120 — the runtime_pids scan and the
+# the dated rollbacks, and — since PR #120 — the /proc runtime scan and the
 # wineserver stop all follow the target, so an overridden root is guarded by
 # the same gate as the default one rather than silently unprotected.
 # Runtime and prefix paths resolve in one place; see scripts/runtime-env.sh.
@@ -113,7 +113,7 @@ live_up=0
 [ -z "$(ableton_live_pids)" ] || live_up=1
 if ableton_runtime_busy; then
     echo "== stop processes using the installed runtime =="
-    echo "   $(runtime_pids | wc -l) found"
+    echo "   $(ableton_runtime_pids | wc -l) found"
     # Closing Live discards unsaved work, so require an explicit yes.
     # -r and -w cannot ask that: they stat a 0666 device node and pass
     # even with no controlling terminal, and the printf would then fail
@@ -146,13 +146,13 @@ if ableton_runtime_busy; then
         done
     fi
     if ableton_runtime_busy; then
-        runtime_pids | xargs -r kill 2>/dev/null || true
+        ableton_runtime_pids | xargs -r kill 2>/dev/null || true
         pkill -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
         for _ in $(seq 1 10); do
             ableton_runtime_busy || break
             sleep 0.5
         done
-        runtime_pids | xargs -r kill -9 2>/dev/null || true
+        ableton_runtime_pids | xargs -r kill -9 2>/dev/null || true
         pkill -9 -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
     fi
 fi
