@@ -22,7 +22,7 @@ That is crude, and it is enough.
 
 | Phase | What | State |
 | --- | --- | --- |
-| 1 | Nightly builds, published | not started — `mvp/nightly-builds` |
+| 1 | Nightly builds, published | built, first run in flight — `mvp/nightly-builds` |
 | 2 | Test suite and `ci-checks` | done, unmerged — `ci/test-suite-merge` |
 | 3 | Script consolidation | partly done — `refactor/runtime-env` |
 | 4 | Channels proper | designed; the migration is built on phase 3's branch |
@@ -65,13 +65,21 @@ tag each run, with `--prerelease`. `/releases/latest/` excludes prereleases, so
 the stable installer URL is untouched and the nightly gets its own predictable
 one at no cost.
 
-**Skip an unchanged tree.** `BUILD-INFO` records `patch-head`, which is
-`git rev-parse HEAD` at build time, so the workflow can compare it with the
-published nightly and exit before spending forty minutes rebuilding the same
-commit.
+**Skip an unchanged tree.** The rolling tag is the record: created with
+`--target`, it points at the commit that was built, so the workflow compares it
+with `GITHUB_SHA` and exits before spending forty minutes rebuilding the same
+commit. That check runs as its own job with no checkout — deciding whether to
+spend forty minutes should not first cost a 100MB clone of `vendor/` — and
+reads both the tag and `VERSION` from the API.
 
-Provenance needs nothing new for the same reason: `patch-head` already ties a
-reported nightly back to a commit.
+`BUILD-INFO`'s `patch-head` looks like the obvious source for this and is not.
+`container-build.sh` computes it inside `$WORK/wine-src` after applying the
+series, so it is the HEAD of the patched Wine tree and resolves to no object in
+this repository. An earlier draft of this note asserted it was
+`git rev-parse HEAD`; that was read off the line without checking which
+directory it runs in.
+
+Provenance comes from the same tag, so it needs nothing extra either.
 
 The gate is `build-audit.sh`, which already runs and verifies every patch is
 present in the shipped binaries by fingerprint. That is the right check for a
