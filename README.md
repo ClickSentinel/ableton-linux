@@ -107,6 +107,38 @@ preserved. Compatibility-related Wine and Live settings may be updated.
 Running the installer without `--update` offers the same compatibility update
 when it finds an existing installation.
 
+### Nightly builds
+
+Nightly builds are automated builds of the latest development code. They are
+not releases: they have not been tested by a person, and they can break in ways
+a release will not. If Live is how you get work done, stay on the release.
+
+They exist so problems are found before they reach a release, and so a fix you
+are waiting on can be tried the day it lands rather than the week it ships.
+
+To try one:
+
+```bash
+sh ~/Downloads/install-ableton-nightly.run --update
+```
+
+The newest nightly is always at
+<https://github.com/shibco/ableton-linux/releases/download/nightly/install-ableton-nightly.run>.
+
+Each nightly names the exact commit it was built from, so a bug report can
+point at one.
+
+To go back, install the release over it:
+
+```bash
+sh ~/Downloads/install-ableton-latest.run --update
+```
+
+Nightly builds share one Wine prefix with the release, so your Live
+installation, authorization and projects are the same on both and switching
+does not touch them. The previous runtime is kept as a dated folder under
+`~/.local/opt`, so a bad nightly can be reverted by hand as well.
+
 ### Uninstalling
 
 To remove this project's runtime and desktop integration while keeping Live and

@@ -150,6 +150,18 @@ jobs:
           cp "$run" dist/install-ableton-nightly.run
           ( cd dist && sha256sum install-ableton-nightly.run > install-ableton-nightly.run.sha256 )
 
+          # The runtime tarball is stamped from VERSION, so a nightly's and a
+          # release's are byte-different but identically named. Anything that
+          # fetches a runtime by filename — run-regression.sh --artifact does —
+          # would mix them silently. Publish it under the label instead, with a
+          # checksum regenerated to match the name it is served as.
+          version="${LABEL%%+*}"
+          built="dist/wine-d2d1-nspa-11.13-${version}.tar.zst"
+          [ -f "$built" ] || { echo "!! no runtime tarball at $built" >&2; exit 1; }
+          tarball="dist/wine-d2d1-nspa-11.13-${LABEL}.tar.zst"
+          cp "$built" "$tarball"
+          ( cd dist && sha256sum "$(basename "$tarball")" > "$(basename "$tarball").sha256" )
+
           {
               echo "Automated build of \`main\` — **not a release.** Expect breakage."
               echo
@@ -184,5 +196,5 @@ jobs:
               --title "Nightly $LABEL" --notes-file /tmp/notes.md \
               "$run" "$run.sha256" \
               dist/install-ableton-nightly.run dist/install-ableton-nightly.run.sha256 \
-              dist/wine-d2d1-nspa-11.13-*.tar.zst dist/wine-d2d1-nspa-11.13-*.tar.zst.sha256 \
+              "$tarball" "$tarball.sha256" \
               dist/BUILD-INFO.txt
