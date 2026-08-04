@@ -13,6 +13,8 @@ bats_require_minimum_version 1.5.0
 load ../helpers/common
 
 setup() {
+    setup_stubs
+    stub pgrep 1                # runtime_busy's fallback must not read the host
     HOME="$BATS_TEST_TMPDIR/home"
     mkdir -p "$HOME"
     unset ABLETON_WINE_ROOT ABLETON_WINEPREFIX
@@ -80,4 +82,65 @@ setup() {
     ableton_bind_runtime
     [ "${WINEESYNC:-}" = "1" ]
     [ "${WINEFSYNC:-}" = "1" ]
+}
+
+# --- process detection -------------------------------------------------------
+# /proc cannot be stubbed through PATH, so the lib reads ABLETON_PROC_ROOT and
+# these build a fixture tree instead of trusting whatever the machine is doing.
+
+fake_proc() {   # fake_proc <pid> <exe-target> [cmdline]
+    local d="$ABLETON_PROC_ROOT/$1"
+    mkdir -p "$d"
+    ln -sfn "$2" "$d/exe"
+    [ $# -lt 3 ] || printf '%s\0' "$3" > "$d/cmdline"
+}
+
+proc_setup() {
+    export ABLETON_PROC_ROOT="$BATS_TEST_TMPDIR/proc"
+    export ABLETON_WINE_ROOT="$BATS_TEST_TMPDIR/rt"
+    mkdir -p "$ABLETON_PROC_ROOT"
+}
+
+@test "runtime pids: a process running from the runtime is found" {
+    proc_setup
+    fake_proc 101 "$ABLETON_WINE_ROOT/bin/wineserver"
+    [ "$(ableton_runtime_pids)" = "101" ]
+}
+
+# guards: scoping — a Live under an unrelated Wine is neither counted nor killed
+@test "runtime pids: a process from another Wine install is ignored" {
+    proc_setup
+    fake_proc 202 "/usr/lib/wine/wine-preloader" "Ableton Live 12 Suite.exe"
+    [ -z "$(ableton_runtime_pids)" ]
+}
+
+@test "runtime pids: non-numeric entries in the tree are skipped" {
+    proc_setup
+    mkdir -p "$ABLETON_PROC_ROOT/self" "$ABLETON_PROC_ROOT/sys"
+    ln -sfn "$ABLETON_WINE_ROOT/bin/wine" "$ABLETON_PROC_ROOT/self/exe"
+    [ -z "$(ableton_runtime_pids)" ]
+}
+
+@test "live pids: Live is told apart from the support processes around it" {
+    proc_setup
+    fake_proc 101 "$ABLETON_WINE_ROOT/bin/wineserver" "wineserver"
+    fake_proc 102 "$ABLETON_WINE_ROOT/bin/wine-preloader" \
+        'C:\ProgramData\Ableton\Live 12 Suite\Program\Ableton Live 12 Suite.exe'
+    [ "$(ableton_live_pids)" = "102" ]
+    ableton_live_running
+}
+
+# guards: the launcher's stale-wineserver kill — a lingering server must still
+# read as "Live is down", or that kill never runs
+@test "a lingering wineserver means busy, but not that Live is running" {
+    proc_setup
+    fake_proc 101 "$ABLETON_WINE_ROOT/bin/wineserver" "wineserver"
+    ableton_runtime_busy
+    ! ableton_live_running
+}
+
+@test "an idle machine is neither busy nor running Live" {
+    proc_setup
+    ! ableton_runtime_busy
+    ! ableton_live_running
 }

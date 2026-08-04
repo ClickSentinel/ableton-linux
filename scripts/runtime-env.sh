@@ -48,3 +48,52 @@ ableton_bind_runtime() {
     PATH="$WINE_ROOT/bin:$PATH"
     export WINEPREFIX WINESERVER PATH
 }
+
+# The process table to read. Only the tests set this, pointing it at a fixture
+# tree of fake exe symlinks; /proc cannot be stubbed through PATH the way pgrep
+# can, so without a seam the accurate implementation is the untestable one.
+ableton_proc_root() {
+    printf '%s\n' "${ABLETON_PROC_ROOT:-/proc}"
+}
+
+# Every pid whose binary lives under the runtime. From PR #120, which found the
+# reason a command line cannot answer this: Wine's in-prefix helpers show a
+# Windows path in argv (C:\windows\system32\...), so no pattern reaches them.
+# The exe link is the real binary - bin/wineserver, or the wine-preloader every
+# in-prefix process runs from - so the match is exact rather than a guess, and
+# is scoped to this runtime instead of any Wine on the machine.
+ableton_runtime_pids() {
+    local proc root d
+    root="$(ableton_wine_root)"
+    proc="$(ableton_proc_root)"
+    for d in "$proc"/[0-9]*; do
+        case "$(readlink "$d/exe" 2>/dev/null)" in
+            "$root"/*) printf '%s\n' "${d##*/}" ;;
+        esac
+    done
+}
+
+# Anything at all using the runtime: the predicate to ask before replacing its
+# files. The name match stays as a second opinion because failing open here
+# means installing over a running runtime.
+ableton_runtime_busy() {
+    [ -n "$(ableton_runtime_pids)" ] || \
+        pgrep -af '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1
+}
+
+# Live itself, as opposed to the support processes around it. A launcher wants
+# this and not runtime_busy: a wineserver lingering after Live exits must still
+# count as "Live is down", or the stale-server kill never runs.
+ableton_live_pids() {
+    local proc p
+    proc="$(ableton_proc_root)"
+    for p in $(ableton_runtime_pids); do
+        case "$(tr -s '\0' ' ' < "$proc/$p/cmdline" 2>/dev/null)" in
+            *"Ableton Live"*.exe*) printf '%s\n' "$p" ;;
+        esac
+    done
+}
+
+ableton_live_running() {
+    [ -n "$(ableton_live_pids)" ]
+}
