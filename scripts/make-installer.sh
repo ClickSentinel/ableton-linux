@@ -23,6 +23,13 @@ command -v ableton_pick_tarball >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
 NAME="$(ableton_runtime_name)"
 VERSION="$(cat VERSION)"
+# What the finished installer is called, as opposed to which runtime goes in it.
+# They are the same for a release and differ for a nightly, which must not bump
+# VERSION: that file is committed, and repo-hygiene and release.bats both assert
+# its format and its pairing with CHANGELOG and BUILD-INFO. Everything that
+# locates a build input keeps using VERSION; only the artifact's name, the
+# header stamp and the version recorded into the installed kit use LABEL.
+LABEL="${ABLETON_DIST_LABEL:-$VERSION}"
 # ABLETON_RUNTIME_TARBALL pins one outright; otherwise the exact-version
 # runtime if present, else the newest properly-named one. Never a bare glob.
 if [ -n "${ABLETON_RUNTIME_TARBALL:-}" ]; then
@@ -102,6 +109,11 @@ install -m644 vendor/fonts/bitstream-vera/*.ttf \
               vendor/fonts/bitstream-vera/COPYRIGHT.TXT \
               "$kit/vendor/fonts/bitstream-vera/"
 cp -a VERSION README.md TROUBLESHOOTING.md BUILDING.md "$kit/"
+# Overwritten rather than skipped so the staging list above stays intact for
+# packaging.bats. install.sh copies this into ~/.local/share/ableton-wine/
+# VERSION, so without it a nightly would report itself as the release it was
+# built from and every bug report would name the wrong build.
+printf '%s\n' "$LABEL" > "$kit/VERSION"
 install -m755 dist/cabextract-static "$kit/bin/cabextract"
 install -m755 dist/ableton-linkd "$kit/bin/ableton-linkd"
 # Ableton Link is GPLv2+ with no linking exception, so the built daemon's
@@ -125,8 +137,8 @@ payload="$stage/payload.tar"
 tar --sort=name --owner=0 --group=0 --numeric-owner \
     -cf "$payload" -C "$kit" .
 payload_sha="$(sha256sum "$payload" | awk '{print $1}')"
-out="dist/ableton-wine-setup-${VERSION}.run"
-sed -e "s/@VERSION@/$VERSION/g" -e "s/@PAYLOAD_SHA@/$payload_sha/g" \
+out="dist/ableton-wine-setup-${LABEL}.run"
+sed -e "s/@VERSION@/$LABEL/g" -e "s/@PAYLOAD_SHA@/$payload_sha/g" \
     scripts/setup-run-header.sh > "$out"
 cat "$payload" >> "$out"
 chmod +x "$out"
@@ -137,4 +149,4 @@ sh "$out" --help >/dev/null
 echo
 echo "OK: $out ($(du -h "$out" | cut -f1))"
 echo "Copy it (plus your Ableton installer .exe) to a USB stick and run:"
-echo "  sh /run/media/*/*/ableton-wine-setup-${VERSION}.run"
+echo "  sh /run/media/*/*/ableton-wine-setup-${LABEL}.run"
