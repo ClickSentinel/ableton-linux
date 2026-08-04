@@ -31,10 +31,45 @@ ableton_container_root() {
     printf '%s\n' "$(ableton_opt_dir)/ableton-wine"
 }
 
+# The runtime's build name. It carries the Wine version because the *artifact*
+# does — a tarball identifies which build it is. Nothing about where a runtime
+# is installed depends on it any more.
+ableton_runtime_name() {
+    printf '%s\n' "wine-d2d1-nspa-11.13"
+}
+
 # The pre-container install path. Carries the Wine version, which is exactly
 # why it is being retired: a base bump moved every user's directory.
 ableton_legacy_root() {
-    printf '%s\n' "$(ableton_opt_dir)/wine-d2d1-nspa-11.13"
+    printf '%s\n' "$(ableton_opt_dir)/$(ableton_runtime_name)"
+}
+
+# The newest runtime tarball in <dir>, or nothing. Shared because it was not:
+# install.sh, make-installer.sh and build-audit.sh each had a copy, the same
+# defect was in all three, and fixing one left a release assembled — and
+# audited — from whatever `sort -V` put last.
+#
+# The glob cannot be the selector. The build also emits
+# <name>-<version>-debug.tar.zst, and `sort -V` orders that suffix *after* the
+# runtime, so a glob piped to `tail -1` picks the debug tree: bin/ and lib/ but
+# no share/, passes `wine --version`, then fails at launch with "could not exec
+# the wine loader". Match the dated release form only.
+#
+# Locals are underscore-prefixed because this is sourced into scripts that have
+# their own $found and $target.
+ableton_pick_tarball() {
+    local _dir="$1" _nm _f _b
+    _nm="$(ableton_runtime_name)"
+    local _re="^${_nm//./\\.}-[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]+\\.tar\\.zst\$"
+    local -a _found=()
+    for _f in "$_dir"/"$_nm"-*.tar.zst; do
+        [ -e "$_f" ] || continue          # no match: the glob came back literal
+        _b="${_f##*/}"
+        [[ "$_b" =~ $_re ]] || continue
+        _found+=("$_f")
+    done
+    [ "${#_found[@]}" -gt 0 ] || return 0
+    printf '%s\n' "${_found[@]}" | sort -V | tail -1
 }
 
 ableton_wine_root() {

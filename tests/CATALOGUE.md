@@ -18,10 +18,10 @@ for which run on a PR.
 - [tests/launcher-cli.bats](#launcher-cli) — 19 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
-- [tests/unit/install.bats](#install) — 9 test(s)
+- [tests/unit/install.bats](#install) — 2 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 16 test(s)
-- [tests/unit/runtime-env.bats](#runtime-env) — 20 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 27 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
 
@@ -77,7 +77,7 @@ staging list and checks it against what the kit's own scripts reference.
 | 3 | every script a kit script sources is itself staged into the kit | issue label 'installer' — scripts resolve every path in a checkout, only some in the kit |
 | 4 | every sibling file a kit script executes or installs is staged too | — |
 | 5 | kit-relative desktop and vendor paths are staged wholesale | — |
-| 6 | the runtime name is identical in make-installer.sh, build.sh and install.sh | — |
+| 6 | only the shared lib and the build side spell the runtime name | — |
 | 7 | the kit ships the GPL source and licence Ableton Link requires | licence GPLv2+ — Ableton Link has no linking exception, so the source must travel with the binary |
 | 8 | release.yml's asset list matches what make-installer.sh actually produces | — |
 | 9 | every shell function a script calls is actually defined | lifting runtime_pids into the lib renamed it, and a replace that only |
@@ -200,28 +200,18 @@ unreadable chrome, which is exactly the kind of thing that reaches users.
 ## tests/unit/install.bats
 
 
-scripts/install.sh — which tarball an install actually unpacks.
+scripts/install.sh — ordering that cannot be checked from output.
 
-Everything else install.sh does needs a real tree to stage and promote. This
-one decision is pure string work, and it is the one place where a wrong
-answer is silent: the debug tree passes `wine --version` and then fails at
-launch with "could not exec the wine loader", which reads as a broken build
-rather than a mis-picked file. A second release channel puts more artifacts
-in the same directory, so the selector has to be right before that lands.
+Tarball selection moved to scripts/runtime-env.sh and is tested with the rest
+of that lib; it was duplicated in three scripts and the same defect was in all
+of them, which is why it now lives in one.
 
   ./tests/run.sh tests/unit/install.bats
 
 | # | Test | Guards |
 | --- | --- | --- |
-| 1 | the runtime wins over a debug tree sitting beside it | sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/ |
-| 2 | the newest dated runtime wins when several are present | — |
-| 3 | the same-day counter orders numerically, not lexically | — |
-| 4 | a debug tree on its own selects nothing, so the caller fails loudly | — |
-| 5 | an undated or suffixed artifact is not mistaken for the runtime | the beta channel — a nightly artifact must never be taken for the stable runtime |
-| 6 | an empty directory selects nothing rather than erroring | — |
-| 7 | a missing directory selects nothing rather than erroring | — |
-| 8 | the layout migration runs after the process stop, not before | the migration renames the directory running processes execute from, |
-| 9 | the runtime root is re-resolved after the migration, before staging | staging and promotion must target where the runtime now lives, not |
+| 1 | the layout migration runs after the process stop, not before | the migration renames the directory running processes execute from, |
+| 2 | the runtime root is re-resolved after the migration, before staging | staging and promotion must target where the runtime now lives, not |
 
 <a id="launcher"></a>
 
@@ -334,6 +324,13 @@ sandbox, which is the whole reason they echo instead of assigning.
 | 18 | runtime root: the container wins even with the legacy symlink present | the compatibility symlink must stay vestigial — resolving through it |
 | 19 | runtime root: an explicit pin beats the container | — |
 | 20 | live pids: a process that exits mid-scan is skipped, not an error | observed during the first real migration — six "/proc/PID/cmdline: |
+| 21 | the runtime wins over a debug tree sitting beside it | sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/ |
+| 22 | the newest dated runtime wins when several are present | — |
+| 23 | the same-day counter orders numerically, not lexically | — |
+| 24 | a debug tree on its own selects nothing, so the caller fails loudly | — |
+| 25 | an undated or suffixed artifact is not mistaken for the runtime | the beta channel — a nightly artifact must never be taken for the stable runtime |
+| 26 | an empty directory selects nothing rather than erroring | — |
+| 27 | a missing directory selects nothing rather than erroring | — |
 
 <a id="patch-stack"></a>
 
@@ -420,9 +417,9 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `scripts/detect-theme.sh` | detect-theme: newest prefs dir: mtime wins, not a version sort<br>detect-theme: newest prefs dir: the sort -V trap case, stated explicitly |
 | `scripts/setup-run-header.sh line 19` | repo-hygiene: the installer header survives being run by a real POSIX sh |
 | `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
-| `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | install: the runtime wins over a debug tree sitting beside it |
+| `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | runtime-env: the runtime wins over a debug tree sitting beside it |
 | `staging and promotion must target where the runtime now lives, not` | install: the runtime root is re-resolved after the migration, before staging |
-| `the beta channel` | install: an undated or suffixed artifact is not mistaken for the runtime |
+| `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
 | `the compatibility symlink must stay vestigial` | runtime-env: runtime root: the container wins even with the legacy symlink present |
 | `the destructive row of the decision table` | migrate-layout: two real runtimes refuse, naming both, rather than guessing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |

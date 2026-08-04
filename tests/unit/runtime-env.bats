@@ -191,3 +191,56 @@ proc_setup() {
     [ -z "$output" ]
     [[ "$stderr$output" != *"No such file"* ]]
 }
+
+# --- runtime tarball selection -----------------------------------------------
+# Shared because it was not: install.sh, make-installer.sh and build-audit.sh
+# each carried a copy and the same defect was in all three — a release both
+# assembled and audited from whatever sort -V put last.
+
+setup_dist() {
+    DIST="$BATS_TEST_TMPDIR/dist"
+    mkdir -p "$DIST"
+    NAME="$(ableton_runtime_name)"
+}
+
+# guards: sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/
+@test "the runtime wins over a debug tree sitting beside it" {
+    setup_dist; : > "$DIST/$NAME-2026.08.01.1.tar.zst"
+    setup_dist; : > "$DIST/$NAME-2026.08.01.1-debug.tar.zst"
+    [ "$(basename "$(ableton_pick_tarball "$DIST")")" = "$NAME-2026.08.01.1.tar.zst" ]
+}
+
+@test "the newest dated runtime wins when several are present" {
+    setup_dist; for v in 2026.07.29.1 2026.08.01.1 2026.07.23.1; do : > "$DIST/$NAME-$v.tar.zst"; done
+    [ "$(basename "$(ableton_pick_tarball "$DIST")")" = "$NAME-2026.08.01.1.tar.zst" ]
+}
+
+@test "the same-day counter orders numerically, not lexically" {
+    setup_dist; for n in 1 2 10; do : > "$DIST/$NAME-2026.08.01.$n.tar.zst"; done
+    [ "$(basename "$(ableton_pick_tarball "$DIST")")" = "$NAME-2026.08.01.10.tar.zst" ]
+}
+
+@test "a debug tree on its own selects nothing, so the caller fails loudly" {
+    setup_dist; : > "$DIST/$NAME-2026.08.01.1-debug.tar.zst"
+    [ -z "$(ableton_pick_tarball "$DIST")" ]
+}
+
+# guards: the beta channel — a nightly artifact must never be taken for the stable runtime
+@test "an undated or suffixed artifact is not mistaken for the runtime" {
+    setup_dist; : > "$DIST/$NAME-nightly.tar.zst"
+    setup_dist; : > "$DIST/$NAME-2026.08.01.1-rc2.tar.zst"
+    [ -z "$(ableton_pick_tarball "$DIST")" ]
+}
+
+@test "an empty directory selects nothing rather than erroring" {
+    setup_dist; run ableton_pick_tarball "$DIST"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "a missing directory selects nothing rather than erroring" {
+    setup_dist; run ableton_pick_tarball "$BATS_TEST_TMPDIR/nope"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
