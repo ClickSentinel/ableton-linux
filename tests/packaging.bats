@@ -134,7 +134,17 @@ kit_script_names() {
     cd "$REPO"
     # The verify job hard-codes asset filenames. A rename in make-installer.sh
     # that misses release.yml fails only after the release is published.
-    grep -qF 'ableton-wine-setup-${VERSION}.run' "$MK"
+    #
+    # Assert on the name a release run *produces*, not on how the script spells
+    # it. The installer's name is built from a label that defaults to VERSION,
+    # so grepping for a source literal fails on a refactor that changed nothing
+    # about the output — which is a test reporting on itself, not on the code.
+    unset ABLETON_DIST_LABEL
+    eval "$(grep -m1 '^VERSION=' "$MK")"
+    eval "$(grep -m1 '^LABEL=' "$MK")"
+    eval "produced=$(grep -m1 '^out=' "$MK" | cut -d= -f2-)"
+    [ "$produced" = "dist/ableton-wine-setup-$(cat VERSION).run" ] || {
+        echo "a release build would produce '$produced'" >&2; false; }
     grep -qF 'ableton-wine-setup-$ver.run' .github/workflows/release.yml
     grep -qF 'install-ableton-latest.run' .github/workflows/release.yml
     grep -qF 'install-ableton-latest.run' scripts/release.sh
