@@ -17,6 +17,7 @@ GmbH** and respects the Ableton terms of service.
 - Experimental Live 11, Max for Live, and Max 9 support
 - Push 1 and Push 2 support (Push 3 and Move support coming soon!)
 - Local-network Ableton Link support
+- Experimental support for Ableton's forthcoming Extensions SDK
 - Compatibility with Ableton's Splice integration
 - Automatic recovery when in-use audio hardware or startup-detected MIDI
   controllers briefly disconnect
@@ -38,7 +39,7 @@ Additionally, you need:
 
 - glibc 2.35 or newer
 - PipeWire 0.3.56 or newer (we recommend 1.6 or newer for audio performance)
-- GStreamer with its base and good plugin sets (for mp3 and video import)
+- GStreamer with its base and good plugin sets
 - `tar` and `zstd`
 - your installation files and activation details from Ableton
 
@@ -263,6 +264,7 @@ Contributors must follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 Maintained by [Cade 'shibco' Diehm](https://shiba.computer/about) and
 [Lucas 'ClickSentinel' Gillingham](https://github.com/ClickSentinel), with help from
+[trendwhore](https://github.com/trendwhore), 
 [jackson-57](https://github.com/jackson-57),
 [jttdev](https://github.com/jttdev),
 [astrazds](https://github.com/astrazds),
