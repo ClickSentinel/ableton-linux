@@ -1,0 +1,188 @@
+# Nightly build of main, published as a rolling prerelease.
+#
+#   gh workflow run nightly-build.yml --repo <owner>/ableton-linux
+#   gh workflow run nightly-build.yml --repo <owner>/ableton-linux --ref <branch>
+#
+# Why nightly rather than per-PR: ci-pr-build.yml already builds PRs that touch
+# the build. What neither catches is rot that arrives without a commit — a base
+# image whose apt packages moved, a toolchain bump, a runner image change. That
+# shows up on a clean nightly and nowhere else.
+#
+# The gate is scripts/build-audit.sh, which verifies every patch is present in
+# the shipped binaries by fingerprint rather than merely applied to the source
+# tree. That is the check a runtime artifact needs; ci-checks.yml guards scripts
+# and repo hygiene, which is not what a nightly tarball gets wrong. Gating here
+# on the audit alone is what keeps this workflow independent of the test suite.
+#
+# Publishing to a rolling `nightly` prerelease rather than an Actions artifact
+# is deliberate: /releases/latest/ excludes prereleases, so the stable installer
+# URL is untouched while this gets its own predictable one. It also avoids
+# upload-artifact's zip wrapper around an already-compressed .tar.zst.
+name: nightly-build
+
+on:
+  schedule:
+    # 04:00 UTC. GitHub queues scheduled runs on a best-effort basis and skips
+    # them entirely on repos with no activity for 60 days.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Build even if the nightly already points at this commit"
+        type: boolean
+        default: false
+
+# A manual run while the nightly is mid-flight should win; two full Wine builds
+# racing each other just burns runner time.
+concurrency:
+  group: nightly-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Deliberately a separate job, and deliberately without a checkout: deciding
+  # whether to spend forty minutes should not first cost a 100MB clone of
+  # vendor/. Both facts it needs come from the API.
+  check:
+    # Scheduled runs only upstream: a fork does not want a nightly 40-minute
+    # build it never asked for. Manual dispatch works everywhere, which is how
+    # a fork exercises this pipeline.
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'shibco/ableton-linux'
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+      label: ${{ steps.decide.outputs.label }}
+    steps:
+      - name: Has this commit already been published?
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          # The rolling tag is the record of what was last published: it is
+          # created with --target, so it points at the commit that was built.
+          # BUILD-INFO cannot answer this — its patch-head is the HEAD of the
+          # patched Wine source tree inside the container, not a commit here.
+          published="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/nightly" \
+              --jq .object.sha 2>/dev/null || true)"
+          version="$(gh api "repos/$GITHUB_REPOSITORY/contents/VERSION?ref=$GITHUB_SHA" \
+              --jq .content | base64 -d | tr -d '[:space:]')"
+          printf 'label=%s+nightly.%s\n' "$version" "${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+          if [ "${FORCE:-false}" = "true" ]; then
+              echo "forced: building even if nothing changed"
+              echo "build=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$published" ] && [ "$published" = "$GITHUB_SHA" ]; then
+              echo "nightly already points at $GITHUB_SHA; nothing to build"
+              echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+              echo "building ${published:-<no previous nightly>} -> $GITHUB_SHA"
+              echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    env:
+      LABEL: ${{ needs.check.outputs.label }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Restore ccache
+        uses: actions/cache@v6
+        with:
+          path: .ccache
+          key: ccache-${{ runner.os }}-${{ hashFiles('patches/**', 'Containerfile') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build container image (Buildx, GHA layer cache)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Containerfile
+          tags: ableton-wine-build:22.04
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Wine + PipeASIO + ableton-linkd
+        run: ENGINE=docker JOBS="$(nproc)" ./build.sh
+
+      # container-build.sh writes dist/ and .ccache/ as the container's root
+      # under plain `docker run`; the later steps run as the unprivileged runner.
+      - name: Fix ownership of container output
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" dist .ccache
+
+      - name: Build audit (every patch verified in the built artifact)
+        run: ./scripts/build-audit.sh
+
+      # ENGINE because make-installer.sh defaults to podman and the runner has
+      # docker; ABLETON_DIST_LABEL so the installer is named and stamped for
+      # this build without touching the committed VERSION.
+      - name: Assemble the installer
+        run: ENGINE=docker ABLETON_DIST_LABEL="$LABEL" ./scripts/make-installer.sh
+
+      - name: ccache stats
+        if: always()
+        continue-on-error: true
+        run: docker run --rm -v "$PWD/.ccache:/ccache" -e CCACHE_DIR=/ccache ableton-wine-build:22.04 ccache -s
+
+      # Delete and recreate rather than edit: the tag has to move to this
+      # commit, and --cleanup-tag removes the old one so --target can place it.
+      - name: Publish the rolling nightly prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run="dist/ableton-wine-setup-${LABEL}.run"
+          [ -f "$run" ] || { echo "!! make-installer.sh produced no $run" >&2; exit 1; }
+          # A stable name beside the labelled one, so the download URL does not
+          # change every night. Mirrors install-ableton-latest.run for stable.
+          cp "$run" dist/install-ableton-nightly.run
+          ( cd dist && sha256sum install-ableton-nightly.run > install-ableton-nightly.run.sha256 )
+
+          {
+              echo "Automated build of \`main\` — **not a release.** Expect breakage."
+              echo
+              echo "| | |"
+              echo "| --- | --- |"
+              echo "| Commit | \`$GITHUB_SHA\` |"
+              echo "| Build | \`$LABEL\` |"
+              echo
+              echo "Download \`install-ableton-nightly.run\`, put it next to your Ableton"
+              echo "Live installer, and run:"
+              echo
+              echo '```'
+              echo "sh ~/Downloads/install-ableton-nightly.run"
+              echo '```'
+              echo
+              echo "The newest nightly is always at:"
+              echo "https://github.com/$GITHUB_REPOSITORY/releases/download/nightly/install-ableton-nightly.run"
+              echo
+              echo "This tracks the same Wine base as the stable release and shares the"
+              echo "same prefix. To go back, install the stable installer over it."
+              echo
+              echo "Build provenance:"
+              echo
+              echo '```'
+              cat dist/BUILD-INFO.txt
+              echo '```'
+          } > /tmp/notes.md
+
+          gh release delete nightly --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create nightly --repo "$GITHUB_REPOSITORY" \
+              --prerelease --target "$GITHUB_SHA" \
+              --title "Nightly $LABEL" --notes-file /tmp/notes.md \
+              "$run" "$run.sha256" \
+              dist/install-ableton-nightly.run dist/install-ableton-nightly.run.sha256 \
+              dist/wine-d2d1-nspa-11.13-*.tar.zst dist/wine-d2d1-nspa-11.13-*.tar.zst.sha256 \
+              dist/BUILD-INFO.txt
