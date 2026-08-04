@@ -263,6 +263,7 @@ Contributors must follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 Maintained by [Cade 'shibco' Diehm](https://shiba.computer/about) and
 [Lucas 'ClickSentinel' Gillingham](https://github.com/ClickSentinel), with help from
+[trendwhore](https://github.com/trendwhore), 
 [jackson-57](https://github.com/jackson-57),
 [jttdev](https://github.com/jttdev),
 [astrazds](https://github.com/astrazds),
