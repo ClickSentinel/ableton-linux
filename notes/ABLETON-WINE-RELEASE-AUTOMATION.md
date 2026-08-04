@@ -110,21 +110,40 @@ would have produced.
 
 ## Decisions
 
-**Does the release still commit BUILD-INFO?** Dropping it is simpler and
-removes an ordering trap. Keeping it preserves an in-repo record of what every
-release contained, which is a real thing to lose — `dist/` holds thirteen of
-them today and they have been useful. A middle path is committing it *after*
-the release, generated from what CI published.
+**Rebuild by default; promotion is an explicit act.** The default should be the
+one that always works, and rebuild is reproducible from the tag alone with no
+dependency on a nightly existing at the right commit. Promotion stays available
+for the case it is good at — shipping bits that have already soaked — and reads
+as a deliberate choice rather than something that can happen by drift.
 
-**Is promote or rebuild the default?** Promotion ships tested bits and takes
-minutes; rebuild is reproducible from the tag with no dependency on a nightly
-existing at the right commit. Recommend rebuild as the default and promotion as
-an explicit choice, because the default should be the one that always works.
+**BUILD-INFO stops being committed.** `.gitignore` currently carries an
+explicit exception for it:
 
-**Does this end "CI never builds a release"?** Yes, and it is stated in two
-files. The replacement guarantee is `build-audit.sh`: every patch verified
-present in the shipped binaries by fingerprint, which is a stronger check than
-a human build receives, and it already gates every nightly.
+```text
+/dist/*
+!/dist/BUILD-INFO*.txt
+```
+
+That exception goes, and with it the ordering trap where a tag is rejected
+because a file was not committed before it was pushed. The record does not
+disappear — it moves to the release asset, which is where it is actually
+consumed and where the verify job already checks it.
+
+What is genuinely lost is durability: a release asset can be deleted, git
+history cannot. The fifteen files already tracked stay as the record of
+releases made under the old procedure; the practice simply stops. Anyone
+needing a past BUILD-INFO after that reads the release.
+
+`make-installer.sh:67` is unaffected. It copies `dist/BUILD-INFO-<VERSION>.txt`
+into the kit, and in CI that is the file the build just produced — it was never
+reading a committed copy, only a file that happened to also be committed.
+
+**"CI never builds a release" is replaced, not abandoned.** The guarantee it
+encoded — that shipped bits were verified — moves to `build-audit.sh`, which
+checks every patch is present in the shipped binaries by fingerprint. That is a
+stronger check than a human build receives, it already gates every nightly, and
+unlike the old invariant it is mechanical rather than a matter of trust in
+whoever ran the build. Both files stating the old rule need updating to say so.
 
 ## Limits
 
