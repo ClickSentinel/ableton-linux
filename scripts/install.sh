@@ -12,7 +12,15 @@ root="$(cd "$here/.." && pwd)"
 OPT="$HOME/.local/opt"
 BIN="$HOME/.local/bin"
 APPS="$HOME/.local/share/applications"
-NAME="wine-d2d1-nspa-11.13"
+# Runtime naming and tarball selection resolve in one place; see
+# scripts/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" "$root/scripts/runtime-env.sh"; do
+    # shellcheck source=scripts/runtime-env.sh
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v ableton_pick_tarball >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
+NAME="$(ableton_runtime_name)"
 # Where this install lands. scripts/ableton-live and scripts/setup-prefix.sh
 # already honour ABLETON_WINE_ROOT; install.sh and uninstall.sh hardcoded it,
 # which is the only reason two runtimes could not sit side by side. Staging,
@@ -63,27 +71,12 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # tarball: prefer dist/ (freshly built), else a release tarball dropped in root
-pick_runtime_tarball() {
-    local dir="$1" f base
-    # NAME carries dots (11.13); escape them so they match literally.
-    local re="^${NAME//./\\.}-[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]+\\.tar\\.zst\$"
-    local -a found=()
-    for f in "$dir"/"$NAME"-*.tar.zst; do
-        [ -e "$f" ] || continue          # no match: the glob came back literal
-        base="${f##*/}"
-        [[ "$base" =~ $re ]] || continue
-        found+=("$f")
-    done
-    [ "${#found[@]}" -gt 0 ] || return 0
-    printf '%s\n' "${found[@]}" | sort -V | tail -1
-}
-
 if [ -n "${ABLETON_RUNTIME_TARBALL:-}" ]; then
     tarball="$ABLETON_RUNTIME_TARBALL"
     [ -f "$tarball" ] || { echo "!! ABLETON_RUNTIME_TARBALL is not a file: $tarball" >&2; exit 1; }
 else
-    tarball="$(pick_runtime_tarball "$root/dist")"
-    [ -n "$tarball" ] || tarball="$(pick_runtime_tarball "$root")"
+    tarball="$(ableton_pick_tarball "$root/dist")"
+    [ -n "$tarball" ] || tarball="$(ableton_pick_tarball "$root")"
 fi
 [ -n "$tarball" ] || { echo "!! no ${NAME}-*.tar.zst found: run ./build.sh first, or drop a release tarball in $root/dist/"; exit 1; }
 
