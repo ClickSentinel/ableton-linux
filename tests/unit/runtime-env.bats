@@ -178,3 +178,16 @@ proc_setup() {
     ABLETON_WINE_ROOT=/tmp/pinned
     [ "$(ableton_wine_root)" = "/tmp/pinned" ]
 }
+
+# guards: observed during the first real migration — six "/proc/PID/cmdline:
+# No such file or directory" lines, because the processes exited between the
+# scan and the read. tr's 2>/dev/null cannot suppress that: the shell reports a
+# failed redirection itself, before tr runs. Same bug is in install.sh on main.
+@test "live pids: a process that exits mid-scan is skipped, not an error" {
+    proc_setup
+    fake_proc 101 "$ABLETON_WINE_ROOT/bin/wine-preloader"   # exe, but no cmdline
+    run ableton_live_pids
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    [[ "$stderr$output" != *"No such file"* ]]
+}

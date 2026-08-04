@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-164 tests across 11 suites. See [README.md](README.md) for how to run
+165 tests across 11 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -21,7 +21,7 @@ for which run on a PR.
 - [tests/unit/install.bats](#install) — 9 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 16 test(s)
-- [tests/unit/runtime-env.bats](#runtime-env) — 19 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 20 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
 
@@ -333,6 +333,7 @@ sandbox, which is the whole reason they echo instead of assigning.
 | 17 | runtime root: falls back to the legacy path before migrating | an install that predates the migration must still resolve and launch |
 | 18 | runtime root: the container wins even with the legacy symlink present | the compatibility symlink must stay vestigial — resolving through it |
 | 19 | runtime root: an explicit pin beats the container | — |
+| 20 | live pids: a process that exits mid-scan is skipped, not an error | observed during the first real migration — six "/proc/PID/cmdline: |
 
 <a id="patch-stack"></a>
 
@@ -409,6 +410,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `issue label 'installer'` | packaging: every script a kit script sources is itself staged into the kit |
 | `licence GPLv2+` | packaging: the kit ships the GPL source and licence Ableton Link requires |
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
+| `observed during the first real migration` | runtime-env: live pids: a process that exits mid-scan is skipped, not an error |
 | `rm -rf on a symlink takes the link, not the tree` | migrate-layout: removal takes the compatibility symlink without following it |
 | `scoping` | runtime-env: runtime pids: a process from another Wine install is ignored |
 | `scripts/ableton-live` | launcher-cli: a stale wineserver is killed and the session booted before registry writes<br>launcher: windowmetrics: a value wrapped across continuation lines is rejoined |

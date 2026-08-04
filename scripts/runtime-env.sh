@@ -119,8 +119,15 @@ ableton_runtime_busy() {
 ableton_live_pids() {
     local proc p
     proc="$(ableton_proc_root)"
+    local cmd
     for p in $(ableton_runtime_pids); do
-        case "$(tr -s '\0' ' ' < "$proc/$p/cmdline" 2>/dev/null)" in
+        # A process can exit between the scan above and this read — during an
+        # install that is common, because the stop is what made them exit. The
+        # shell reports a failed redirection itself, before tr ever runs, so
+        # tr's own 2>/dev/null cannot suppress it. Check first instead.
+        [ -r "$proc/$p/cmdline" ] || continue
+        cmd="$(tr -s '\0' ' ' < "$proc/$p/cmdline" 2>/dev/null)" || continue
+        case "$cmd" in
             *"Ableton Live"*.exe*) printf '%s\n' "$p" ;;
         esac
     done
