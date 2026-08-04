@@ -7,7 +7,6 @@ root="$(cd "$here/.." && pwd)"
 # Runtime naming and tarball selection resolve in one place; see
 # scripts/runtime-env.sh.
 for _l in "$(dirname "$0")/runtime-env.sh" "$root/scripts/runtime-env.sh"; do
-    # shellcheck source=scripts/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
 command -v ableton_pick_tarball >/dev/null 2>&1 || {

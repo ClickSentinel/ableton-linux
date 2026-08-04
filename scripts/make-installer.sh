@@ -17,7 +17,6 @@ IMAGE="${IMAGE:-ableton-wine-build:22.04}"
 # scripts/runtime-env.sh. Both used to live here as a second copy, and the
 # selection defect below was in both.
 for _l in "$(dirname "$0")/runtime-env.sh" "$here/runtime-env.sh"; do
-    # shellcheck source=scripts/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
 command -v ableton_pick_tarball >/dev/null 2>&1 || {

@@ -12,7 +12,6 @@ set -u
 # Clear inherited Wine variables so this launch uses only the patched build.
 # Runtime and prefix paths resolve in one place; see scripts/runtime-env.sh.
 for _l in "$(dirname "$0")/runtime-env.sh" "$HOME/.local/share/ableton-wine/runtime-env.sh"; do
-    # shellcheck source=scripts/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
 command -v ableton_wine_root >/dev/null 2>&1 || {
@@ -212,7 +211,6 @@ if ! pgrep -af "Ableton Live.*\.exe" 2>/dev/null | grep "ProgramData" >/dev/null
     dpi_mode="${ABLETON_DPI_MODE:-auto}"
     dpi_family=""; dpi_scale=""
     dpi_lib="$HOME/.local/share/ableton-wine/detect-scale.sh"
-    # shellcheck source=scripts/detect-scale.sh
     [ -r "$dpi_lib" ] && . "$dpi_lib"
     if ! declare -F ableton_dpi_block_values >/dev/null 2>&1; then
         # no (or an older) detect-scale.sh: the two legacy blocks still resolve inline
@@ -720,7 +718,6 @@ if ! pgrep -af "Ableton Live.*\.exe" 2>/dev/null | grep "ProgramData" >/dev/null
     # Sourced outside the auto branch: the topbar color detection below wants the lib
     # even when ABLETON_THEME_MODE pins the scheme.
     theme_lib="$HOME/.local/share/ableton-wine/detect-theme.sh"
-    # shellcheck source=scripts/detect-theme.sh
     [ -r "$theme_lib" ] && . "$theme_lib"
     theme_mode="${ABLETON_THEME_MODE:-auto}"
     if [ "$theme_mode" = auto ]; then

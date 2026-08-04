@@ -3,7 +3,6 @@
 set -euo pipefail
 # Runtime paths resolve in one place; see scripts/runtime-env.sh.
 for _l in "$(dirname "$0")/runtime-env.sh" "$HOME/.local/share/ableton-wine/runtime-env.sh"; do
-    # shellcheck source=scripts/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
 command -v ableton_wine_root >/dev/null 2>&1 || {
