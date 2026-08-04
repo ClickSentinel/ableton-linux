@@ -89,13 +89,24 @@ exists to prevent.
 
 ## Pruning
 
-The store grows by roughly 2GB per retained build. Development machines already
-hold eight rollbacks; on a disk at 92% that is not academic.
+Open. The shape of the policy is settled; the numbers are not, and the numbers
+are what decides whether a policy is needed at all.
 
-Policy: never remove a version any channel symlink points at. Beyond that keep
-the most recent `ABLETON_KEEP_VERSIONS` (default 2) and prune oldest first,
-after a successful install rather than before, so a failed install cannot leave
-a user with neither the new runtime nor the old one.
+Measured 2026-08-04 on the development machine: an unpacked runtime is **392M**,
+not the ~2GB an earlier draft of this note asserted. Nine entries — one live and
+eight rollbacks — came to 4.2G, and one of those rollbacks was 1.2G rather than
+392M, so sizes are not uniform and the outlier has not been identified.
+
+At 392M a version is cheap enough that keeping several is unremarkable, which
+weakens the case for pruning automatically at all. What survives regardless:
+never remove a version a channel symlink points at, and prune after a
+successful install rather than before, so a failure cannot leave a user with
+neither the new runtime nor the old one.
+
+What is undecided: whether pruning is automatic or a command a user runs, how
+many to keep, and whether the count is per channel or across the store. Also
+worth knowing what the 1.2G entry is before setting any limit — an outlier that
+large suggests the store may hold things other than plain runtimes.
 
 ## Rejected approaches
 
@@ -111,10 +122,13 @@ version is a broken install produced by a housekeeping rule.
 
 ## Limits
 
+Not to ship before the release procedure is in order — that sequencing is
+deliberate and comes ahead of this work regardless of readiness.
+
 Nothing here is implemented. The interim container layout is, and is migrated
 on one machine, so this carries a second migration for that machine
 specifically — cheap now, and the reason to decide quickly rather than after
 the layout reaches users.
 
-Disk pressure is stated from one machine. The 2GB-per-build figure is the
-unpacked runtime; the prune default of 2 is a guess, not a measurement.
+Disk figures are from one machine and one filesystem. The 392M is measured; the
+1.2G outlier is not explained.
