@@ -33,6 +33,8 @@
  *   --tempo BPM   initial tempo when founding a session (default 120.0)
  *   --linger SECS exit 0 after SECS with no peers (default 900; 0 = never;
  *                 ABLETON_LINKD_LINGER sets the same)
+ *   --verbose     also log a status line every 10 s (the pre-2026.08 default;
+ *                 ABLETON_LINKD_VERBOSE=1 does the same)
  *   --help        usage
  *
  * Logging is event-driven by default. The change callbacks cover peers,
@@ -227,7 +229,7 @@ int run_probe(double tempo, int secs)
 
 /* Foreground and --daemon: anchor the session until signalled, or until it
  * has had no peer for linger_secs (0 = anchor forever). */
-int run_anchor(double tempo, bool as_daemon, int linger_secs)
+int run_anchor(double tempo, bool as_daemon, bool verbose, int linger_secs)
 {
     if (as_daemon) {
         std::string log_dir;
@@ -260,7 +262,7 @@ int run_anchor(double tempo, bool as_daemon, int linger_secs)
             log_line("no peers for %d s, session over: exiting", linger_secs);
             break;
         }
-        if (now - last_status >= kStatusPeriod) {
+        if (verbose && now - last_status >= kStatusPeriod) {
             print_status(link);
             last_status = now;
         }
@@ -276,7 +278,7 @@ void print_usage(const char* argv0)
     std::printf(
         "ableton-linkd: native Ableton Link session anchor and probe\n"
         "\n"
-        "usage: %s [--tempo BPM] [--linger SECS] [--daemon | --probe [secs] | --help]\n"
+        "usage: %s [--tempo BPM] [--linger SECS] [--verbose] [--daemon | --probe [secs] | --help]\n"
         "\n"
         "  (no options)   run in the foreground; log to stderr on peer, tempo and\n"
         "                 start-stop changes\n"
@@ -289,6 +291,8 @@ void print_usage(const char* argv0)
         "  --linger SECS  exit 0 after SECS seconds with no peers (default %d,\n"
         "                 0 = anchor until signalled; the ABLETON_LINKD_LINGER\n"
         "                 environment variable sets the same)\n"
+        "  --verbose      also log a status line every 10 s\n"
+        "                 (ABLETON_LINKD_VERBOSE=1 does the same)\n"
         "  --help         this text\n"
         "\n"
         "Strictly passive: after construction it never changes the session tempo\n"
@@ -317,6 +321,8 @@ int main(int argc, char** argv)
     bool probe = false;
     int probe_secs = kDefaultProbeSecs;
     int linger_secs = kDefaultLingerSecs;
+    const char* verbose_env = std::getenv("ABLETON_LINKD_VERBOSE");
+    bool verbose = verbose_env && *verbose_env && std::strcmp(verbose_env, "0") != 0;
 
     /* Environment first, flags override: the launchers start the daemon
      * without arguments, so the environment is the per-launch override. */
@@ -386,5 +392,5 @@ int main(int argc, char** argv)
     }
 
     return probe ? run_probe(tempo, probe_secs)
-                 : run_anchor(tempo, as_daemon, linger_secs);
+                 : run_anchor(tempo, as_daemon, verbose, linger_secs);
 }
