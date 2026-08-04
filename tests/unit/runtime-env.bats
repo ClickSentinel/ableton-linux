@@ -4,9 +4,16 @@
 #
 # Three scripts resolved the tarball independently until this existed, and each
 # resolved it with `ls | sort -V | tail -1`, which orders the -debug suffix last
-# and so installs a tree with bin/ and lib/ but no share/ — a runtime that
-# cannot exec the wine loader. The selector is pure so it can be tested here
-# rather than through an install.
+# and so installs a tree with bin/ and lib/ but no share/. A wrong answer here
+# is silent: the debug tree passes `wine --version` and only fails at launch
+# with "could not exec the wine loader", which reads as a broken build rather
+# than a mis-picked file. A second release channel puts more artifacts in the
+# same directory, so the selector has to be right before that lands.
+#
+# The selector is pure, so these source runtime-env.sh directly rather than
+# extracting a function body out of install.sh as the earlier copy of these
+# tests did — renaming it fails these tests instead of silently exercising a
+# stale copy.
 #
 #   ./tests/run.sh tests/unit/runtime-env.bats
 
