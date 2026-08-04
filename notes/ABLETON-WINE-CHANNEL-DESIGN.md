@@ -151,8 +151,10 @@ ambiguity refuses rather than guesses:
 | real dir | symlink elsewhere | ambiguous — refuse |
 | real dir | real dir | cannot tell which is live — refuse loudly |
 
-The still-running check (`pgrep` for Live, Push2, anything under the runtime)
-must run *before* the migration: moving the tree under a running Wine is the one
+The still-running check must run *before* the migration — that is
+`ableton_runtime_busy`, which resolves `/proc/PID/exe` against the runtime root
+rather than matching command lines, because Wine's in-prefix helpers show a
+Windows path in argv and no pattern reaches them: moving the tree under a running Wine is the one
 genuinely destructive failure, and that check already exists. `mv` within
 `~/.local/opt` is a same-filesystem rename, so it is atomic and needs no extra
 disk. Migration is skipped entirely when `ABLETON_WINE_ROOT` is set — the user
