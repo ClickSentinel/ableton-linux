@@ -12,85 +12,106 @@ tarball is provably relocatable, and GitHub's `/releases/latest/` excludes
 prereleases so two download URLs cannot collide. What is not settled is whether
 the two channels can share a Wine prefix.
 
-## Status
+## Phases
 
-| Item | State |
-| --- | --- |
-| Phase 0, prerequisites | done — PR #3, gate green, 126 tests |
-| Q1 second prefix | answered — clone the authorised prefix |
-| Q2 what the channel is for | answered — so stable can slow down |
-| Q3 promote or rebuild | answered — support both, provenance recorded |
-| Phase 1, channel plumbing | unblocked |
-| Phase 2, publishing | not started |
-| Phase 3, switching | not started |
-| Container layout | ready to propose, independent of channels |
-| Live-detection consolidation | unblocked since PR119 landed; not started |
+Staged so the first ships user-visible value alone and nothing later blocks it.
+Phase 1 needs no channel machinery, no layout change and no script
+consolidation: installing the other `.run` already switches a user between
+builds, because `install.sh` replaces the runtime and keeps a dated rollback.
+That is crude, and it is enough.
 
-Phase 0 delivered: the bats suite merged and hermetic, `install.sh` selecting
-the dated runtime tarball rather than whatever `sort -V` put last,
-`ABLETON_WINE_ROOT` honoured in `install.sh` and `uninstall.sh`, and the
-catalogue generator made locale-independent.
+| Phase | What | State |
+| --- | --- | --- |
+| 1 | Nightly builds, published | not started — `mvp/nightly-builds` |
+| 2 | Test suite and `ci-checks` | done, unmerged — `ci/test-suite-merge` |
+| 3 | Script consolidation | partly done — `refactor/runtime-env` |
+| 4 | Channels proper | designed; the migration is built on phase 3's branch |
 
-## Open questions
+Phases 2 to 4 improve phase 1, they are not prerequisites for it. Phase 2
+tightens the gate. Phase 3 removes the duplication that would make phase 4
+unmaintainable. Phase 4 is what lets two channels sit on different Wine bases,
+which is the only real limitation phase 1 ships with.
 
-Q1 is answered — see *Prefix cloning* below. An earlier draft asserted that a
-second prefix was impossible because Ableton limits activations. That was
-wrong twice over: it was never tested, and it confused per-machine
-authorisation with per-install activation. The answer turned out not to be
-"authorise twice" but "do not create a second prefix at all — copy the first".
+Each phase lives on its own branch rather than one stack. Main moved underneath
+this work three times in a single session — once silently rescoping a safety
+gate — and a four-deep stack against a moving base is where that stops being
+survivable.
 
-Q2 is answered: the second channel exists so that **stable can become less
-frequent**. Eleven releases shipped between 2026-07-14 and 2026-08-01, one
-every 1.7 days, but that cadence is a symptom of having one channel — every fix
-has to reach stable because there is nowhere else for it to go. An earlier
-draft read the same number as evidence against a second channel. That inverted
-cause and effect.
+## Phase 1 requirements
 
-What follows from it: the fast channel publishes on merge to main rather than
-on a cron, since the trigger is "a change landed", not "it is 04:00". Stable
-publishes when someone decides a set of changes is ready. And stable's meaning
-changes from "the newest work" to "a curated set", which is a heavier gate than
-it carries today.
+Everything needed for a user to download and run a nightly. Five items, all in
+CI and packaging; no shipped script behaviour changes.
 
-The sequencing consequence is easy to miss: **stable cannot slow down until the
-fast channel is actually shipping**, or there is a window where nobody gets
-fixes quickly. Phases 2 and 3 are prerequisites for the cadence change, not
-optional follow-ups to it.
+**Carry `nightly-build.yml` across.** It exists only on phase 2's branch. It is
+self-contained — checkout, ccache, buildx, `build.sh`, `build-audit.sh`, upload
+— and references nothing under `tests/`, so it moves on its own.
 
-**Q3. Is a stable release promoted from a fast-channel build, or rebuilt?**
+**Build the installer, not just the tarball.** The workflow stops at the runtime
+tarball and never runs `make-installer.sh`, so there is no `.run` to publish.
+Add it with `ENGINE=docker`: the script defaults to podman and CI has docker.
+Its other inputs are already there — `dist/ableton-linkd` from `build.sh`,
+`cabextract-static` built on demand from the same image, and the vendored
+winetricks, fonts and Link source from the checkout.
 
-Both, chosen per release. `release.sh` and `release.yml` both state that CI
-never builds a release — the maintainer builds and verifies locally, and the
-bits released are the bits verified. Promotion ends that invariant; rebuilding
-preserves it. Rather than trade one for the other permanently, keep both paths
-and record which one produced any given release.
+**Separate the two identifiers in `make-installer.sh`.** The tarball it packs
+and the installer it names both come from `$(cat VERSION)`. A nightly must not
+bump `VERSION`: it is committed, and `repo-hygiene` and `release.bats` assert
+its format and its pairing with CHANGELOG and BUILD-INFO. The artifact needs a
+label — `<version>+nightly.<sha>` — distinct from the version of the tarball
+being packed.
 
-Promotion is close to free, because `make-installer.sh` already is the
-primitive: its own header says *repackaging only; Wine is not rebuilt*. Feeding
-it a specific tarball plus the stable VERSION produces a stable installer with
-no Wine build. What stands in the way is that it cannot currently be pointed at
-one — `make-installer.sh:20` falls back to `ls | sort -V | tail -1`, the same
-selection defect fixed in `install.sh`, which orders a `-debug` suffix last.
-The build audit on line 27 means a wrong pick fails loudly rather than shipping,
-so this is a blocker for promotion rather than a live hazard.
+**Publish to a rolling prerelease.** Delete and recreate a permanent `nightly`
+tag each run, with `--prerelease`. `/releases/latest/` excludes prereleases, so
+the stable installer URL is untouched and the nightly gets its own predictable
+one at no cost.
 
-Three constraints keep "both" honest rather than merely ambiguous.
+**Skip an unchanged tree.** `BUILD-INFO` records `patch-head`, which is
+`git rev-parse HEAD` at build time, so the workflow can compare it with the
+published nightly and exit before spending forty minutes rebuilding the same
+commit.
 
-The verification must not fork. `build-audit.sh` already runs inside
-`make-installer.sh`, and the release workflow's verify job re-downloads and
-checks every published asset. Both paths keep both gates, so what differs is
-where the bits came from, never how thoroughly they were checked.
+Provenance needs nothing new for the same reason: `patch-head` already ties a
+reported nightly back to a commit.
 
-Provenance must be recorded, not inferred. A promoted release states in
-BUILD-INFO that it was promoted and from which build; a rebuilt one states it
-was built locally. Without that the trust question Q3 exists to settle becomes
-unanswerable after the fact, which is worse than picking either option.
+The gate is `build-audit.sh`, which already runs and verifies every patch is
+present in the shipped binaries by fingerprint. That is the right check for a
+runtime artifact — `ci-checks` guards scripts and repo hygiene, which is not
+what a nightly tarball gets wrong. Gating on the audit alone is what keeps
+phase 1 independent of phase 2.
 
-Promotion is verifiable rather than asserted, and this is the argument for
-allowing it at all: the runtime tarball is byte-identical to the one already
-published on the fast channel, so its sha256 is unchanged and anyone can
-compare the two releases. The installer wrapper is rebuilt — it embeds VERSION
-and the payload hash — but the Wine tree inside it is provably the tested one.
+## Phase 1 limitations
+
+Worth stating in the release notes rather than discovered by a tester.
+
+Both channels track the same Wine base. Switching is by installing the other
+`.run`, not a flag. There is one prefix, shared, so preferences and installed
+packs are common to both. Rollback is the dated directory `install.sh` already
+leaves behind, not an offline channel flip.
+
+The base constraint is the one that expires: the moment a nightly is built from
+a different Wine base than stable, switching back downgrades the prefix. That is
+phase 4's problem, and `base-bump-11.14` is not currently queued — it sits two
+commits off main with no open PR — so the constraint holds for now rather than
+racing anything.
+
+## Decisions
+
+Three questions shaped the design; all are answered, and the sections below
+carry the reasoning.
+
+A second channel gets its own prefix, made by **copying** the authorised one
+rather than creating it — a fresh prefix regenerates `MachineGuid` and would
+demand re-authorisation. Verified end to end.
+
+The second channel exists **so stable can slow down**. Eleven releases shipped
+in the nineteen days to 2026-08-01, one every 1.7 days, because every fix has
+to reach stable to reach anyone. An earlier draft read that number as evidence
+against a second channel, inverting cause and effect.
+
+A stable release may be either **promoted** from a soaked channel build or
+rebuilt by hand, chosen per release and recorded in BUILD-INFO. Promotion ends
+the repo's "CI never builds a release" invariant, so which path produced a
+given release has to be answerable after the fact.
 
 ## Prefix coupling
 
