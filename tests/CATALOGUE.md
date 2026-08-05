@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-161 tests across 9 suites. See [README.md](README.md) for how to run
+165 tests across 10 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -19,6 +19,7 @@ for which run on a PR.
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 4 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 40 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
@@ -233,6 +234,41 @@ End-to-end launch behaviour is in tests/launcher-cli.bats.
 | 19 | windowmetrics: a value in another section is not picked up | — |
 | 20 | windowmetrics: a missing user.reg is silent, not an error cascade | — |
 
+<a id="install-runs"></a>
+
+## tests/unit/install-runs.bats
+
+
+scripts/install.sh — does it run at all, and does it install what it claims?
+
+This file exists because nothing executed install.sh. The suite sourced
+runtime-env.sh directly and checked the resolvers, which is worth doing and
+says nothing about whether the script that uses them starts. On 2026-08-05 a
+merge reordered install.sh's head so it called ableton_runtime_name eight
+lines before sourcing the file that defines it; under `set -euo pipefail` it
+aborted on that line. 172 tests passed for thirteen commits.
+
+The first test here is deliberately cheap and hermetic: it asserts only that
+the script gets past its own initialisation to the point where it looks for a
+tarball. That is the whole failure mode, and it needs no fixture.
+
+The second does a real install into a throwaway HOME, and skips when there is
+no tarball to install. That is not a gap that can be closed with a fixture:
+install.sh runs `readelf -d` against the packaged libusb and PipeASIO shims
+and greps for real DT_NEEDED entries, so a stand-in tree would either fail
+those checks or force them to be weakened, and weakening them is how a debug
+tree ships.
+
+  ./tests/run.sh tests/unit/install-runs.bats
+  ABLETON_TEST_TARBALL=/path/to/runtime.tar.zst ./tests/run.sh tests/unit/install-runs.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | install.sh gets past its own initialisation | install.sh aborting on its own first lines, which no resolver test can |
+| 2 | install.sh resolves its roots from the shared lib, not from its own copy | — |
+| 3 | a real tarball installs, and the tree identifies itself | the whole install path — staging, the required-file gate, promote, |
+| 4 | a second install promotes and leaves the previous runtime behind | the promote step and its dated rollback, which is where the store's |
+
 <a id="runtime-env"></a>
 
 ## tests/unit/runtime-env.bats
@@ -357,6 +393,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `commit e221cc4` | release: VERSION has a matching CHANGELOG entry at the top |
 | `commit f0fc05e` | detect-scale: cosmic probe: a disabled lid never wins when it is marked non-primary<br>detect-scale: cosmic probe: a disabled lid never wins, even with no primary line |
 | `commit f84eaa4` | repo-hygiene: runtime name: every live file agrees on one wine-d2d1-nspa version |
+| `install.sh aborting on its own first lines, which no resolver test can` | install-runs: install.sh gets past its own initialisation |
 | `issue #106` | repo-hygiene: desktop entries validate after substitution |
 | `issue #32` | launcher: gray text: the blend is 45% towards MenuText, per channel, not symmetric |
 | `issue #38` | launcher-cli: a .als set goes straight to the Live exe, never through start.exe<br>launcher-cli: clips and packs route the same way as sets, case-insensitively |
@@ -379,6 +416,8 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
 | `the id becomes a directory name, and a BUILD-INFO is just text in a tarball` | runtime-env: a BUILD-INFO carrying path traversal is refused, not turned into a path |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
+| `the promote step and its dated rollback, which is where the store's` | install-runs: a second install promotes and leaves the previous runtime behind |
 | `the published nightly carries this suffix so a filename-keyed consumer` | runtime-env: tarball predicate: a nightly label is refused |
 | `the same-day counter must not be read as a date component` | runtime-env: tarball predicate: a partial download is refused |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
+| `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
