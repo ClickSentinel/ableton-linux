@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-170 tests across 10 suites. See [README.md](README.md) for how to run
+186 tests across 11 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -20,6 +20,7 @@ for which run on a PR.
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/install-runs.bats](#install-runs) — 4 test(s)
+- [tests/unit/migrate-layout.bats](#migrate-layout) — 16 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 45 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
@@ -269,6 +270,44 @@ tree ships.
 | 3 | a real tarball installs, and the tree identifies itself | the whole install path — staging, the required-file gate, promote, |
 | 4 | a second install promotes and leaves the previous runtime behind | the promote step and its dated rollback, which is where the store's |
 
+<a id="migrate-layout"></a>
+
+## tests/unit/migrate-layout.bats
+
+
+scripts/runtime-env.sh — the flat-to-store migration.
+
+This renames the directory an existing user's Wine runs from, so every row of
+the decision table gets a test, including the ones that must refuse. The rule
+throughout is that ambiguity is an error: a live tree that cannot be named
+from its own BUILD-INFO means the script cannot know what it is about to
+install over, and guessing wrong swaps a runtime out from under a running
+Live.
+
+Nothing here touches a real install: ABLETON_OPT_DIR points the resolvers at
+a throwaway tree.
+
+  ./tests/run.sh tests/unit/migrate-layout.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | a flat install moves into the store under its own name | — |
+| 2 | nothing remains at the legacy path | nothing is left behind for an older .run to overwrite, and a migrated |
+| 3 | the resolver follows the runtime to its new name | the resolver and the migration must agree, or the install replaces a |
+| 4 | dated rollbacks are renamed by the build they hold | dated rollbacks are the reason the store exists — a timestamp records |
+| 5 | two rollbacks holding one build keep one and set the rest aside | two installs of one build collapse to one entry, and the loser is set |
+| 6 | a rollback that cannot be named moves aside instead of blocking | a debug tree rolled back by the selector bug has no dist-version at |
+| 7 | failed-install debris travels too, so uninstall still finds it | — |
+| 8 | runtimes from other Wine bases are left alone | 11.11 and 11.14 trees coexist on the development machine and are not |
+| 9 | a fresh install migrates nothing and creates nothing | — |
+| 10 | running it twice is a no-op, not a second move | — |
+| 11 | an overridden runtime root is left exactly where the user pinned it | — |
+| 12 | an older installer's tree beside a migrated one is adopted when newer | an older .run over a migrated install writes a flat tree at the legacy |
+| 13 | an older installer's tree that is older stays a store entry | — |
+| 14 | a live tree that cannot be named refuses, and moves nothing | the destructive case. Installing over a runtime that cannot be |
+| 15 | neither tree nameable refuses rather than picking one | — |
+| 16 | a symlink left by an earlier layout refuses instead of migrating | — |
+
 <a id="runtime-env"></a>
 
 ## tests/unit/runtime-env.bats
@@ -392,15 +431,19 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | Reference | Tests |
 | --- | --- |
 | `/proc/PID/exe reports resolved paths, so a channel-path root matches no` | runtime-env: runtime root: resolves to the build, not to the channel link |
+| `11.11 and 11.14 trees coexist on the development machine and are not` | migrate-layout: runtimes from other Wine bases are left alone |
 | `2026.07.29.1 appears four times on the dev machine under two patch stacks` | runtime-env: two builds of one version under different patch stacks get different ids |
 | `a dangling channel must not resolve to nothing and strand the launcher` | runtime-env: runtime root: a dangling channel falls back rather than resolving empty |
+| `a debug tree rolled back by the selector bug has no dist-version at` | migrate-layout: a rollback that cannot be named moves aside instead of blocking |
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
 | `an install that predates the migration must still resolve and launch` | runtime-env: runtime root: falls back to the legacy path before migrating |
+| `an older .run over a migrated install writes a flat tree at the legacy` | migrate-layout: an older installer's tree beside a migrated one is adopted when newer |
 | `bin/ and lib/ with no share/` | runtime-env: tarball predicate: a debug tree is refused |
 | `commit 9cba3b0` | launcher: gray text: the dark fallback lands on classic GrayText |
 | `commit e221cc4` | release: VERSION has a matching CHANGELOG entry at the top |
 | `commit f0fc05e` | detect-scale: cosmic probe: a disabled lid never wins when it is marked non-primary<br>detect-scale: cosmic probe: a disabled lid never wins, even with no primary line |
 | `commit f84eaa4` | repo-hygiene: runtime name: every live file agrees on one wine-d2d1-nspa version |
+| `dated rollbacks are the reason the store exists` | migrate-layout: dated rollbacks are renamed by the build they hold |
 | `install.sh aborting on its own first lines, which no resolver test can` | install-runs: install.sh gets past its own initialisation |
 | `issue #106` | repo-hygiene: desktop entries validate after substitution |
 | `issue #32` | launcher: gray text: the blend is 45% towards MenuText, per channel, not symmetric |
@@ -410,6 +453,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
 | `make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
 | `no released runtime carries source-commit` | runtime-env: a runtime without source-commit is named from its patch stack |
+| `nothing is left behind for an older .run to overwrite, and a migrated` | migrate-layout: nothing remains at the legacy path |
 | `observed during the first real migration` | runtime-env: live pids: a process that exits mid-scan is skipped, not an error |
 | `scoping` | runtime-env: runtime pids: a process from another Wine install is ignored |
 | `scripts/ableton-live` | launcher-cli: a stale wineserver is killed and the session booted before registry writes<br>launcher: windowmetrics: a value wrapped across continuation lines is rejoined |
@@ -422,12 +466,15 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | runtime-env: the runtime wins over a debug tree sitting beside it |
 | `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
+| `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
 | `the id becomes a directory name, and a BUILD-INFO is just text in a tarball` | runtime-env: a BUILD-INFO carrying path traversal is refused, not turned into a path |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
 | `the promote step and its dated rollback, which is where the store's` | install-runs: a second install promotes and leaves the previous runtime behind |
 | `the published nightly carries this suffix so a filename-keyed consumer` | runtime-env: tarball predicate: a nightly label is refused |
+| `the resolver and the migration must agree, or the install replaces a` | migrate-layout: the resolver follows the runtime to its new name |
 | `the same resolution a running process reports, so the two can be` | runtime-env: runtime root: matches what /proc would report for a process under it |
 | `the same-day counter must not be read as a date component` | runtime-env: tarball predicate: a partial download is refused |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
 | `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
+| `two installs of one build collapse to one entry, and the loser is set` | migrate-layout: two rollbacks holding one build keep one and set the rest aside |

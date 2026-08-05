@@ -241,3 +241,127 @@ ableton_runtime_id() {
     esac
     printf '%s+%s\n' "$_ver" "$_disc"
 }
+
+# --- layout migration --------------------------------------------------------
+# One-time move from the flat layout to the store: one directory per build,
+# named from its own BUILD-INFO, with a channel symlink at the live one. Only
+# install.sh calls this. It lives here because it has to agree with the
+# resolvers above about where a runtime is, and those drifting apart is the
+# failure this whole file exists to prevent.
+
+# Is <a> a newer build than <b>? built-at where both carry it, dist-version
+# otherwise. Runtimes built before built-at existed have only the version, which
+# ties across every nightly between two releases — that is why the field was
+# added, and why this answers "no" rather than guessing when it cannot tell.
+ableton_build_is_newer() {
+    local _a="$1" _b="$2" _av _bv
+    _av="$(ableton_buildinfo_field "$_a/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+    _bv="$(ableton_buildinfo_field "$_b/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+    if [ -z "$_av" ] || [ -z "$_bv" ]; then
+        _av="$(ableton_buildinfo_field "$_a/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
+        _bv="$(ableton_buildinfo_field "$_b/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
+    fi
+    [ -n "$_av" ] && [ -n "$_bv" ] || return 1
+    [ "$_av" != "$_bv" ] || return 1
+    [ "$(printf '%s\n%s\n' "$_av" "$_bv" | sort -V | tail -1)" = "$_av" ]
+}
+
+# Move <dir> into the store under its own id. A tree that cannot be named, or
+# whose name is already taken, is set aside under <container>/<kind>-<stamp>/
+# rather than deleted — these are multi-gigabyte runtimes and nothing here
+# removes one behind the user's back.
+ableton_store_absorb() {
+    local _dir="$1" _stamp="$2" _container _id _aside
+    _container="$(ableton_container_root)"
+    _id="$(ableton_runtime_id "$_dir")"
+    if [ -n "$_id" ] && [ ! -e "$_container/$_id" ]; then
+        mv "$_dir" "$_container/$_id"
+        printf '%s\n' "$_id"
+        return 0
+    fi
+    # unnameable, or a name already held by an identical build
+    _aside="$_container/$([ -n "$_id" ] && echo superseded || echo failed)-$_stamp"
+    mkdir -p "$_aside"
+    mv "$_dir" "$_aside/${_dir##*/}"
+    return 0
+}
+
+# Migrate, or explain why not. Idempotent, and refuses rather than guessing when
+# the live tree cannot be identified — installing over an unidentifiable runtime
+# is the ambiguous case the store exists to prevent.
+#
+# Nothing is left at the legacy path. An earlier design kept a compatibility
+# symlink there and it did not survive examination: the case it was chiefly
+# justified by, an older .run, does not read that path, it overwrites it.
+#
+# The caller must already have established that nothing is running from the
+# runtime: this renames the directory a running Wine executes from.
+ableton_migrate_layout() {
+    local legacy container chan stamp id other d
+    legacy="$(ableton_legacy_root)"
+    container="$(ableton_container_root)"
+    chan="$container/stable"
+    stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+
+    if [ -n "${ABLETON_WINE_ROOT:-}" ]; then
+        echo "   layout: ABLETON_WINE_ROOT is set; leaving the install where it is"
+        return 0
+    fi
+
+    # Already migrated. A real tree at the legacy path beside it is not
+    # corruption: an older .run knows nothing about the store and writes one
+    # there. That is a normal action on a machine holding an older installer, so
+    # recover rather than refuse — identify both and keep the newer live.
+    if [ -L "$chan" ]; then
+        if [ -d "$legacy" ] && [ ! -L "$legacy" ]; then
+            other="$(readlink -f "$chan" 2>/dev/null || true)"
+            if [ -z "$(ableton_runtime_id "$legacy")" ] && \
+               { [ -z "$other" ] || [ -z "$(ableton_runtime_id "$other")" ]; }; then
+                echo "!! neither $legacy nor $chan can be identified from its" \
+                     "BUILD-INFO; remove whichever is stale and rerun" >&2
+                return 1
+            fi
+            id="$(ableton_store_absorb "$legacy" "$stamp")"
+            if [ -n "$id" ] && [ -n "$other" ] && ableton_build_is_newer "$container/$id" "$other"; then
+                ln -sfn "$id" "$chan"
+                echo "   layout: adopted the newer $id from $legacy"
+            else
+                echo "   layout: kept $legacy as a store entry; the channel stays where it was"
+            fi
+        fi
+        return 0
+    fi
+
+    # Nothing installed: install.sh creates the store itself.
+    if [ ! -e "$legacy" ] && [ ! -L "$legacy" ]; then
+        return 0
+    fi
+
+    # -L as well as -e: a dangling link from an older layout reads as absent to
+    # -e alone and would fall through to a silent no-op.
+    if [ -L "$legacy" ]; then
+        echo "!! $legacy is a symlink, not a runtime; remove it and rerun" >&2
+        return 1
+    fi
+
+    id="$(ableton_runtime_id "$legacy")"
+    [ -n "$id" ] || {
+        echo "!! $legacy carries no readable ABLETON-WINE-BUILD-INFO.txt, so it" \
+             "cannot be named; installing over it would be a guess" >&2
+        return 1; }
+
+    mkdir -p "$container"
+    mv "$legacy" "$container/$id"
+    ln -sfn "$id" "$chan"
+
+    # The dated rollbacks travel too, and become readable in the process: each
+    # carries its own BUILD-INFO, so a timestamp that recorded when a runtime
+    # was replaced becomes a name that says which build it holds. Left behind
+    # they are invisible to the container-scoped uninstall and orphan several
+    # gigabytes apiece.
+    for d in "$legacy"-rollback-* "$legacy".failed-*; do
+        [ -e "$d" ] || continue
+        ableton_store_absorb "$d" "$stamp" >/dev/null
+    done
+    echo "   layout: moved the runtime to $container/$id"
+}
