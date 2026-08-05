@@ -213,10 +213,23 @@ stack_sha="$(sha256sum "$stack_stamp" | awk '{print $1}')"
 # the HEAD of the patched Wine tree and names no object here, so without this a
 # built runtime cannot say what source made it — which is why a nightly and the
 # release it was built after are indistinguishable by dist-version alone.
-# /src is mounted read-only; rev-parse does not write, and safe.directory goes
-# to the container's own HOME.
-git config --global --add safe.directory "$SRC" 2>/dev/null || true
-source_commit="$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)"
+# build.sh resolves this on the host and passes it in, because the container
+# frequently cannot: in a git worktree /src/.git is a file naming a gitdir under
+# the main repository, which is not mounted, so rev-parse fails here and the
+# fallback below records "unknown" without saying so. Measured 2026-08-05, and
+# this repository is worked in worktrees — so every local build was producing a
+# runtime that could not say what made it, while CI, building a plain clone,
+# looked correct.
+#
+# The in-container attempt stays for a direct invocation of this script, where
+# nothing set the variable. /src is read-only; rev-parse does not write, and the
+# safe.directory it needs goes to the container's own HOME.
+if [ -n "${SOURCE_COMMIT:-}" ]; then
+    source_commit="$SOURCE_COMMIT"
+else
+    git config --global --add safe.directory "$SRC" 2>/dev/null || true
+    source_commit="$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)"
+fi
 
 # When this build ran. source-commit identifies a build; it does not order two,
 # because a sha has no order outside the commit graph and the installer does not
