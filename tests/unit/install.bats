@@ -15,16 +15,29 @@ bats_require_minimum_version 1.5.0
 
 load ../helpers/common
 
-# NAME and pick_runtime_tarball are pulled out of install.sh rather than
-# restated, so renaming either in the script fails these tests instead of
-# leaving them quietly exercising a copy.
+# NAME and the tarball selector are pulled out of the implementation rather
+# than restated, so renaming either fails these tests instead of leaving them
+# quietly exercising a copy.
+#
+# Which file holds them is deliberately not asserted. install.sh carried both
+# until the shared resolver landed and scripts/runtime-env.sh carries them
+# after, so resolving from whichever is present keeps this file green on both
+# sides of that change. Scraping `^NAME=` out of install.sh cannot: the
+# assignment becomes a call into the resolver, and `eval` of it in a shell that
+# has not sourced the resolver exits 127 and takes every test here with it.
 setup() {
-    eval "$(grep -m1 '^NAME=' "$REPO/scripts/install.sh")"
-    [ -n "${NAME:-}" ] || { echo "no NAME= assignment in install.sh" >&2; return 1; }
-    local body
-    body="$(sed -n '/^pick_runtime_tarball() {/,/^}/p' "$REPO/scripts/install.sh")"
-    [ -n "$body" ] || { echo "pick_runtime_tarball is gone from install.sh" >&2; return 1; }
-    eval "$body"
+    if [ -r "$REPO/scripts/runtime-env.sh" ]; then
+        . "$REPO/scripts/runtime-env.sh"
+        NAME="$(ableton_runtime_name)"
+        pick_runtime_tarball() { ableton_pick_tarball "$@"; }
+    else
+        eval "$(grep -m1 '^NAME=' "$REPO/scripts/install.sh")"
+        local body
+        body="$(sed -n '/^pick_runtime_tarball() {/,/^}/p' "$REPO/scripts/install.sh")"
+        [ -n "$body" ] || { echo "pick_runtime_tarball is gone from install.sh" >&2; return 1; }
+        eval "$body"
+    fi
+    [ -n "${NAME:-}" ] || { echo "no runtime name resolved" >&2; return 1; }
     DIST="$BATS_TEST_TMPDIR/dist"
     mkdir -p "$DIST"
 }
