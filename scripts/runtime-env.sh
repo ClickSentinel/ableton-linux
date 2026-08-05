@@ -30,11 +30,51 @@ ableton_runtime_name() {
     printf '%s\n' "wine-d2d1-nspa-11.13"
 }
 
+# The directory holding every installed runtime, one per build.
+ableton_container_root() {
+    printf '%s\n' "$(ableton_opt_dir)/ableton-wine"
+}
+
+# The pre-container install path. Carries the Wine version, which is exactly why
+# it is being retired: a base bump moved every user's directory.
+ableton_legacy_root() {
+    printf '%s\n' "$(ableton_opt_dir)/$(ableton_runtime_name)"
+}
+
 # The installed runtime. ABLETON_WINE_ROOT overrides it — the tests, the
 # regression VMs and anyone bisecting a build rely on that, so it stays the
-# outermost say regardless of what resolves underneath it later.
+# outermost say.
+#
+# Returns what the channel points at, never the channel path itself. Two things
+# turn on that, and both were measured rather than argued:
+#
+# /proc/PID/exe reports a path with symlinks already resolved, so a process
+# launched through <container>/stable/bin/wine appears under the build's own
+# name. Compare against the channel and ableton_runtime_pids matches nothing:
+# the confirmation before force-closing Live never fires, the targeted kills
+# reach nothing, and only the pgrep fallback PR #120 added the scan to replace
+# still works — while install.sh goes on to rename the directory.
+#
+# And a caller that resolved once keeps the build it resolved. A channel switch
+# part-way through a session cannot move the runtime under a process already
+# executing from it.
 ableton_wine_root() {
-    printf '%s\n' "${ABLETON_WINE_ROOT:-$(ableton_opt_dir)/$(ableton_runtime_name)}"
+    local _chan _target
+    if [ -n "${ABLETON_WINE_ROOT:-}" ]; then
+        printf '%s\n' "$ABLETON_WINE_ROOT"
+        return
+    fi
+    _chan="$(ableton_container_root)/stable"
+    if [ -e "$_chan" ]; then
+        _target="$(readlink -f "$_chan" 2>/dev/null || true)"
+        if [ -n "$_target" ]; then
+            printf '%s\n' "$_target"
+            return
+        fi
+    fi
+    # No container yet: an install that predates the migration still has to
+    # resolve and launch.
+    ableton_legacy_root
 }
 
 # The Ableton prefix. Separate from the runtime on purpose: a channel switch
