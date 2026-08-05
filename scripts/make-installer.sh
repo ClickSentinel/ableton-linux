@@ -34,6 +34,20 @@ else
 fi
 
 [ -n "$tarball" ] && [ -f "$tarball" ] || { echo "!! no ${NAME}-*.tar.zst in dist/: run ./build.sh first" >&2; exit 1; }
+# The kit carries this tarball and the kit's own install.sh selects it by name,
+# so a name the selector rejects builds a kit that packs cleanly and then dies
+# on the user's machine with "no tarball found". Only the pin reaches here with
+# an unchecked name — the branch above already filters — but the pin is exactly
+# how a published nightly gets packed, and those are named
+# <name>-<version>+nightly.<sha>.tar.zst.
+#
+# install.sh honours its own pin whatever the name, deliberately: there the
+# consequence lands on whoever set the variable. Here it lands on whoever is
+# handed the .run, so this refuses instead.
+ableton_is_runtime_tarball "$tarball" || {
+    echo "!! not a name the kit's install.sh will select: $(basename "$tarball")" >&2
+    echo "   expected ${NAME}-<YYYY.MM.DD.N>.tar.zst — rename it, or drop it in dist/ under that name" >&2
+    exit 1; }
 [ -f "$tarball.sha256" ] || { echo "!! $tarball.sha256 missing" >&2; exit 1; }
 echo "   runtime: $(basename "$tarball")"
 

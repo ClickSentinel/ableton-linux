@@ -11,7 +11,7 @@ ableton_runtime_name() {
     printf '%s\n' "wine-d2d1-nspa-11.13"
 }
 
-# The newest runtime tarball in <dir>, or nothing.
+# Is this a runtime tarball an install will select? The name is the whole test.
 #
 # The glob cannot be the selector. The build also emits
 # <name>-<version>-debug.tar.zst, and `sort -V` orders that suffix *after* the
@@ -20,17 +20,29 @@ ableton_runtime_name() {
 # with "could not exec the wine loader". Match the dated release form only and
 # let every suffixed variant fall out.
 #
+# A predicate rather than the regex inlined at one call site, because there are
+# two: the selector below, and make-installer.sh checking the tarball it was
+# told to pack. Those disagreeing is not hypothetical — a name this rejects
+# packs into a kit perfectly well, and the failure surfaces on the user's
+# machine, where the kit's own install.sh finds nothing to install.
+ableton_is_runtime_tarball() {
+    local _b="${1##*/}" _nm _re
+    _nm="$(ableton_runtime_name)"
+    _re="^${_nm//./\\.}-[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]+\\.tar\\.zst\$"
+    [[ "$_b" =~ $_re ]]
+}
+
+# The newest runtime tarball in <dir>, or nothing.
+#
 # Locals are underscore-prefixed: this is sourced into scripts with their own
 # $found and $target.
 ableton_pick_tarball() {
-    local _dir="$1" _nm _f _b
+    local _dir="$1" _nm _f
     _nm="$(ableton_runtime_name)"
-    local _re="^${_nm//./\\.}-[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]+\\.tar\\.zst\$"
     local -a _found=()
     for _f in "$_dir"/"$_nm"-*.tar.zst; do
         [ -e "$_f" ] || continue          # no match: the glob came back literal
-        _b="${_f##*/}"
-        [[ "$_b" =~ $_re ]] || continue
+        ableton_is_runtime_tarball "$_f" || continue
         _found+=("$_f")
     done
     [ "${#_found[@]}" -gt 0 ] || return 0
