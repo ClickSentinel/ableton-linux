@@ -27,7 +27,7 @@ b0501b6e4632289482ff941a4f5c56a8b2f46ecb16d22b04abb9476da5a78045  0024-wined3d-k
 cc29b3c62ed515f36a3df6ea40726fc2179d4fe6d8e588f1da9b2b7e0e896e60  0028-winealsa-re-subscribe-MIDI-devices-when-they-reappea.patch
 b3d943e5df5286b48fbfee62299febe6b3988932f00de4404e0e5788c71a61fb  0029-win32u-lay-out-the-menu-bar-4px-taller-than-SM_CYMEN.patch
 c2826c5068b5f8407e7dedb65c6f43cb0f7a83b2d831a6451103750bd90defe4  0030-dxgi-don-t-blit-stale-sized-dcomp-comp-buffers-into-.patch
-3781400eb89817029c6b88fd57c7d4359cdeb8da639bf8562c2bb8dd0c581c0d  0031-comdlg32-add-XDG-file-dialog-portal.patch
+62418193ab94f338b872c2dcfe9f08d76b27d5314c3836c8e05b149831ce7107  0031-comdlg32-add-XDG-file-dialog-portal.patch
 3742ab32c39a5be16d1cc589a5a5867d6b91bfcf5d1642ccc501113909af9e61  0032-libusb-1.0-add-host-USB-bridge-for-Push-2.patch
 6bd2836da3679670bc7f012f741f5a36c26490c5586298eea932c8375160437a  0033-ntdll-let-WINE_DISABLE_UNIX_MOUNT_REPARSE-turn-off-m.patch
 099669fac44d35948fff9dcc48448d9c4a67438f70c86a74fd7312a13ab1f6cd  0034-winex11-flush-XdndStatus-replies-before-the-source-s.patch
