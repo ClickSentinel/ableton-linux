@@ -53,12 +53,17 @@ case "${ABLETON_LIVE_VERSION:-12}" in
     *) echo "!! ABLETON_LIVE_VERSION must be 11 or 12 (got '$ABLETON_LIVE_VERSION')" >&2; exit 2 ;;
 esac
 
-unset WINELOADER WINEDLLPATH WINEDLLOVERRIDES WINEARCH WINEESYNC WINEFSYNC
-WINE_ROOT="${ABLETON_WINE_ROOT:-$HOME/.local/opt/wine-d2d1-nspa-11.13}"
-export WINEPREFIX="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}"
-export PATH="$WINE_ROOT/bin:$PATH"
+# Runtime and prefix paths resolve in one place; see scripts/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" "$HOME/.local/share/ableton-wine/runtime-env.sh"; do
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v ableton_wine_root >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/.local/share/ableton-wine" >&2; exit 1; }
+ableton_bind_runtime
+# Only this script clears the sync backends: folding them into the shared
+# binder would start dropping a user's WINEESYNC on every launch.
+unset WINEESYNC WINEFSYNC
 export WINEDEBUG=-all
-export WINESERVER="$WINE_ROOT/bin/wineserver"
 
 # --post-first-run: Max for Live 8 (ships with Live 11) crashes on its SECOND start
 # with a stale preferences file. Move it aside: never delete: so Max regenerates
@@ -95,6 +100,7 @@ for required in \
 done
 
 # Host tools winetricks needs to unpack the redistributables.
+# shellcheck disable=SC2043  # deliberately a list: more host tools get added here
 for t in cabextract; do
     command -v "$t" >/dev/null || echo "!! missing host tool '$t' (needed by winetricks): install it (e.g. 'pacman -S cabextract' / 'apt install cabextract')"
 done
