@@ -111,11 +111,28 @@ kit_script_names() {
 
 @test "the runtime name is identical in make-installer.sh, build.sh and install.sh" {
     cd "$REPO"
-    mk="$(grep -oE 'NAME="wine-d2d1-nspa-[0-9.]+"' "$MK" | head -1)"
+    # What this guards is that the build and the installer agree on the name,
+    # not that they spell it the same way in the same places. Once the shared
+    # resolver lands, install.sh and make-installer.sh stop carrying a literal
+    # at all and call runtime-env.sh instead — which is the drift this test
+    # exists to prevent, arriving as the fix rather than as a regression. So
+    # resolve the installer's name the way the installer does, and keep
+    # comparing it with build.sh, which stays a literal because it runs before
+    # anything is installed.
+    if [ -r scripts/runtime-env.sh ]; then
+        . scripts/runtime-env.sh
+        installer_name="$(ableton_runtime_name)"
+    else
+        mk="$(grep -oE 'NAME="wine-d2d1-nspa-[0-9.]+"' "$MK" | head -1)"
+        installer_name="${mk#NAME=\"}"; installer_name="${installer_name%\"}"
+        is="$(grep -oE 'wine-d2d1-nspa-[0-9.]+' scripts/install.sh | head -1)"
+        [ "$installer_name" = "$is" ] || \
+            { echo "make-installer '$installer_name' vs install.sh '$is'" >&2; false; }
+    fi
+    [ -n "$installer_name" ] || { echo "no runtime name resolved" >&2; false; }
     bs="$(grep -oE 'wine-d2d1-nspa-[0-9.]+' build.sh | head -1)"
-    is="$(grep -oE 'wine-d2d1-nspa-[0-9.]+' scripts/install.sh | head -1)"
-    [ "${mk#NAME=\"}" = "$bs\"" ] || { echo "make-installer '$mk' vs build.sh '$bs'" >&2; false; }
-    [ "$bs" = "$is" ] || { echo "build.sh '$bs' vs install.sh '$is'" >&2; false; }
+    [ "$bs" = "$installer_name" ] || \
+        { echo "build.sh '$bs' vs installer '$installer_name'" >&2; false; }
 }
 
 # guards: licence GPLv2+ — Ableton Link has no linking exception, so the source must travel with the binary
