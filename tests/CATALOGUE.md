@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-272 tests across 14 suites. See [README.md](README.md) for how to run
+279 tests across 14 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -19,12 +19,12 @@ for which run on a PR.
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/install-runs.bats](#install-runs) — 13 test(s)
-- [tests/unit/manifest.bats](#manifest) — 14 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 16 test(s)
+- [tests/unit/manifest.bats](#manifest) — 17 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 25 test(s)
 - [tests/unit/ableton-runtime.bats](#ableton-runtime) — 21 test(s)
 - [tests/unit/ableton-update.bats](#ableton-update) — 22 test(s)
-- [tests/unit/runtime-env.bats](#runtime-env) — 56 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 57 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
 
@@ -281,6 +281,9 @@ tree ships.
 | 11 | a kit with no channel marker is stable, as every older kit was | — |
 | 12 | uninstalling takes the recorded channel back | install.sh writes the channel file, so "removed everything install.sh |
 | 13 | uninstalling leaves anything else under the config directory alone | the config directory is not ours to clear out — only the one file is |
+| 14 | setup-prefix refuses while something runs from the runtime | `wineboot -u` rewriting the registry under a live wineserver |
+| 15 | setup-prefix refuses with no terminal too | the refusal must not depend on a terminal -- an unattended run is |
+| 16 | setup-prefix gets past the guard when nothing is running | the guard must not block the .run, where install.sh has already |
 
 <a id="manifest"></a>
 
@@ -315,6 +318,9 @@ round-trip them: a manifest this repo writes must be one this repo accepts.
 | 12 | the manifest URL follows the configured channel | — |
 | 13 | an override wins, for testing against a local file | — |
 | 14 | the installer URL is resolved beside the manifest | moving a release must not strand the installer it names |
+| 15 | the runtime's BUILD-INFO is read straight out of a tarball | the updater compares the manifest's source-commit against |
+| 16 | a tarball that is not there is an error, not an empty BUILD-INFO | — |
+| 17 | a BUILD-INFO with no source-commit produces a manifest that is refused | this is the exact shape that made the first stable manifest invalid |
 
 <a id="migrate-layout"></a>
 
@@ -515,6 +521,7 @@ sandbox, which is the whole reason they echo instead of assigning.
 | 54 | channel: the environment overrides the file | — |
 | 55 | runtime root: resolves through the configured channel | — |
 | 56 | retention never removes what a DIFFERENT channel points at | pruning on behalf of one channel must not strand another |
+| 57 | tarball predicate: a dated nightly label is accepted | the nightly label carries the build's own date, so the selector has to |
 
 <a id="patch-stack"></a>
 
@@ -581,6 +588,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `/proc/PID/exe reports resolved paths, so a channel-path root matches no` | runtime-env: runtime root: resolves to the build, not to the channel link |
 | `11.11 and 11.14 trees coexist on the development machine and are not` | migrate-layout: runtimes from other Wine bases are left alone |
 | `2026.07.29.1 appears four times on the dev machine under two patch stacks` | runtime-env: two builds of one version under different patch stacks get different ids |
+| ``wineboot -u` rewriting the registry under a live wineserver` | install-runs: setup-prefix refuses while something runs from the runtime |
 | `a Wire is bound to its base by .update-timestamp and cannot be taken` | ableton-update: a Wine base change is refused |
 | `a channel names a symlink and selects a URL; it is user configuration` | ableton-update: an unknown channel is refused before any fetch |
 | `a channel pointing at a pruned entry is a broken install produced by` | migrate-layout: retention never removes what the channel points at |
@@ -642,19 +650,24 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
+| `the guard must not block the .run, where install.sh has already` | install-runs: setup-prefix gets past the guard when nothing is running |
 | `the id becomes a directory name, and a BUILD-INFO is just text in a tarball` | runtime-env: a BUILD-INFO carrying path traversal is refused, not turned into a path |
 | `the installer name becomes both a URL component and a filename` | manifest: an installer name containing a path is refused |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
+| `the nightly label carries the build's own date, so the selector has to` | runtime-env: tarball predicate: a dated nightly label is accepted |
 | `the prefix cannot be taken back, so this must not happen quietly` | ableton-runtime: use refuses a base change with no terminal to ask on |
 | `the promote step and its dated rollback, which is where the store's` | install-runs: a second install promotes and leaves the previous runtime behind |
+| `the refusal must not depend on a terminal -- an unattended run is` | install-runs: setup-prefix refuses with no terminal too |
 | `the resolver and the migration must agree, or the install replaces a` | migrate-layout: the resolver follows the runtime to its new name |
 | `the resolver, the process scan and the install must all name the same` | install-runs: after installing, the resolver points at a real build directory |
 | `the same resolution a running process reports, so the two can be` | runtime-env: runtime root: matches what /proc would report for a process under it |
 | `the same-day counter must not be read as a date component` | runtime-env: tarball predicate: a partial download is refused |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
 | `the updater compares source-commit to decide "do I already have this"` | manifest: the source commit is carried, not truncated |
+| `the updater compares the manifest's source-commit against` | manifest: the runtime's BUILD-INFO is read straight out of a tarball |
 | `the value names a symlink and, for the updater, part of a URL` | runtime-env: channel: an unknown value falls back to stable and says so |
 | `the version string is identical across every nightly between releases,` | ableton-update: a new build with the same version is still an update |
 | `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
+| `this is the exact shape that made the first stable manifest invalid` | manifest: a BUILD-INFO with no source-commit produces a manifest that is refused |
 | `this is the only runtime artifact the nightly channel publishes, so` | runtime-env: tarball predicate: a nightly label is accepted |
 | `two installs of one build collapse to one entry, and the loser is set` | migrate-layout: two rollbacks holding one build keep one and set the rest aside |
