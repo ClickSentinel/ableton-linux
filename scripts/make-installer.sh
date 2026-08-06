@@ -94,7 +94,7 @@ mkdir -p "$kit/bin" "$kit/dist" "$kit/vendor"
 cp -a "$tarball" "$tarball.sha256" "$kit/dist/"
 cp -a "dist/BUILD-INFO-${VERSION}.txt" "$kit/" 2>/dev/null || true
 mkdir -p "$kit/scripts"
-cp -a scripts/runtime-env.sh scripts/ableton-runtime scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
+cp -a scripts/runtime-env.sh scripts/ableton-runtime scripts/ableton-update scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
       scripts/ableton-live scripts/max9 scripts/detect-scale.sh \
       scripts/detect-theme.sh scripts/check-live-audio.sh scripts/setup-link.sh \
       "$kit/scripts/"
@@ -133,6 +133,15 @@ install -m644 vendor/fonts/bitstream-vera/*.ttf \
               vendor/fonts/bitstream-vera/COPYRIGHT.TXT \
               "$kit/vendor/fonts/bitstream-vera/"
 cp -a VERSION README.md TROUBLESHOOTING.md BUILDING.md "$kit/"
+# The kit says which channel it belongs to. Without it install.sh promotes into
+# whatever channel the machine already followed, so installing a nightly while
+# configured for stable would point `stable` at a nightly build.
+#
+# One word rather than the manifest: the manifest carries the sealed kit's own
+# checksum and so cannot exist until after this is packed. They answer different
+# questions anyway - the manifest says what a channel currently points at, for
+# the updater; this says what this kit is, for the installer holding it.
+printf '%s\n' "${ABLETON_CHANNEL_PUBLISH:-stable}" > "$kit/channel"
 install -m755 dist/cabextract-static "$kit/bin/cabextract"
 install -m755 dist/ableton-linkd "$kit/bin/ableton-linkd"
 # Ableton Link is GPLv2+ with no linking exception, so the built daemon's

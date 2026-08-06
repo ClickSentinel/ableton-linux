@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-241 tests across 13 suites. See [README.md](README.md) for how to run
+266 tests across 14 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -19,10 +19,11 @@ for which run on a PR.
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/install-runs.bats](#install-runs) — 8 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 11 test(s)
 - [tests/unit/manifest.bats](#manifest) — 14 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 25 test(s)
 - [tests/unit/ableton-runtime.bats](#ableton-runtime) — 21 test(s)
+- [tests/unit/ableton-update.bats](#ableton-update) — 22 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 52 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
@@ -275,6 +276,9 @@ tree ships.
 | 6 | the channel stays a symlink across a second install | — |
 | 7 | after installing, the resolver points at a real build directory | the resolver, the process scan and the install must all name the same |
 | 8 | a flat install is migrated by the installer, not just by the library | an existing flat install is what nearly every user has |
+| 9 | a kit declares its channel and the installer promotes into it | — |
+| 10 | installing records the channel, so the updater follows it | — |
+| 11 | a kit with no channel marker is stable, as every older kit was | — |
 
 <a id="manifest"></a>
 
@@ -395,6 +399,48 @@ resolve through it instead of naming a directory.
 | 19 | a downgrade is named as a downgrade | forward Wine supports, backward it does not - the wording has to differ |
 | 20 | use with no argument refuses when there is no terminal | a script calling `use` with no argument must fail, not block forever |
 | 21 | use with no argument leaves the channel alone | — |
+
+<a id="ableton-update"></a>
+
+## tests/unit/ableton-update.bats
+
+
+scripts/ableton-update — deciding whether to replace the runtime.
+
+Everything the updater does before it downloads is a refusal: same build,
+unknown channel, incomplete manifest, a Wine base it cannot take a Wire back
+across, a runtime something is still running from. Those refusals are the
+feature — the download is the easy part — so this file is mostly about them.
+
+Nothing here reaches the network. ABLETON_MANIFEST_URL points curl at a
+file:// URL, which is the same code path a real channel takes.
+
+  ./tests/run.sh tests/unit/ableton-update.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | the same build is recognised, and nothing happens | — |
+| 2 | a new build with the same version is still an update | the version string is identical across every nightly between releases, |
+| 3 | --check installs nothing | — |
+| 4 | a channel switch to a build already in the store downloads nothing | — |
+| 5 | switching channel records the choice | — |
+| 6 | switching channel leaves the other channel where it was | a switch must move the channel it names, and only that one |
+| 7 | --check does not move a channel even when the build is present | --check is a question, and asking it must not answer it |
+| 8 | an unknown channel is refused before any fetch | a channel names a symlink and selects a URL; it is user configuration |
+| 9 | --channel with nothing after it is refused, and says so | an empty value must not silently mean "the channel you are on" — a |
+| 10 | an unknown option is refused | — |
+| 11 | a manifest that cannot be fetched is an error, not an update | — |
+| 12 | an incomplete manifest is refused | a half-read manifest cannot answer "is this newer" or "does this |
+| 13 | a Wine base change is refused | a Wire is bound to its base by .update-timestamp and cannot be taken |
+| 14 | --yes does not override a Wine base change | — |
+| 15 | it refuses while something is running from the runtime | replacing the tree under a running Live is how a session is lost |
+| 16 | with no terminal to ask on it stops rather than assuming yes | an unattended run must not hang waiting on a prompt nobody can answer |
+| 17 | a checksum mismatch stops the install | the checksum is the only thing making the manifest's URL trustworthy |
+| 18 | a matching checksum reaches the installer | — |
+| 19 | the installer is fetched from beside the manifest | releases move, and the manifest must stay the thing that locates the |
+| 20 | a downgrade is named as one | — |
+| 21 | a machine with nothing installed is offered the build | — |
+| 22 | --help says what it does without touching anything | — |
 
 <a id="runtime-env"></a>
 
@@ -525,18 +571,25 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 
 | Reference | Tests |
 | --- | --- |
+| `--check is a question, and asking it must not answer it` | ableton-update: --check does not move a channel even when the build is present |
 | `/proc/PID/exe reports resolved paths, so a channel-path root matches no` | runtime-env: runtime root: resolves to the build, not to the channel link |
 | `11.11 and 11.14 trees coexist on the development machine and are not` | migrate-layout: runtimes from other Wine bases are left alone |
 | `2026.07.29.1 appears four times on the dev machine under two patch stacks` | runtime-env: two builds of one version under different patch stacks get different ids |
+| `a Wire is bound to its base by .update-timestamp and cannot be taken` | ableton-update: a Wine base change is refused |
+| `a channel names a symlink and selects a URL; it is user configuration` | ableton-update: an unknown channel is refused before any fetch |
 | `a channel pointing at a pruned entry is a broken install produced by` | migrate-layout: retention never removes what the channel points at |
 | `a dangling channel must not resolve to nothing and strand the launcher` | runtime-env: runtime root: a dangling channel falls back rather than resolving empty |
 | `a debug tree rolled back by the selector bug has no dist-version at` | migrate-layout: a rollback that cannot be named moves aside instead of blocking |
+| `a half-read manifest cannot answer "is this newer" or "does this` | ableton-update: an incomplete manifest is refused |
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
 | `a script calling `use` with no argument must fail, not block forever` | ableton-runtime: use with no argument refuses when there is no terminal |
 | `a stale exported ABLETON_WINE_ROOT from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
+| `a switch must move the channel it names, and only that one` | ableton-update: switching channel leaves the other channel where it was |
+| `an empty value must not silently mean "the channel you are on"` | ableton-update: --channel with nothing after it is refused, and says so |
 | `an existing flat install is what nearly every user has` | install-runs: a flat install is migrated by the installer, not just by the library |
 | `an install that predates the migration must still resolve and launch` | runtime-env: runtime root: falls back to the legacy path before migrating |
 | `an older .run over a migrated install writes a flat tree at the legacy` | migrate-layout: an older installer's tree beside a migrated one is adopted when newer |
+| `an unattended run must not hang waiting on a prompt nobody can answer` | ableton-update: with no terminal to ask on it stops rather than assuming yes |
 | `bin/ and lib/ with no share/` | runtime-env: tarball predicate: a debug tree is refused |
 | `commit 9cba3b0` | launcher: gray text: the dark fallback lands on classic GrayText |
 | `commit e221cc4` | release: VERSION has a matching CHANGELOG entry at the top |
@@ -560,6 +613,8 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `nothing is left behind for an older .run to overwrite, and a migrated` | migrate-layout: nothing remains at the legacy path |
 | `observed during the first real migration` | runtime-env: live pids: a process that exits mid-scan is skipped, not an error |
 | `pruning on behalf of one channel must not strand another` | runtime-env: retention never removes what a DIFFERENT channel points at |
+| `releases move, and the manifest must stay the thing that locates the` | ableton-update: the installer is fetched from beside the manifest |
+| `replacing the tree under a running Live is how a session is lost` | ableton-update: it refuses while something is running from the runtime |
 | `scoping` | runtime-env: runtime pids: a process from another Wine install is ignored |
 | `scripts/ableton-live` | launcher-cli: a stale wineserver is killed and the session booted before registry writes<br>launcher: windowmetrics: a value wrapped across continuation lines is rejoined |
 | `scripts/build-audit.sh` | patch-stack: audit: every wine patch is registered in FINGERPRINTS or STAMP_ONLY |
@@ -573,6 +628,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
 | `the channel is user configuration and must never choose a host` | manifest: an unknown channel resolves no URL at all |
 | `the channel is what the launcher resolves through` | ableton-runtime: use refuses a name that is not installed |
+| `the checksum is the only thing making the manifest's URL trustworthy` | ableton-update: a checksum mismatch stops the install |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
@@ -589,5 +645,6 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
 | `the updater compares source-commit to decide "do I already have this"` | manifest: the source commit is carried, not truncated |
 | `the value names a symlink and, for the updater, part of a URL` | runtime-env: channel: an unknown value falls back to stable and says so |
+| `the version string is identical across every nightly between releases,` | ableton-update: a new build with the same version is still an update |
 | `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
 | `two installs of one build collapse to one entry, and the loser is set` | migrate-layout: two rollbacks holding one build keep one and set the rest aside |

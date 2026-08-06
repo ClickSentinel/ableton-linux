@@ -31,6 +31,7 @@ WINE_ROOT_DIR="$(dirname "$WINE_ROOT")"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 stage=""
 backup=""
+CHANNEL="stable"
 replaced=""
 replaced_orig=""
 STORE=""
@@ -177,6 +178,19 @@ if [ -n "${ABLETON_WINE_ROOT:-}" ]; then
 else
     STORE="$(ableton_container_root)"
     mkdir -p "$STORE"
+    # Which channel this kit belongs to, not which one the machine follows.
+    # Installing a nightly while configured for stable must not point `stable`
+    # at a nightly build. Kits older than this say nothing, and stable is what
+    # they all were.
+    CHANNEL="stable"
+    for _c in "$here/../channel" "$root/dist/channel"; do
+        [ -r "$_c" ] || continue
+        case "$(head -1 "$_c" | tr -d '[:space:]')" in
+            stable)  CHANNEL=stable ;;
+            nightly) CHANNEL=nightly ;;
+        esac
+        break
+    done
 fi
 
 echo "== stage and validate patched Wine =="
@@ -281,9 +295,13 @@ if [ -n "$STORE" ]; then
     mv "$candidate" "$STORE/$id"
     promoted=1
     WINE_ROOT="$STORE/$id"
-    ln -sfn "$id" "$STORE/$(ableton_channel)"
+    ln -sfn "$id" "$STORE/$CHANNEL"
     [ -z "$replaced" ] || { rm -rf "$replaced"; replaced=""; replaced_orig=""; }
-    echo "   $id"
+    echo "   $id  [$CHANNEL]"
+    # Follow what was last installed. Downloading the nightly installer is the
+    # choice; nobody should have to also edit a file to make it stick.
+    _cf="${XDG_CONFIG_HOME:-$HOME/.config}/ableton-wine/channel"
+    mkdir -p "$(dirname "$_cf")" && printf '%s\n' "$CHANNEL" > "$_cf"
     # After the promote, never before: a failure earlier must not leave a user
     # with neither the new runtime nor the old one.
     ableton_prune_runtimes
@@ -309,6 +327,7 @@ install -m755 "$here/ableton-live" "$BIN/ableton-live"
 # The store makes rollback possible; this is what exposes it. Installed beside
 # the launcher because it is a user-facing command, not a helper.
 install -m755 "$here/ableton-runtime" "$BIN/ableton-runtime"
+install -m755 "$here/ableton-update" "$BIN/ableton-update"
 
 echo "== install detection libs -> ~/.local/share/ableton-wine =="
 # The launcher sources these on every start (DPI auto-calibration, light/dark theme sync).
