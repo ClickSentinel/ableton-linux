@@ -253,7 +253,7 @@ ableton_buildinfo_field() {
 # times under two different patch stacks, and 2026.07.23.1 covers both the 11.11
 # and the 11.14 tree — keyed on version they would collide.
 ableton_runtime_id() {
-    local _dir="$1" _info _ver _disc
+    local _dir="$1" _info _ver _disc _kind
     _info="$_dir/ABLETON-WINE-BUILD-INFO.txt"
     [ -r "$_info" ] || return 0
 
@@ -264,6 +264,14 @@ ableton_runtime_id() {
     [ -n "$_disc" ] || _disc="$(ableton_buildinfo_field "$_info" patch-stack)"
     [ -n "$_disc" ] || return 0
     _disc="${_disc:0:7}"
+
+    # A nightly says so here rather than in dist-version. That field is the date
+    # the build happened, for every build, which is the one question a directory
+    # name has to answer -- putting the kind there too would mean either a second
+    # date or a second separator, and the id is <version>+<discriminator> with
+    # exactly one. So: 2026.08.06.1+nightly.badafaf.
+    _kind="$(ableton_buildinfo_field "$_info" build-kind)"
+    [ -z "$_kind" ] || _disc="$_kind.$_disc"
 
     # The id becomes a directory name, so it is validated rather than trusted: a
     # BUILD-INFO is plain text inside a tarball and nothing upstream of here

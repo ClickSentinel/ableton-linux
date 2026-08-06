@@ -51,6 +51,7 @@ jobs:
     outputs:
       build: ${{ steps.decide.outputs.build }}
       label: ${{ steps.decide.outputs.label }}
+      dist:  ${{ steps.decide.outputs.dist }}
     steps:
       - name: Has this commit already been published?
         id: decide
@@ -65,17 +66,21 @@ jobs:
           # patched Wine source tree inside the container, not a commit here.
           published="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/nightly" \
               --jq .object.sha 2>/dev/null || true)"
-          version="$(gh api "repos/$GITHUB_REPOSITORY/contents/VERSION?ref=$GITHUB_SHA" \
-              --jq .content | base64 -d | tr -d '[:space:]')"
-          # The build's own date, not the release's. VERSION stays put -- it is
-          # committed and asserted against CHANGELOG and BUILD-INFO, so a nightly
-          # must not bump it -- but inheriting its date meant a nightly built
-          # three weeks into a cycle still announced the date of the last
-          # release. For a date-based scheme that is the name stating something
-          # false. The base version stays in front, so the label still says which
-          # release this descends from.
-          today="$(date -u +%Y%m%d)"
-          printf 'label=%s+nightly.%s.%s\n' "$version" "$today" "${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+          # A build is named for the day it was built. That is the question a
+          # runtime directory has to answer, and for a nightly the committed
+          # VERSION cannot: it names the last release, so a nightly three weeks
+          # into a cycle would announce a date three weeks stale. VERSION itself
+          # is never touched -- it is committed and asserted against CHANGELOG
+          # and BUILD-INFO.
+          #
+          # `nightly` rides in the discriminator rather than the version, so the
+          # date appears once and the id keeps its single separator:
+          #   dist-version  2026.08.06.1
+          #   directory     2026.08.06.1+nightly.badafaf
+          # See ableton_runtime_id.
+          dist="$(date -u +%Y.%m.%d).1"
+          printf 'dist=%s\n'  "$dist" >> "$GITHUB_OUTPUT"
+          printf 'label=%s+nightly.%s\n' "$dist" "${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
           if [ "${FORCE:-false}" = "true" ]; then
               echo "forced: building even if nothing changed"
@@ -97,6 +102,7 @@ jobs:
       contents: write
     env:
       LABEL: ${{ needs.check.outputs.label }}
+      DIST:  ${{ needs.check.outputs.dist }}
     steps:
       - uses: actions/checkout@v7
 
@@ -121,8 +127,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # ABLETON_DIST_VERSION and ABLETON_BUILD_KIND go to the build, not just to
+      # the packaging: they land in the runtime's own BUILD-INFO, which is what
+      # names the installed directory and what the updater compares against.
+      # Stamping only the installer would leave the tree a user actually runs
+      # claiming the last release's date.
       - name: Build Wine + PipeASIO + ableton-linkd
-        run: ENGINE=docker JOBS="$(nproc)" ./build.sh
+        run: |
+          ENGINE=docker JOBS="$(nproc)" \
+          ABLETON_DIST_VERSION="$DIST" ABLETON_BUILD_KIND=nightly \
+          ./build.sh
 
       # container-build.sh writes dist/ and .ccache/ as the container's root
       # under plain `docker run`; the later steps run as the unprivileged runner.

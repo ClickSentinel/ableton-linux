@@ -7,7 +7,16 @@ SRC=/src
 OUT=/out
 WORK=/work
 JOBS="${JOBS:-$(nproc)}"
-VERSION="$(cat "$SRC/VERSION")"
+# What this build calls itself. A release takes it from the committed VERSION.
+# A nightly overrides it with the date the build actually happened, because that
+# is the question a user asks of a runtime directory and nothing else in the name
+# answers it. VERSION itself is never touched: it is committed and asserted
+# against CHANGELOG and BUILD-INFO.
+VERSION="${ABLETON_DIST_VERSION:-$(cat "$SRC/VERSION")}"
+# Releases have no kind. A nightly says so, and ableton_runtime_id folds it into
+# the discriminator -- so the directory is 2026.08.06.1+nightly.badafaf: the date
+# it was built, that it is a nightly, and which commit. Once each, one separator.
+BUILD_KIND="${ABLETON_BUILD_KIND:-}"
 NAME="wine-d2d1-nspa-11.13"
 CONFIGURE_PREFIX="${INSTALL_PREFIX:?build.sh must pass INSTALL_PREFIX}"
 [ "$(basename "$CONFIGURE_PREFIX")" = "$NAME" ] || {
@@ -244,6 +253,7 @@ built_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 build_info="$PREFIX_ROOT/ABLETON-WINE-BUILD-INFO.txt"
 {
     echo "dist-version: $VERSION"
+    [ -z "$BUILD_KIND" ] || echo "build-kind:   $BUILD_KIND"
     echo "source-commit: $source_commit"
     echo "built-at:     $built_at"
     echo "wine:         $("$PREFIX_ROOT/bin/wine" --version)"
