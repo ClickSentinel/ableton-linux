@@ -104,8 +104,16 @@ kit_script_names() {
     grep -qE '^cp -a desktop "\$kit/desktop"' "$MK" || {
         echo "make-installer.sh no longer stages desktop/ — install.sh reads \$root/desktop/*" >&2
         false; }
-    grep -qE '^cp -a vendor/winetricks vendor/winetricks-cache' "$MK" || {
-        echo "make-installer.sh no longer stages the winetricks payloads — setup-prefix.sh needs them" >&2
+    grep -qE '^cp -a vendor/winetricks "' "$MK" || {
+        echo "make-installer.sh no longer stages winetricks itself — setup-prefix.sh needs it" >&2
+        false; }
+    grep -qF 'ls-files vendor/winetricks-cache' "$MK" || {
+        echo "make-installer.sh no longer stages the winetricks cache by tracked path" >&2
+        false; }
+    # guards: staging the cache directory wholesale ships whatever the build
+    # machine downloaded — 1.6G against CI's 112M, measured 2026-08-05
+    ! grep -qE '^cp -a vendor/winetricks-cache|winetricks vendor/winetricks-cache' "$MK" || {
+        echo "make-installer.sh stages the whole winetricks cache again" >&2
         false; }
 }
 
