@@ -548,6 +548,28 @@ ableton_manifest_installer_url() {
     printf '%s/%s\n' "${_manifest%/*}" "$_name"
 }
 
+# The runtime's own BUILD-INFO, read out of a tarball without unpacking it.
+#
+# This, and not dist/BUILD-INFO-<version>.txt, is what a manifest must be written
+# from. The two are different documents: the committed one is the release's
+# declared provenance, written for release notes, and the tarball's is the file
+# that lands on the user's machine as $root/ABLETON-WINE-BUILD-INFO.txt — which
+# is exactly what the updater compares the manifest against. Writing the manifest
+# from the other one compares two documents and hopes they agree.
+#
+# They do not currently agree: the committed BUILD-INFO for 2026.08.04.1 carries
+# neither source-commit nor built-at, because the release predates both fields.
+# A manifest written from it fails validation, which is the right outcome and the
+# wrong reason.
+#
+# Half a second on a 60 MB tarball, at package time only.
+ableton_tarball_buildinfo() {
+    local _t="$1"
+    [ -f "$_t" ] || return 1
+    zstd -dc --long=27 "$_t" 2>/dev/null \
+        | tar -xO --wildcards '*/ABLETON-WINE-BUILD-INFO.txt' 2>/dev/null
+}
+
 # Write one. Called by the publish step; kept here so the writer and the reader
 # cannot drift apart.
 ableton_manifest_write() {

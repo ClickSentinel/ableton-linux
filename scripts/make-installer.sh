@@ -195,14 +195,23 @@ chmod +x "$out"
 # updater resolves that name against the manifest's own URL, so naming the
 # versioned artifact would send it to a URL that stops existing next release.
 # Same bytes either way, so the checksum is the built file's.
-info="dist/BUILD-INFO-${VERSION}.txt"
-if [ -r "$info" ]; then
+# Read from the runtime being packed, not from dist/BUILD-INFO-<version>.txt:
+# the tarball's copy is the one that lands on the user's machine and the one the
+# updater compares against. See ableton_tarball_buildinfo.
+info="$stage/runtime-BUILD-INFO.txt"
+if ableton_tarball_buildinfo "$tarball" > "$info" && [ -s "$info" ]; then
     ableton_manifest_write "${ABLETON_CHANNEL_PUBLISH:-stable}" "$info" \
         "${ABLETON_PUBLISH_AS:-$(basename "$out")}" \
         "$(awk '{print $1}' "$out.sha256")" > dist/manifest.txt
+    ableton_manifest_valid dist/manifest.txt || {
+        echo "!! the manifest this build would publish is incomplete:" >&2
+        sed 's/^/   /' dist/manifest.txt >&2
+        echo "   the runtime's BUILD-INFO is missing a field -- rebuild it" >&2
+        exit 1; }
     echo "   manifest: dist/manifest.txt -> ${ABLETON_PUBLISH_AS:-$(basename "$out")}"
 else
-    echo "   (no dist/BUILD-INFO-${VERSION}.txt: skipping the manifest)"
+    echo "!! could not read BUILD-INFO out of $(basename "$tarball")" >&2
+    exit 1
 fi
 
 echo "== [5/5] wrapper self-check =="

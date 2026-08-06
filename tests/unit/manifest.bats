@@ -119,3 +119,34 @@ setup() {
     [ "$(ableton_manifest_installer_url https://h/x/y/manifest.txt install.run)" \
       = "https://h/x/y/install.run" ]
 }
+
+# --- where the manifest's facts come from -------------------------------------
+# guards: the updater compares the manifest's source-commit against
+# $root/ABLETON-WINE-BUILD-INFO.txt, which comes out of the tarball. Writing the
+# manifest from dist/BUILD-INFO-<version>.txt instead compares two documents and
+# hopes they agree -- and for 2026.08.04.1 they demonstrably do not, because the
+# committed one predates both fields.
+
+@test "the runtime's BUILD-INFO is read straight out of a tarball" {
+    local d="$BATS_TEST_TMPDIR/rt/wine-x"; mkdir -p "$d"
+    printf 'dist-version: 1\nsource-commit: abc123\nbuilt-at:     t\nwine:         wine-11.13\n' \
+        > "$d/ABLETON-WINE-BUILD-INFO.txt"
+    tar -C "$BATS_TEST_TMPDIR/rt" -cf - wine-x | zstd -q -o "$BATS_TEST_TMPDIR/rt.tar.zst"
+
+    run ableton_tarball_buildinfo "$BATS_TEST_TMPDIR/rt.tar.zst"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"source-commit: abc123"* ]]
+}
+
+@test "a tarball that is not there is an error, not an empty BUILD-INFO" {
+    run ableton_tarball_buildinfo "$BATS_TEST_TMPDIR/absent.tar.zst"
+    [ "$status" -ne 0 ]
+}
+
+# guards: this is the exact shape that made the first stable manifest invalid
+@test "a BUILD-INFO with no source-commit produces a manifest that is refused" {
+    printf 'dist-version: 2026.08.04.1\nwine:         wine-11.13\npatches:      65\n' > "$TREE"
+    ableton_manifest_write stable "$TREE" x.run abc > "$M"
+    run ableton_manifest_valid "$M"
+    [ "$status" -ne 0 ]
+}

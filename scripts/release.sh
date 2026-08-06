@@ -97,7 +97,12 @@ cp "$run" "$stage/install-ableton-latest.run"
 # makes the updater refuse every build on the channel, invisibly, until a user
 # runs it.
 manifest="$stage/manifest.txt"
-ableton_manifest_write stable "$info" install-ableton-latest.run \
+# From the runtime being shipped, not from $info: the committed BUILD-INFO is the
+# release's declared provenance and the tarball's is what the updater will compare
+# against on the user's machine. See ableton_tarball_buildinfo.
+ableton_tarball_buildinfo "$tarball" > "$stage/runtime-BUILD-INFO.txt" || {
+    echo "!! could not read BUILD-INFO out of $tarball" >&2; exit 1; }
+ableton_manifest_write stable "$stage/runtime-BUILD-INFO.txt" install-ableton-latest.run \
     "$(awk '{print $1}' "$stage/install-ableton-latest.run.sha256")" > "$manifest"
 ableton_manifest_valid "$manifest" || {
     echo "!! the manifest this would publish is incomplete" >&2; sed 's/^/   /' "$manifest" >&2; exit 1; }
