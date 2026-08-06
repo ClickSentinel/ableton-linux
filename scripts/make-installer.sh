@@ -163,6 +163,20 @@ cat "$payload" >> "$out"
 chmod +x "$out"
 ( cd dist && sha256sum "$(basename "$out")" > "$(basename "$out").sha256" )
 
+# The channel manifest, beside the kit. Written from the runtime's own
+# BUILD-INFO by the same function that reads it, so a manifest this repo
+# publishes is one its updater accepts - the round trip is tested. The publish
+# step uploads it; nothing here decides which channel a build is for, so it
+# takes one, defaulting to stable.
+info="dist/BUILD-INFO-${VERSION}.txt"
+if [ -r "$info" ]; then
+    ableton_manifest_write "${ABLETON_CHANNEL_PUBLISH:-stable}" "$info" \
+        "$(basename "$out")" "$(awk '{print $1}' "$out.sha256")" > dist/manifest.txt
+    echo "   manifest: dist/manifest.txt"
+else
+    echo "   (no dist/BUILD-INFO-${VERSION}.txt: skipping the manifest)"
+fi
+
 echo "== [5/5] wrapper self-check =="
 sh "$out" --help >/dev/null
 echo

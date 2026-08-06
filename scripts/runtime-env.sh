@@ -495,3 +495,70 @@ ableton_remove_runtimes() {
         rm -rf "$_d" && echo "removed $_d"
     done
 }
+
+# --- the manifest ------------------------------------------------------------
+# A channel publishes one small document saying what it currently points at.
+# Everything before this re-derived that by parsing artifact filenames, which is
+# the single decision behind the selector defect, the packing defect, the
+# retention tie and the update prompt having nothing to compare.
+#
+# Same `key: value` shape as BUILD-INFO, so ableton_buildinfo_field reads it and
+# nothing needs jq:
+#
+#   channel:       stable
+#   dist-version:  2026.08.04.1
+#   installer:     install-ableton-latest.run
+#   sha256:        …
+#   source-commit: …
+#   built-at:      2026-08-04T13:49:38Z
+#   wine:          wine-11.13
+
+# Where a channel's manifest lives. A table rather than string-building from the
+# channel name: the value is user configuration, and the one thing it must never
+# do is choose a host. ABLETON_MANIFEST_URL overrides it for testing.
+ableton_manifest_url() {
+    local _c="${1:-$(ableton_channel)}"
+    [ -z "${ABLETON_MANIFEST_URL:-}" ] || { printf '%s\n' "$ABLETON_MANIFEST_URL"; return; }
+    case "$_c" in
+        stable)  printf '%s\n' "https://github.com/shibco/ableton-linux/releases/latest/download/manifest.txt" ;;
+        nightly) printf '%s\n' "https://github.com/ClickSentinel/ableton-linux/releases/download/nightly/manifest.txt" ;;
+        *)       return 1 ;;
+    esac
+}
+
+# The installer a manifest names, resolved against the manifest's own location.
+# Relative, so moving a release does not strand it.
+ableton_manifest_installer_url() {
+    local _manifest="$1" _name="$2"
+    printf '%s/%s\n' "${_manifest%/*}" "$_name"
+}
+
+# Write one. Called by the publish step; kept here so the writer and the reader
+# cannot drift apart.
+ableton_manifest_write() {
+    local _channel="$1" _info="$2" _installer="$3" _sha="$4"
+    [ -r "$_info" ] || { echo "!! no BUILD-INFO at $_info" >&2; return 1; }
+    printf 'channel:       %s\n' "$_channel"
+    printf 'dist-version:  %s\n' "$(ableton_buildinfo_field "$_info" dist-version)"
+    printf 'installer:     %s\n' "$_installer"
+    printf 'sha256:        %s\n' "$_sha"
+    printf 'source-commit: %s\n' "$(ableton_buildinfo_field "$_info" source-commit)"
+    printf 'built-at:      %s\n' "$(ableton_buildinfo_field "$_info" built-at)"
+    printf 'wine:          %s\n' "$(ableton_buildinfo_field "$_info" wine)"
+}
+
+# Is a manifest usable? Refuses rather than half-applying: a field missing here
+# means the updater cannot answer "is this newer" or "will this change the Wine
+# base", which are the two questions it exists to answer.
+ableton_manifest_valid() {
+    local _f="$1" _k
+    [ -r "$_f" ] || return 1
+    for _k in channel dist-version installer sha256 source-commit built-at; do
+        [ -n "$(ableton_buildinfo_field "$_f" "$_k")" ] || return 1
+    done
+    # The installer name reaches a URL and a filename. Nothing else in it.
+    case "$(ableton_buildinfo_field "$_f" installer)" in
+        */*|*..*|"") return 1 ;;
+    esac
+    return 0
+}

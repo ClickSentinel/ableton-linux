@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-227 tests across 12 suites. See [README.md](README.md) for how to run
+241 tests across 13 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -20,6 +20,7 @@ for which run on a PR.
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/install-runs.bats](#install-runs) — 8 test(s)
+- [tests/unit/manifest.bats](#manifest) — 14 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 25 test(s)
 - [tests/unit/ableton-runtime.bats](#ableton-runtime) — 21 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 52 test(s)
@@ -275,6 +276,40 @@ tree ships.
 | 7 | after installing, the resolver points at a real build directory | the resolver, the process scan and the install must all name the same |
 | 8 | a flat install is migrated by the installer, not just by the library | an existing flat install is what nearly every user has |
 
+<a id="manifest"></a>
+
+## tests/unit/manifest.bats
+
+
+scripts/runtime-env.sh — the channel manifest.
+
+A channel publishes one document saying what it points at. Everything before
+this re-derived that by parsing artifact filenames, which is the single
+decision behind the selector defect, the packing defect and the update prompt
+having nothing to compare.
+
+The writer and the reader live in the same file on purpose, and these tests
+round-trip them: a manifest this repo writes must be one this repo accepts.
+
+  ./tests/run.sh tests/unit/manifest.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | a manifest this repo writes is one it accepts | — |
+| 2 | every field survives the round trip | — |
+| 3 | the source commit is carried, not truncated | the updater compares source-commit to decide "do I already have this" |
+| 4 | writing refuses a tree with no BUILD-INFO | — |
+| 5 | a manifest missing built-at is refused | — |
+| 6 | a manifest missing the checksum is refused | — |
+| 7 | a missing manifest is refused, not treated as empty | — |
+| 8 | an installer name containing a path is refused | the installer name becomes both a URL component and a filename |
+| 9 | an installer name that is a URL is refused | — |
+| 10 | each channel has a manifest URL | — |
+| 11 | an unknown channel resolves no URL at all | the channel is user configuration and must never choose a host |
+| 12 | the manifest URL follows the configured channel | — |
+| 13 | an override wins, for testing against a local file | — |
+| 14 | the installer URL is resolved beside the manifest | moving a release must not strand the installer it names |
+
 <a id="migrate-layout"></a>
 
 ## tests/unit/migrate-layout.bats
@@ -518,6 +553,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `licence GPLv2+` | packaging: the kit ships the GPL source and licence Ableton Link requires |
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
 | `make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
+| `moving a release must not strand the installer it names` | manifest: the installer URL is resolved beside the manifest |
 | `names tie across every nightly between two releases, so ordering on` | migrate-layout: retention orders by built-at, not by the name |
 | `names tie across nightlies, so ordering is by built-at` | ableton-runtime: list is newest first |
 | `no released runtime carries source-commit` | runtime-env: a runtime without source-commit is named from its patch stack |
@@ -535,11 +571,13 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | runtime-env: the runtime wins over a debug tree sitting beside it |
 | `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
+| `the channel is user configuration and must never choose a host` | manifest: an unknown channel resolves no URL at all |
 | `the channel is what the launcher resolves through` | ableton-runtime: use refuses a name that is not installed |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
 | `the id becomes a directory name, and a BUILD-INFO is just text in a tarball` | runtime-env: a BUILD-INFO carrying path traversal is refused, not turned into a path |
+| `the installer name becomes both a URL component and a filename` | manifest: an installer name containing a path is refused |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
 | `the prefix cannot be taken back, so this must not happen quietly` | ableton-runtime: use refuses a base change with no terminal to ask on |
 | `the promote step and its dated rollback, which is where the store's` | install-runs: a second install promotes and leaves the previous runtime behind |
@@ -549,6 +587,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the same resolution a running process reports, so the two can be` | runtime-env: runtime root: matches what /proc would report for a process under it |
 | `the same-day counter must not be read as a date component` | runtime-env: tarball predicate: a partial download is refused |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
+| `the updater compares source-commit to decide "do I already have this"` | manifest: the source commit is carried, not truncated |
 | `the value names a symlink and, for the updater, part of a URL` | runtime-env: channel: an unknown value falls back to stable and says so |
 | `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
 | `two installs of one build collapse to one entry, and the loser is set` | migrate-layout: two rollbacks holding one build keep one and set the rest aside |
