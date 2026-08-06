@@ -22,6 +22,7 @@ APPS="$HOME/.local/share/applications"
 # behind a dangling channel.
 ableton_remove_runtimes
 rm -f  "$BIN"        && echo "removed $BIN"
+rm -f  "$HOME/.local/bin/ableton-runtime"
 rm -f  "$BIN".rollback-*
 # Stop and drop the Ableton Link session anchor's user unit (setup-link.sh
 # installs it under ~/.config); the daemon binary goes with share/ableton-wine.

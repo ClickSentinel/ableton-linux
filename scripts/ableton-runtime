@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# Which build of the runtime is in use, and switching between them.
+#
+#   ableton-runtime list          every installed build, newest first
+#   ableton-runtime path          the runtime root, for scripts and docs
+#   ableton-runtime use <name>    point the channel at a different build
+#   ableton-runtime use --previous
+#
+# The store makes rollback possible - one directory per build, a channel symlink
+# at the live one - and until this existed nothing exposed it. Rolling back was
+# `ln -sfn` against a name you had to go and look up.
+#
+# Switching does not disturb a running Live. The resolver returns the build the
+# channel names rather than the channel itself, so a session that has already
+# started keeps the build it started with; the next launch picks up the new one.
+set -uo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+for _l in "$here/runtime-env.sh" "$HOME/.local/share/ableton-wine/runtime-env.sh" \
+          "$here/../scripts/runtime-env.sh"; do
+    # shellcheck source=scripts/runtime-env.sh
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v ableton_wine_root >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/.local/share/ableton-wine" >&2; exit 1; }
+
+container="$(ableton_container_root)"
+channel="$container/stable"
+
+# Entries only: a directory the id reader can name. Quarantined trees
+# (superseded-*, failed-*) and the channel link are not builds you can choose.
+entries() {
+    local d
+    [ -d "$container" ] || return 0
+    for d in "$container"/*; do
+        [ -d "$d" ] && [ ! -L "$d" ] || continue
+        [ -n "$(ableton_runtime_id "$d")" ] || continue
+        printf '%s\n' "${d##*/}"
+    done
+}
+
+# Newest first, by built-at where present. Entries built before that field
+# existed have only their version, which ties across every nightly between two
+# releases - so they sort as a group rather than pretending to an order.
+sorted() {
+    local e at ver
+    while read -r e; do
+        [ -n "$e" ] || continue
+        at="$(ableton_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+        ver="$(ableton_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
+        if [ -n "$at" ]; then printf '1 %s\t%s\n' "$at" "$e"
+        else                  printf '0 %s\t%s\n' "$ver" "$e"; fi
+    done < <(entries) | sort -rV | cut -f2
+}
+
+cmd_path() {
+    local r; r="$(ableton_wine_root)"
+    [ -n "$r" ] || { echo "!! no runtime resolved" >&2; return 1; }
+    printf '%s\n' "$r"
+}
+
+cmd_list() {
+    local live e at n=0
+    live="$(readlink -f "$channel" 2>/dev/null || true)"
+    if [ ! -d "$container" ]; then
+        echo "No version store yet — this install predates it."
+        echo "  runtime: $(ableton_wine_root)"
+        return 0
+    fi
+    while read -r e; do
+        [ -n "$e" ] || continue
+        n=$((n+1))
+        at="$(ableton_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+        if [ "$container/$e" = "$live" ]; then printf '* %-28s %s\n' "$e" "${at:-—}"
+        else                                   printf '  %-28s %s\n' "$e" "${at:-—}"; fi
+    done < <(sorted)
+    [ "$n" -gt 0 ] || echo "No installed builds found in $container"
+    local aside
+    aside=$(find "$container" -maxdepth 1 \( -name 'superseded-*' -o -name 'failed-*' \) -type d 2>/dev/null | wc -l)
+    [ "$aside" -eq 0 ] || echo "  ($aside set-aside director$([ "$aside" = 1 ] && echo y || echo ies) not shown; nothing was deleted)"
+}
+
+cmd_use() {
+    local want="${1:-}" live cur
+    [ -n "$want" ] || { echo "!! usage: ableton-runtime use <name>|--previous" >&2; return 1; }
+    [ -d "$container" ] || { echo "!! no version store; nothing to switch between" >&2; return 1; }
+
+    if [ "$want" = "--previous" ]; then
+        cur="$(readlink "$channel" 2>/dev/null || true)"
+        want="$(sorted | grep -vxF "$cur" | head -1)"
+        [ -n "$want" ] || { echo "!! only one build is installed" >&2; return 1; }
+    fi
+
+    [ -d "$container/$want" ] || {
+        echo "!! no such build: $want" >&2
+        echo "   installed:" >&2; sorted | sed 's/^/     /' >&2
+        return 1; }
+    [ -n "$(ableton_runtime_id "$container/$want")" ] || {
+        echo "!! $want has no readable BUILD-INFO and is not a runtime you can select" >&2
+        return 1; }
+    [ -x "$container/$want/bin/wine" ] || {
+        echo "!! $want has no bin/wine; refusing to point the channel at it" >&2
+        return 1; }
+
+    ln -sfn "$want" "$channel"
+    echo "channel -> $want"
+    if ableton_runtime_busy; then
+        echo "note: something is still running from the previous build. It keeps"
+        echo "      the build it started with; this takes effect on the next launch."
+    fi
+}
+
+case "${1:-list}" in
+    list|ls)        cmd_list ;;
+    path|root)      cmd_path ;;
+    use|switch)     shift; cmd_use "${1:-}" ;;
+    -h|--help|help)
+        sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' ;;
+    *) echo "!! unknown command: $1 (try --help)" >&2; exit 1 ;;
+esac

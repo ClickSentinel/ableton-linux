@@ -30,7 +30,7 @@ After installing Live in `~/.wine-ableton`, start it and run the Live checks:
 
 ```bash
 ./beta/tester-kit/run-session --live-only \
-  --wine "$HOME/.local/opt/wine-d2d1-nspa-11.13/bin/wine"
+  --wine "$(ableton-runtime path)/bin/wine"
 ```
 
 The command asks you to open Learn View and one representative Direct2D or

@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-199 tests across 11 suites. See [README.md](README.md) for how to run
+213 tests across 12 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -21,6 +21,7 @@ for which run on a PR.
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/install-runs.bats](#install-runs) — 8 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 25 test(s)
+- [tests/unit/ableton-runtime.bats](#ableton-runtime) — 14 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 45 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
@@ -321,6 +322,38 @@ a throwaway tree.
 | 24 | removal refuses a pinned root that is not a runtime | a stale exported ABLETON_WINE_ROOT from a test session would otherwise |
 | 25 | removal refuses a pinned root of \$HOME | — |
 
+<a id="ableton-runtime"></a>
+
+## tests/unit/ableton-runtime.bats
+
+
+scripts/ableton-runtime — choosing which build is live.
+
+The store made rollback possible and nothing exposed it: switching meant
+`ln -sfn` against a name you had to look up. These cover the two things that
+matter — that `use` refuses anything that is not a runtime you could actually
+launch, and that `path` answers on both layouts, because scripts and docs
+resolve through it instead of naming a directory.
+
+  ./tests/run.sh tests/unit/ableton-runtime.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | path answers on the flat layout | docs and scripts resolve through this instead of naming a directory, |
+| 2 | path answers on the store, with the build rather than the channel | — |
+| 3 | path honours an explicit pin | — |
+| 4 | list marks the live build | — |
+| 5 | list is newest first | names tie across nightlies, so ordering is by built-at |
+| 6 | list says so when there is no store yet | — |
+| 7 | list does not offer quarantined trees, but mentions them | set-aside trees are not builds you can choose, but their existence is |
+| 8 | use retargets the channel | — |
+| 9 | use --previous picks the other build | — |
+| 10 | use --previous refuses when only one build is installed | — |
+| 11 | use refuses a name that is not installed | the channel is what the launcher resolves through — pointing it at |
+| 12 | use refuses a directory with no readable BUILD-INFO | — |
+| 13 | use refuses an entry with no wine binary | — |
+| 14 | use refuses when there is no store | — |
+
 <a id="runtime-env"></a>
 
 ## tests/unit/runtime-env.bats
@@ -460,6 +493,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `commit f0fc05e` | detect-scale: cosmic probe: a disabled lid never wins when it is marked non-primary<br>detect-scale: cosmic probe: a disabled lid never wins, even with no primary line |
 | `commit f84eaa4` | repo-hygiene: runtime name: every live file agrees on one wine-d2d1-nspa version |
 | `dated rollbacks are the reason the store exists` | migrate-layout: dated rollbacks are renamed by the build they hold |
+| `docs and scripts resolve through this instead of naming a directory,` | ableton-runtime: path answers on the flat layout |
 | `install.sh aborting on its own first lines, which no resolver test can` | install-runs: install.sh gets past its own initialisation |
 | `issue #106` | repo-hygiene: desktop entries validate after substitution |
 | `issue #32` | launcher: gray text: the blend is 45% towards MenuText, per channel, not symmetric |
@@ -469,6 +503,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
 | `make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
 | `names tie across every nightly between two releases, so ordering on` | migrate-layout: retention orders by built-at, not by the name |
+| `names tie across nightlies, so ordering is by built-at` | ableton-runtime: list is newest first |
 | `no released runtime carries source-commit` | runtime-env: a runtime without source-commit is named from its patch stack |
 | `nothing is left behind for an older .run to overwrite, and a migrated` | migrate-layout: nothing remains at the legacy path |
 | `observed during the first real migration` | runtime-env: live pids: a process that exits mid-scan is skipped, not an error |
@@ -479,9 +514,11 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `scripts/detect-scale.sh DPI policy` | detect-scale: block map: gnome scales collapse onto the ceil-based matched set<br>detect-scale: block map: non-gnome scales round to plain LogPixels with no IFEO |
 | `scripts/detect-theme.sh` | detect-theme: newest prefs dir: mtime wins, not a version sort<br>detect-theme: newest prefs dir: the sort -V trap case, stated explicitly |
 | `scripts/setup-run-header.sh line 19` | repo-hygiene: the installer header survives being run by a real POSIX sh |
+| `set-aside trees are not builds you can choose, but their existence is` | ableton-runtime: list does not offer quarantined trees, but mentions them |
 | `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | runtime-env: the runtime wins over a debug tree sitting beside it |
 | `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
+| `the channel is what the launcher resolves through` | ableton-runtime: use refuses a name that is not installed |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
