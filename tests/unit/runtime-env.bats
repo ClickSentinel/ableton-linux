@@ -489,3 +489,9 @@ make_tree() {
     [ -d "$C/2026.01.01.1+aaaaaaa" ] || { echo "nightly's target was pruned" >&2; false; }
     [ ! -e "$C/2026.02.01.1+aaaaaaa" ]           # the unpinned one goes
 }
+
+# guards: the nightly label carries the build's own date, so the selector has to
+# take a two-part label -- refusing it would leave that channel uninstallable
+@test "tarball predicate: a dated nightly label is accepted" {
+    ableton_is_runtime_tarball "wine-d2d1-nspa-11.13-2026.08.04.1+nightly.20260806.b46efb9.tar.zst"
+}

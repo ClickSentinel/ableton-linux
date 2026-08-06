@@ -67,7 +67,15 @@ jobs:
               --jq .object.sha 2>/dev/null || true)"
           version="$(gh api "repos/$GITHUB_REPOSITORY/contents/VERSION?ref=$GITHUB_SHA" \
               --jq .content | base64 -d | tr -d '[:space:]')"
-          printf 'label=%s+nightly.%s\n' "$version" "${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+          # The build's own date, not the release's. VERSION stays put -- it is
+          # committed and asserted against CHANGELOG and BUILD-INFO, so a nightly
+          # must not bump it -- but inheriting its date meant a nightly built
+          # three weeks into a cycle still announced the date of the last
+          # release. For a date-based scheme that is the name stating something
+          # false. The base version stays in front, so the label still says which
+          # release this descends from.
+          today="$(date -u +%Y%m%d)"
+          printf 'label=%s+nightly.%s.%s\n' "$version" "$today" "${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
           if [ "${FORCE:-false}" = "true" ]; then
               echo "forced: building even if nothing changed"
