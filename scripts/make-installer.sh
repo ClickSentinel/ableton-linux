@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Assemble dist/ableton-wine-setup-<VERSION>.run: setup-run-header.sh + a tar of the end-user kit
+# Assemble dist/ableton-wine-setup-<LABEL>.run: setup-run-header.sh + a tar of the end-user kit
 # (runtime tarball, scripts, winetricks payloads, static cabextract, ableton-linkd).
 # Repackaging only; Wine is not rebuilt.
 set -euo pipefail
@@ -23,6 +23,13 @@ command -v ableton_pick_tarball >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
 NAME="$(ableton_runtime_name)"
 VERSION="$(cat VERSION)"
+# What the finished installer is called, as opposed to which runtime goes in it.
+# They are the same for a release and differ for a nightly, which must not bump
+# VERSION: that file is committed, and repo-hygiene and release.bats both assert
+# its format and its pairing with CHANGELOG and BUILD-INFO. Everything that
+# locates a build input keeps using VERSION; only the artifact's name, the
+# header stamp and the version recorded into the installed kit use LABEL.
+LABEL="${ABLETON_DIST_LABEL:-$VERSION}"
 # ABLETON_RUNTIME_TARBALL pins one outright; otherwise the exact-version
 # runtime if present, else the newest properly-named one. Never a bare glob.
 if [ -n "${ABLETON_RUNTIME_TARBALL:-}" ]; then
@@ -132,7 +139,11 @@ mkdir -p "$kit/vendor/fonts/bitstream-vera"
 install -m644 vendor/fonts/bitstream-vera/*.ttf \
               vendor/fonts/bitstream-vera/COPYRIGHT.TXT \
               "$kit/vendor/fonts/bitstream-vera/"
-cp -a VERSION README.md TROUBLESHOOTING.md BUILDING.md "$kit/"
+cp -a README.md TROUBLESHOOTING.md BUILDING.md "$kit/"
+# The kit records LABEL, not VERSION: a nightly and the release it was built
+# after share a VERSION, and the installed tree has to be able to say which of
+# the two it is.
+printf '%s\n' "$LABEL" > "$kit/VERSION"
 # The kit says which channel it belongs to. Without it install.sh promotes into
 # whatever channel the machine already followed, so installing a nightly while
 # configured for stable would point `stable` at a nightly build.
@@ -165,8 +176,8 @@ payload="$stage/payload.tar"
 tar --sort=name --owner=0 --group=0 --numeric-owner \
     -cf "$payload" -C "$kit" .
 payload_sha="$(sha256sum "$payload" | awk '{print $1}')"
-out="dist/ableton-wine-setup-${VERSION}.run"
-sed -e "s/@VERSION@/$VERSION/g" -e "s/@PAYLOAD_SHA@/$payload_sha/g" \
+out="dist/ableton-wine-setup-${LABEL}.run"
+sed -e "s/@VERSION@/$LABEL/g" -e "s/@PAYLOAD_SHA@/$payload_sha/g" \
     scripts/setup-run-header.sh > "$out"
 cat "$payload" >> "$out"
 chmod +x "$out"
@@ -177,11 +188,19 @@ chmod +x "$out"
 # publishes is one its updater accepts - the round trip is tested. The publish
 # step uploads it; nothing here decides which channel a build is for, so it
 # takes one, defaulting to stable.
+#
+# The installer is named as *published*, which is not what it is called here:
+# both channels upload a second copy under a fixed name (install-ableton-latest
+# .run, install-ableton-nightly.run) so the download URL survives a release. The
+# updater resolves that name against the manifest's own URL, so naming the
+# versioned artifact would send it to a URL that stops existing next release.
+# Same bytes either way, so the checksum is the built file's.
 info="dist/BUILD-INFO-${VERSION}.txt"
 if [ -r "$info" ]; then
     ableton_manifest_write "${ABLETON_CHANNEL_PUBLISH:-stable}" "$info" \
-        "$(basename "$out")" "$(awk '{print $1}' "$out.sha256")" > dist/manifest.txt
-    echo "   manifest: dist/manifest.txt"
+        "${ABLETON_PUBLISH_AS:-$(basename "$out")}" \
+        "$(awk '{print $1}' "$out.sha256")" > dist/manifest.txt
+    echo "   manifest: dist/manifest.txt -> ${ABLETON_PUBLISH_AS:-$(basename "$out")}"
 else
     echo "   (no dist/BUILD-INFO-${VERSION}.txt: skipping the manifest)"
 fi
@@ -191,4 +210,4 @@ sh "$out" --help >/dev/null
 echo
 echo "OK: $out ($(du -h "$out" | cut -f1))"
 echo "Copy it (plus your Ableton installer .exe) to a USB stick and run:"
-echo "  sh /run/media/*/*/ableton-wine-setup-${VERSION}.run"
+echo "  sh /run/media/*/*/ableton-wine-setup-${LABEL}.run"

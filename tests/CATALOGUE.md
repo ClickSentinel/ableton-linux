@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-270 tests across 14 suites. See [README.md](README.md) for how to run
+272 tests across 14 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -19,7 +19,7 @@ for which run on a PR.
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/install-runs.bats](#install-runs) — 11 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 13 test(s)
 - [tests/unit/manifest.bats](#manifest) — 14 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 25 test(s)
 - [tests/unit/ableton-runtime.bats](#ableton-runtime) — 21 test(s)
@@ -279,6 +279,8 @@ tree ships.
 | 9 | a kit declares its channel and the installer promotes into it | — |
 | 10 | installing records the channel, so the updater follows it | — |
 | 11 | a kit with no channel marker is stable, as every older kit was | — |
+| 12 | uninstalling takes the recorded channel back | install.sh writes the channel file, so "removed everything install.sh |
+| 13 | uninstalling leaves anything else under the config directory alone | the config directory is not ours to clear out — only the one file is |
 
 <a id="manifest"></a>
 
@@ -605,6 +607,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `docs and scripts resolve through this instead of naming a directory,` | ableton-runtime: path answers on the flat layout |
 | `forward Wine supports, backward it does not - the wording has to differ` | ableton-runtime: a downgrade is named as a downgrade |
 | `install.sh aborting on its own first lines, which no resolver test can` | install-runs: install.sh gets past its own initialisation |
+| `install.sh writes the channel file, so "removed everything install.sh` | install-runs: uninstalling takes the recorded channel back |
 | `issue #106` | repo-hygiene: desktop entries validate after substitution |
 | `issue #32` | launcher: gray text: the blend is 45% towards MenuText, per channel, not symmetric |
 | `issue #38` | launcher-cli: a .als set goes straight to the Live exe, never through start.exe<br>launcher-cli: clips and packs route the same way as sets, case-insensitively |
@@ -635,6 +638,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the channel is user configuration and must never choose a host` | manifest: an unknown channel resolves no URL at all |
 | `the channel is what the launcher resolves through` | ableton-runtime: use refuses a name that is not installed |
 | `the checksum is the only thing making the manifest's URL trustworthy` | ableton-update: a checksum mismatch stops the install |
+| `the config directory is not ours to clear out` | install-runs: uninstalling leaves anything else under the config directory alone |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |

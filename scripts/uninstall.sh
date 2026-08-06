@@ -31,6 +31,13 @@ rm -f  "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/ableton-linkd.service" \
     && echo "removed ~/.config/systemd/user/ableton-linkd.service"
 systemctl --user daemon-reload 2>/dev/null || true
 rm -rf "$HOME/.local/share/ableton-wine" && echo "removed ~/.local/share/ableton-wine"
+# The channel install.sh recorded. Not prompted for, unlike the prefix: this is
+# one word of preference, not data, and leaving it behind means a later install
+# is followed by an `ableton-update` pointed at a channel nothing here chose.
+# The directory goes only if it is empty, so anything else under it survives.
+rm -f  "${XDG_CONFIG_HOME:-$HOME/.config}/ableton-wine/channel"
+rmdir  "${XDG_CONFIG_HOME:-$HOME/.config}/ableton-wine" 2>/dev/null \
+    && echo "removed ~/.config/ableton-wine" || true
 rm -f  "$APPS/ableton-live.desktop" "$APPS/wine-protocol-ableton.desktop" "$APPS/wine-extension-auz.desktop"
 rm -f  "$APPS/max9.desktop" "$APPS/wine-protocol-c74max.desktop" "$HOME/.local/bin/max9"
 rm -f  "$HOME/.local/share/mime/packages/x-wine-extension-auz.xml"

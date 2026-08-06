@@ -169,3 +169,71 @@ setup() {
     [ -L "$container/stable" ]
     [ "$(readlink "$container/stable")" != "2026.01.01.1+0ldbui1" ]  # channel moved on
 }
+
+# --- channels -----------------------------------------------------------------
+# Which kit you download is the channel choice. install.sh must follow the kit,
+# not the machine: installing a nightly while configured for stable would
+# otherwise point `stable` at a nightly build.
+
+@test "a kit declares its channel and the installer promotes into it" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set ABLETON_TEST_TARBALL to run this"
+    export XDG_CONFIG_HOME="$HOME/.config"
+    printf 'stable\n' > "$BATS_TEST_TMPDIR/pretend-stable"
+
+    # a checkout stands in for a kit: dist/channel is the same marker
+    mkdir -p "$BATS_TEST_TMPDIR/dist" && printf 'nightly\n' > "$REPO/dist/channel"
+    run env ABLETON_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    rm -f "$REPO/dist/channel"
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+
+    container="$(ableton_container_root)"
+    [ -L "$container/nightly" ] || { echo "no nightly channel: $(ls -1 "$container")" >&2; false; }
+    [ ! -e "$container/stable" ] || { echo "stable was pointed at a nightly build" >&2; false; }
+}
+
+@test "installing records the channel, so the updater follows it" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set ABLETON_TEST_TARBALL to run this"
+    export XDG_CONFIG_HOME="$HOME/.config"
+    printf 'nightly\n' > "$REPO/dist/channel"
+    env ABLETON_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    rm -f "$REPO/dist/channel"
+    [ "$(cat "$HOME/.config/ableton-wine/channel")" = "nightly" ]
+}
+
+@test "a kit with no channel marker is stable, as every older kit was" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set ABLETON_TEST_TARBALL to run this"
+    export XDG_CONFIG_HOME="$HOME/.config"
+    rm -f "$REPO/dist/channel"
+    env ABLETON_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    [ -L "$(ableton_container_root)/stable" ]
+}
+
+# guards: install.sh writes the channel file, so "removed everything install.sh
+# added" has to include it — left behind, a later install is followed by an
+# `ableton-update` pointed at a channel nothing on the machine chose
+@test "uninstalling takes the recorded channel back" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set ABLETON_TEST_TARBALL to run this"
+    export XDG_CONFIG_HOME="$HOME/.config"
+    env ABLETON_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    [ -r "$HOME/.config/ableton-wine/channel" ]
+
+    run setsid --wait bash "$REPO/scripts/uninstall.sh" --yes
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [ ! -e "$HOME/.config/ableton-wine/channel" ]
+}
+
+# guards: the config directory is not ours to clear out — only the one file is
+@test "uninstalling leaves anything else under the config directory alone" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set ABLETON_TEST_TARBALL to run this"
+    export XDG_CONFIG_HOME="$HOME/.config"
+    env ABLETON_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    printf 'keep me\n' > "$HOME/.config/ableton-wine/notes.txt"
+
+    setsid --wait bash "$REPO/scripts/uninstall.sh" --yes >/dev/null 2>&1
+    [ -r "$HOME/.config/ableton-wine/notes.txt" ]
+}
