@@ -13,15 +13,14 @@ for _l in "$(dirname "$0")/runtime-env.sh" \
 done
 command -v ableton_wine_root >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
-OPT="$(ableton_wine_root)"
 BIN="$HOME/.local/bin/ableton-live"
 APPS="$HOME/.local/share/applications"
 
-rm -rf "$OPT"        && echo "removed $OPT"
-for d in "$OPT"-rollback-* "$OPT".failed-*; do
-    [ -e "$d" ] || continue     # unmatched glob stays literal; skip, don't abort
-    rm -rf "$d" && echo "removed $d"
-done
+# Removing by sibling glob around one resolved path stopped working when the
+# runtime moved into the store: ableton_wine_root now names a build *inside* the
+# container, so `rm -rf` on it would take one entry and leave the rest orphaned
+# behind a dangling channel.
+ableton_remove_runtimes
 rm -f  "$BIN"        && echo "removed $BIN"
 rm -f  "$BIN".rollback-*
 # Stop and drop the Ableton Link session anchor's user unit (setup-link.sh

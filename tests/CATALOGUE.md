@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-190 tests across 11 suites. See [README.md](README.md) for how to run
+199 tests across 11 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -20,7 +20,7 @@ for which run on a PR.
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/install-runs.bats](#install-runs) — 8 test(s)
-- [tests/unit/migrate-layout.bats](#migrate-layout) — 16 test(s)
+- [tests/unit/migrate-layout.bats](#migrate-layout) — 25 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 45 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
@@ -311,6 +311,15 @@ a throwaway tree.
 | 14 | a live tree that cannot be named refuses, and moves nothing | the destructive case. Installing over a runtime that cannot be |
 | 15 | neither tree nameable refuses rather than picking one | — |
 | 16 | a symlink left by an earlier layout refuses instead of migrating | — |
+| 17 | retention keeps the configured number of entries, oldest first | — |
+| 18 | retention orders by built-at, not by the name | names tie across every nightly between two releases, so ordering on |
+| 19 | retention never removes what the channel points at | a channel pointing at a pruned entry is a broken install produced by |
+| 20 | retention leaves set-aside trees alone; they are not entries | — |
+| 21 | a nonsense retention value reverts to the default rather than pruning all | — |
+| 22 | removal takes the container and everything inside it | — |
+| 23 | removal handles a flat install that never migrated | — |
+| 24 | removal refuses a pinned root that is not a runtime | a stale exported ABLETON_WINE_ROOT from a test session would otherwise |
+| 25 | removal refuses a pinned root of \$HOME | — |
 
 <a id="runtime-env"></a>
 
@@ -437,9 +446,11 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `/proc/PID/exe reports resolved paths, so a channel-path root matches no` | runtime-env: runtime root: resolves to the build, not to the channel link |
 | `11.11 and 11.14 trees coexist on the development machine and are not` | migrate-layout: runtimes from other Wine bases are left alone |
 | `2026.07.29.1 appears four times on the dev machine under two patch stacks` | runtime-env: two builds of one version under different patch stacks get different ids |
+| `a channel pointing at a pruned entry is a broken install produced by` | migrate-layout: retention never removes what the channel points at |
 | `a dangling channel must not resolve to nothing and strand the launcher` | runtime-env: runtime root: a dangling channel falls back rather than resolving empty |
 | `a debug tree rolled back by the selector bug has no dist-version at` | migrate-layout: a rollback that cannot be named moves aside instead of blocking |
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
+| `a stale exported ABLETON_WINE_ROOT from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
 | `an existing flat install is what nearly every user has` | install-runs: a flat install is migrated by the installer, not just by the library |
 | `an install that predates the migration must still resolve and launch` | runtime-env: runtime root: falls back to the legacy path before migrating |
 | `an older .run over a migrated install writes a flat tree at the legacy` | migrate-layout: an older installer's tree beside a migrated one is adopted when newer |
@@ -457,6 +468,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `licence GPLv2+` | packaging: the kit ships the GPL source and licence Ableton Link requires |
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
 | `make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
+| `names tie across every nightly between two releases, so ordering on` | migrate-layout: retention orders by built-at, not by the name |
 | `no released runtime carries source-commit` | runtime-env: a runtime without source-commit is named from its patch stack |
 | `nothing is left behind for an older .run to overwrite, and a migrated` | migrate-layout: nothing remains at the legacy path |
 | `observed during the first real migration` | runtime-env: live pids: a process that exits mid-scan is skipped, not an error |

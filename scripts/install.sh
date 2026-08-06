@@ -284,6 +284,9 @@ if [ -n "$STORE" ]; then
     ln -sfn "$id" "$STORE/stable"
     [ -z "$replaced" ] || { rm -rf "$replaced"; replaced=""; replaced_orig=""; }
     echo "   $id"
+    # After the promote, never before: a failure earlier must not leave a user
+    # with neither the new runtime nor the old one.
+    ableton_prune_runtimes
 else
     echo "== promote runtime with dated rollback =="
     if [ -e "$WINE_ROOT" ]; then

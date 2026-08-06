@@ -365,3 +365,103 @@ ableton_migrate_layout() {
     done
     echo "   layout: moved the runtime to $container/$id"
 }
+
+# --- retention ---------------------------------------------------------------
+
+# Keep this many entries per channel. A count rather than a policy: a channel
+# that turns over nightly wants a smaller one than a channel that turns over
+# monthly, and an unpacked runtime is ~392M against a 40-minute rebuild.
+ableton_runtime_keep() {
+    local _n="${ABLETON_RUNTIME_KEEP:-10}"
+    case "$_n" in ''|*[!0-9]*) _n=10 ;; esac      # nonsense reverts to the default
+    [ "$_n" -ge 1 ] || _n=1                       # never prune to nothing
+    printf '%s\n' "$_n"
+}
+
+# Drop the oldest entries past the limit. Called after a successful install,
+# never before, so a failure cannot leave a user with neither the new runtime
+# nor the old one.
+#
+# Ordering is by built-at, not by the version in the name. Names tie: every
+# nightly between two releases carries the same dist-version, so sorting on the
+# name falls through to comparing hashes - deterministic, and unrelated to age.
+# Entries predating built-at sort oldest as a group, which they are.
+#
+# What the channel points at is never removed, whatever the count says. A
+# channel pointing at a pruned entry is a broken install produced by
+# housekeeping.
+ableton_prune_runtimes() {
+    local _container _keep _live _e _id _at _ver _key
+    _container="$(ableton_container_root)"
+    [ -d "$_container" ] || return 0
+    _keep="$(ableton_runtime_keep)"
+    _live="$(readlink -f "$_container/stable" 2>/dev/null || true)"
+
+    local -a _victims=()
+    while IFS=$'\t' read -r _key _e; do
+        [ -n "$_e" ] || continue
+        _victims+=("$_e")
+    done < <(
+        for _e in "$_container"/*; do
+            [ -d "$_e" ] && [ ! -L "$_e" ] || continue
+            _id="$(ableton_runtime_id "$_e")"
+            [ -n "$_id" ] || continue        # quarantine directories are not entries
+            _at="$(ableton_buildinfo_field "$_e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+            _ver="$(ableton_buildinfo_field "$_e/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
+            if [ -n "$_at" ]; then printf '1 %s\t%s\n' "$_at" "$_e"
+            else                   printf '0 %s\t%s\n' "$_ver" "$_e"; fi
+        done | sort -V | head -n -"$_keep"
+    )
+
+    for _e in ${_victims+"${_victims[@]}"}; do
+        [ "$_e" != "$_live" ] || continue
+        rm -rf "$_e" && echo "   pruned $(basename "$_e")"
+    done
+}
+
+# --- removal -----------------------------------------------------------------
+
+# Remove every runtime this installer owns. Lives here rather than in
+# uninstall.sh because it has to agree with the resolvers above about where
+# runtimes are, and because deleting trees is worth testing - which needs a
+# function with a seam, not inline code in a script that also stops systemd
+# units and rewrites the desktop database.
+ableton_remove_runtimes() {
+    local _container _legacy _d
+    if [ -n "${ABLETON_WINE_ROOT:-}" ]; then
+        # The user pinned a path; remove that and nothing else - but check what
+        # it names first. This runs `rm -rf` on a variable, and a stale exported
+        # value left from a test session would otherwise remove whatever it
+        # happens to point at.
+        case "$ABLETON_WINE_ROOT" in
+            ""|/|"$HOME"|"$HOME"/)
+                echo "!! ABLETON_WINE_ROOT is '$ABLETON_WINE_ROOT'; refusing to remove that" >&2
+                return 1 ;;
+        esac
+        [ -d "$ABLETON_WINE_ROOT/bin" ] || {
+            echo "!! $ABLETON_WINE_ROOT has no bin/ and does not look like a runtime;" \
+                 "refusing to remove it" >&2
+            return 1; }
+        rm -rf "$ABLETON_WINE_ROOT" && echo "removed $ABLETON_WINE_ROOT"
+        return 0
+    fi
+
+    # One directory holds every entry, every channel and every set-aside tree, so
+    # this is a single removal rather than a sibling glob. That glob is what
+    # would orphan multi-gigabyte directories the moment any suffix joined the
+    # runtime name - and the store's names are nothing but suffixes.
+    _container="$(ableton_container_root)"
+    [ ! -e "$_container" ] || { rm -rf "$_container" && echo "removed $_container"; }
+
+    # An install that never migrated still has the flat layout. -L as well as
+    # -e so a dangling link from an older layout is cleared rather than left;
+    # rm -rf on a symlink removes the link, never its target.
+    _legacy="$(ableton_legacy_root)"
+    if [ -e "$_legacy" ] || [ -L "$_legacy" ]; then
+        rm -rf "$_legacy" && echo "removed $_legacy"
+    fi
+    for _d in "$_legacy"-rollback-* "$_legacy".failed-*; do
+        [ -e "$_d" ] || continue    # unmatched glob stays literal; skip, don't abort
+        rm -rf "$_d" && echo "removed $_d"
+    done
+}

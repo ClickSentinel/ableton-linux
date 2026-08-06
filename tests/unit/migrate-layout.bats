@@ -206,3 +206,95 @@ plant() {
     [ "$status" -eq 1 ]
     [[ "$stderr$output" == *"symlink"* ]]
 }
+
+# --- retention ----------------------------------------------------------------
+
+plant_at() { plant "$1" "$2" "$3" "$4"; }
+
+@test "retention keeps the configured number of entries, oldest first" {
+    mkdir -p "$CONTAINER"
+    plant_at "$CONTAINER/2026.01.01.1+aaaaaaa" 2026.01.01.1 aaaaaaaxxx 2026-01-01T00:00:00Z
+    plant_at "$CONTAINER/2026.02.01.1+bbbbbbb" 2026.02.01.1 bbbbbbbxxx 2026-02-01T00:00:00Z
+    plant_at "$CONTAINER/2026.03.01.1+ccccccc" 2026.03.01.1 cccccccxxx 2026-03-01T00:00:00Z
+    ln -s "2026.03.01.1+ccccccc" "$CONTAINER/stable"
+    ABLETON_RUNTIME_KEEP=2 ableton_prune_runtimes
+    [ ! -e "$CONTAINER/2026.01.01.1+aaaaaaa" ]      # oldest went
+    [ -d "$CONTAINER/2026.02.01.1+bbbbbbb" ]
+    [ -d "$CONTAINER/2026.03.01.1+ccccccc" ]
+}
+
+# guards: names tie across every nightly between two releases, so ordering on
+# the name falls through to comparing hashes — deterministic, unrelated to age
+@test "retention orders by built-at, not by the name" {
+    mkdir -p "$CONTAINER"
+    # same dist-version; the name would sort these the wrong way round
+    plant_at "$CONTAINER/2026.08.04.1+zzzzzzz" 2026.08.04.1 zzzzzzzxxx 2026-08-04T01:00:00Z
+    plant_at "$CONTAINER/2026.08.04.1+aaaaaaa" 2026.08.04.1 aaaaaaaxxx 2026-08-04T09:00:00Z
+    ln -s "2026.08.04.1+aaaaaaa" "$CONTAINER/stable"
+    ABLETON_RUNTIME_KEEP=1 ableton_prune_runtimes
+    [ ! -e "$CONTAINER/2026.08.04.1+zzzzzzz" ]      # older by built-at
+    [ -d "$CONTAINER/2026.08.04.1+aaaaaaa" ]
+}
+
+# guards: a channel pointing at a pruned entry is a broken install produced by
+# housekeeping
+@test "retention never removes what the channel points at" {
+    mkdir -p "$CONTAINER"
+    plant_at "$CONTAINER/2026.01.01.1+aaaaaaa" 2026.01.01.1 aaaaaaaxxx 2026-01-01T00:00:00Z
+    plant_at "$CONTAINER/2026.02.01.1+bbbbbbb" 2026.02.01.1 bbbbbbbxxx 2026-02-01T00:00:00Z
+    ln -s "2026.01.01.1+aaaaaaa" "$CONTAINER/stable"   # channel at the OLDEST
+    ABLETON_RUNTIME_KEEP=1 ableton_prune_runtimes
+    [ -d "$CONTAINER/2026.01.01.1+aaaaaaa" ]
+    [ -n "$(ableton_wine_root)" ]
+}
+
+@test "retention leaves set-aside trees alone; they are not entries" {
+    mkdir -p "$CONTAINER/superseded-20260805T000000Z/old" "$CONTAINER"
+    plant_at "$CONTAINER/2026.01.01.1+aaaaaaa" 2026.01.01.1 aaaaaaaxxx 2026-01-01T00:00:00Z
+    ln -s "2026.01.01.1+aaaaaaa" "$CONTAINER/stable"
+    ABLETON_RUNTIME_KEEP=1 ableton_prune_runtimes
+    [ -d "$CONTAINER/superseded-20260805T000000Z/old" ]
+}
+
+@test "a nonsense retention value reverts to the default rather than pruning all" {
+    mkdir -p "$CONTAINER"
+    plant_at "$CONTAINER/2026.01.01.1+aaaaaaa" 2026.01.01.1 aaaaaaaxxx 2026-01-01T00:00:00Z
+    ln -s "2026.01.01.1+aaaaaaa" "$CONTAINER/stable"
+    ABLETON_RUNTIME_KEEP="lots" ableton_prune_runtimes
+    [ -d "$CONTAINER/2026.01.01.1+aaaaaaa" ]
+}
+
+# --- removal ------------------------------------------------------------------
+
+@test "removal takes the container and everything inside it" {
+    plant "$CONTAINER/2026.01.01.1+aaaaaaa"
+    mkdir -p "$CONTAINER/superseded-20260805T000000Z"
+    ln -s "2026.01.01.1+aaaaaaa" "$CONTAINER/stable"
+    ableton_remove_runtimes
+    [ ! -e "$CONTAINER" ]
+}
+
+@test "removal handles a flat install that never migrated" {
+    plant "$LEGACY"
+    plant "$LEGACY-rollback-20260802T194734Z"
+    ableton_remove_runtimes
+    [ -z "$(find "$ABLETON_OPT_DIR" -maxdepth 1 -name "$NAME*")" ]
+}
+
+# guards: a stale exported ABLETON_WINE_ROOT from a test session would otherwise
+# have this run rm -rf on whatever it names
+@test "removal refuses a pinned root that is not a runtime" {
+    target="$BATS_TEST_TMPDIR/not-a-runtime"
+    mkdir -p "$target/documents"
+    run env ABLETON_WINE_ROOT="$target" bash -c \
+        ". '$REPO/scripts/runtime-env.sh'; ableton_remove_runtimes"
+    [ "$status" -ne 0 ]
+    [ -d "$target/documents" ]
+}
+
+@test "removal refuses a pinned root of \$HOME" {
+    run env ABLETON_WINE_ROOT="$HOME" bash -c \
+        ". '$REPO/scripts/runtime-env.sh'; ableton_remove_runtimes"
+    [ "$status" -ne 0 ]
+    [ -d "$HOME" ]
+}
