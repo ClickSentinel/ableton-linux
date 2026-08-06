@@ -28,10 +28,12 @@ NAME="$(ableton_runtime_name)"
 # the same gate as the default one rather than silently unprotected.
 WINE_ROOT="$(ableton_wine_root)"
 WINE_ROOT_DIR="$(dirname "$WINE_ROOT")"
-WINE_ROOT_BASE="$(basename "$WINE_ROOT")"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 stage=""
 backup=""
+replaced=""
+replaced_orig=""
+STORE=""
 launcher_backup=""
 promoted=0
 
@@ -48,6 +50,13 @@ cleanup()
             mv "$backup" "$WINE_ROOT" || true
         elif [ -n "$backup" ] && [ -e "$backup" ]; then
             echo "!! $WINE_ROOT still present; backup left at $backup" >&2
+        fi
+        if [ -n "$replaced" ] && [ -d "$replaced" ] && [ -n "$replaced_orig" ]; then
+            # A store entry this install set aside to write over. Put it back,
+            # so a failure between the move and the channel retarget does not
+            # leave the user without the build they already had.
+            rm -rf "$replaced_orig" 2>/dev/null || true
+            mv "$replaced" "$replaced_orig" 2>/dev/null || true
         fi
         if [ -n "$launcher_backup" ] && [ -e "$launcher_backup" ]; then
             cp -a "$launcher_backup" "$BIN/ableton-live" || true
@@ -148,9 +157,31 @@ if ableton_runtime_busy; then
     fi
 fi
 
+# The layout migration belongs here and nowhere else: after the stop above,
+# which needs WINE_ROOT to still name where the running processes are executing
+# from, and before the staging below, which must target where the runtime will
+# now live. It refuses rather than guesses whenever the live tree cannot be
+# identified, and set -e turns that into an aborted install.
+#
+# A later failure does not undo it and does not need to: it only moves trees
+# that stay valid, and re-running is a no-op.
+ableton_migrate_layout
+
+# Where this install lands. Unpinned, that is always the store - including on a
+# fresh machine, so a new user never sees the flat layout and never becomes a
+# later migration. Pinned, it is exactly the path the user named, flat, because
+# the pin exists for tests, regression VMs and bisecting a build.
+if [ -n "${ABLETON_WINE_ROOT:-}" ]; then
+    STORE=""
+    WINE_ROOT="$ABLETON_WINE_ROOT"
+else
+    STORE="$(ableton_container_root)"
+    mkdir -p "$STORE"
+fi
+
 echo "== stage and validate patched Wine =="
 mkdir -p "$WINE_ROOT_DIR"
-stage="$(mktemp -d "$WINE_ROOT_DIR/.${WINE_ROOT_BASE}.install.XXXXXX")"
+stage="$(mktemp -d "${STORE:-$WINE_ROOT_DIR}/.install.XXXXXX")"
 tar -C "$stage" -I zstd -xf "$tarball"
 candidate="$stage/$NAME"
 for required in \
@@ -226,14 +257,43 @@ else
     echo "   (binutils not found: skipping deep binary checks)"
 fi
 
-echo "== promote runtime with dated rollback =="
-if [ -e "$WINE_ROOT" ]; then
-    backup="$WINE_ROOT-rollback-$stamp"
-    [ ! -e "$backup" ] || { echo "!! rollback path already exists: $backup" >&2; exit 1; }
-    mv "$WINE_ROOT" "$backup"
+# Promote. Into the store this is: file the candidate under the name its own
+# BUILD-INFO gives it, then retarget the channel. No dated rollback directory is
+# created, because the entry one would hold is already in the store under its
+# real name - which is the whole point of naming them.
+#
+# Promoting by moving the channel aside and writing a real directory in its
+# place, as the flat layout did, replaces the channel with a directory and
+# leaves a rollback symlink pointing into the store. The store then survives no
+# installs at all, and the migration reads the result as already migrated.
+# Reproduced 2026-08-05 before this was written.
+if [ -n "$STORE" ]; then
+    echo "== promote runtime into the store =="
+    id="$(ableton_runtime_id "$candidate")"
+    [ -n "$id" ] || { echo "!! the staged runtime carries no readable BUILD-INFO, so it cannot be named" >&2; exit 1; }
+    if [ -e "$STORE/$id" ]; then
+        # Same build already present. Set it aside rather than writing over it,
+        # so a failure between here and the channel retarget can be undone.
+        replaced_orig="$STORE/$id"
+        replaced="$STORE/.replaced-$id-$stamp"
+        mv "$replaced_orig" "$replaced"
+    fi
+    mv "$candidate" "$STORE/$id"
+    promoted=1
+    WINE_ROOT="$STORE/$id"
+    ln -sfn "$id" "$STORE/stable"
+    [ -z "$replaced" ] || { rm -rf "$replaced"; replaced=""; replaced_orig=""; }
+    echo "   $id"
+else
+    echo "== promote runtime with dated rollback =="
+    if [ -e "$WINE_ROOT" ]; then
+        backup="$WINE_ROOT-rollback-$stamp"
+        [ ! -e "$backup" ] || { echo "!! rollback path already exists: $backup" >&2; exit 1; }
+        mv "$WINE_ROOT" "$backup"
+    fi
+    mv "$candidate" "$WINE_ROOT"
+    promoted=1
 fi
-mv "$candidate" "$WINE_ROOT"
-promoted=1
 "$WINE_ROOT/bin/wine" --version
 
 echo "== install launcher -> $BIN/ableton-live =="

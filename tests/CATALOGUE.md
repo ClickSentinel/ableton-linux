@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-186 tests across 11 suites. See [README.md](README.md) for how to run
+190 tests across 11 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -19,7 +19,7 @@ for which run on a PR.
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/install-runs.bats](#install-runs) — 4 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 8 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 16 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 45 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
@@ -269,6 +269,10 @@ tree ships.
 | 2 | install.sh resolves its roots from the shared lib, not from its own copy | — |
 | 3 | a real tarball installs, and the tree identifies itself | the whole install path — staging, the required-file gate, promote, |
 | 4 | a second install promotes and leaves the previous runtime behind | the promote step and its dated rollback, which is where the store's |
+| 5 | a fresh install lands in the store, not the flat path | — |
+| 6 | the channel stays a symlink across a second install | — |
+| 7 | after installing, the resolver points at a real build directory | the resolver, the process scan and the install must all name the same |
+| 8 | a flat install is migrated by the installer, not just by the library | an existing flat install is what nearly every user has |
 
 <a id="migrate-layout"></a>
 
@@ -436,6 +440,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `a dangling channel must not resolve to nothing and strand the launcher` | runtime-env: runtime root: a dangling channel falls back rather than resolving empty |
 | `a debug tree rolled back by the selector bug has no dist-version at` | migrate-layout: a rollback that cannot be named moves aside instead of blocking |
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
+| `an existing flat install is what nearly every user has` | install-runs: a flat install is migrated by the installer, not just by the library |
 | `an install that predates the migration must still resolve and launch` | runtime-env: runtime root: falls back to the legacy path before migrating |
 | `an older .run over a migrated install writes a flat tree at the legacy` | migrate-layout: an older installer's tree beside a migrated one is adopted when newer |
 | `bin/ and lib/ with no share/` | runtime-env: tarball predicate: a debug tree is refused |
@@ -473,6 +478,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the promote step and its dated rollback, which is where the store's` | install-runs: a second install promotes and leaves the previous runtime behind |
 | `the published nightly carries this suffix so a filename-keyed consumer` | runtime-env: tarball predicate: a nightly label is refused |
 | `the resolver and the migration must agree, or the install replaces a` | migrate-layout: the resolver follows the runtime to its new name |
+| `the resolver, the process scan and the install must all name the same` | install-runs: after installing, the resolver points at a real build directory |
 | `the same resolution a running process reports, so the two can be` | runtime-env: runtime root: matches what /proc would report for a process under it |
 | `the same-day counter must not be read as a date component` | runtime-env: tarball predicate: a partial download is refused |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
