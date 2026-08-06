@@ -3,8 +3,10 @@
 #
 #   ableton-runtime list          every installed build, newest first
 #   ableton-runtime path          the runtime root, for scripts and docs
+#   ableton-runtime use           choose from a numbered list
 #   ableton-runtime use <name>    point the channel at a different build
 #   ableton-runtime use --previous
+#   ableton-runtime use <name> --force   accept a Wine base change unattended
 #
 # The store makes rollback possible - one directory per build, a channel symlink
 # at the live one - and until this existed nothing exposed it. Rolling back was
@@ -59,20 +61,28 @@ cmd_path() {
     printf '%s\n' "$r"
 }
 
+# The Wine base is not in the entry name and should not be - it is derivable,
+# and one runtime release is built on one base. But it is the fact that decides
+# whether switching is safe for a Wire, so it belongs in front of anyone
+# choosing.
+base_of() { ableton_buildinfo_field "$container/$1/ABLETON-WINE-BUILD-INFO.txt" wine; }
+
 cmd_list() {
-    local live e at n=0
+    local live e at base n=0
     live="$(readlink -f "$channel" 2>/dev/null || true)"
     if [ ! -d "$container" ]; then
         echo "No version store yet — this install predates it."
         echo "  runtime: $(ableton_wine_root)"
         return 0
     fi
+    printf '  %-28s %-12s %s\n' "BUILD" "WINE" "BUILT"
     while read -r e; do
         [ -n "$e" ] || continue
         n=$((n+1))
         at="$(ableton_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
-        if [ "$container/$e" = "$live" ]; then printf '* %-28s %s\n' "$e" "${at:-—}"
-        else                                   printf '  %-28s %s\n' "$e" "${at:-—}"; fi
+        base="$(base_of "$e")"
+        if [ "$container/$e" = "$live" ]; then printf '* %-28s %-12s %s\n' "$e" "${base:-?}" "${at:-—}"
+        else                                   printf '  %-28s %-12s %s\n' "$e" "${base:-?}" "${at:-—}"; fi
     done < <(sorted)
     [ "$n" -gt 0 ] || echo "No installed builds found in $container"
     local aside
@@ -80,8 +90,38 @@ cmd_list() {
     [ "$aside" -eq 0 ] || echo "  ($aside set-aside director$([ "$aside" = 1 ] && echo y || echo ies) not shown; nothing was deleted)"
 }
 
+# Pick from a numbered list. Only when there is a terminal to ask on - a script
+# that runs `use` with no argument should fail loudly, not block forever.
+cmd_pick() {
+    local -a names=(); local e i=0 live cur
+    [ -d "$container" ] || { echo "!! no version store; nothing to switch between" >&2; return 1; }
+    live="$(readlink -f "$channel" 2>/dev/null || true)"
+    while read -r e; do [ -n "$e" ] && names+=("$e"); done < <(sorted)
+    [ "${#names[@]}" -gt 0 ] || { echo "!! no installed builds" >&2; return 1; }
+    if [ ! -t 0 ]; then
+        echo "!! no terminal to ask on; name a build instead:" >&2
+        for e in "${names[@]}"; do echo "     ableton-runtime use $e" >&2; done
+        return 1
+    fi
+    for e in "${names[@]}"; do
+        i=$((i+1))
+        cur=""; [ "$container/$e" = "$live" ] && cur="  (current)"
+        printf '  %2d) %-28s %-12s %s%s\n' "$i" "$e" "$(base_of "$e")" \
+            "$(ableton_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)" "$cur"
+    done
+    local ans
+    printf 'Which build? [1-%d, or q to cancel] ' "${#names[@]}"
+    read -r ans || ans=q
+    case "$ans" in
+        q|Q|"")      echo "cancelled"; return 0 ;;
+        *[!0-9]*)    echo "!! not a number: $ans" >&2; return 1 ;;
+    esac
+    [ "$ans" -ge 1 ] && [ "$ans" -le "${#names[@]}" ] || { echo "!! out of range: $ans" >&2; return 1; }
+    cmd_use "${names[$((ans-1))]}"
+}
+
 cmd_use() {
-    local want="${1:-}" live cur
+    local want="${1:-}" force="${2:-}" live cur from to
     [ -n "$want" ] || { echo "!! usage: ableton-runtime use <name>|--previous" >&2; return 1; }
     [ -d "$container" ] || { echo "!! no version store; nothing to switch between" >&2; return 1; }
 
@@ -102,6 +142,34 @@ cmd_use() {
         echo "!! $want has no bin/wine; refusing to point the channel at it" >&2
         return 1; }
 
+    # A Wire is bound to a Wine base: Wine compares the prefix's
+    # .update-timestamp against the runtime's share/wine/wine.inf and runs
+    # wineboot --update when they differ. Forward it does; back it does not
+    # support. Switching between bases is therefore a one-way door for every
+    # Wire using this channel, and nothing said so until now.
+    from="$(base_of "$(readlink "$channel" 2>/dev/null)")"
+    to="$(base_of "$want")"
+    if [ -n "$from" ] && [ -n "$to" ] && [ "$from" != "$to" ]; then
+        echo "This build is on a different Wine base: $from -> $to"
+        if [ "$(printf '%s\n%s\n' "$from" "$to" | sort -V | tail -1)" = "$from" ]; then
+            echo "  That is a DOWNGRADE. Wine does not support it: your Wire was"
+            echo "  bootstrapped against $from and cannot be taken back to $to."
+            echo "  Expect breakage, and keep a copy of the prefix first."
+        else
+            echo "  Your Wire will be re-bootstrapped against $to on next launch,"
+            echo "  and cannot be taken back to $from afterwards."
+        fi
+        if [ "$force" = "--force" ]; then
+            echo "  (--force given)"
+        elif [ -t 0 ]; then
+            local ans; printf '  Continue? [y/N] '; read -r ans || ans=n
+            case "$ans" in y|Y|yes|Yes|YES) ;; *) echo "cancelled"; return 1 ;; esac
+        else
+            echo "!! refusing a base change without a terminal; pass --force if you mean it" >&2
+            return 1
+        fi
+    fi
+
     ln -sfn "$want" "$channel"
     echo "channel -> $want"
     if ableton_runtime_busy; then
@@ -113,7 +181,9 @@ cmd_use() {
 case "${1:-list}" in
     list|ls)        cmd_list ;;
     path|root)      cmd_path ;;
-    use|switch)     shift; cmd_use "${1:-}" ;;
+    use|switch)     shift
+                    if [ -z "${1:-}" ]; then cmd_pick
+                    else cmd_use "$1" "${2:-}"; fi ;;
     -h|--help|help)
         sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) echo "!! unknown command: $1 (try --help)" >&2; exit 1 ;;

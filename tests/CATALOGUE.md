@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-213 tests across 12 suites. See [README.md](README.md) for how to run
+220 tests across 12 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -21,7 +21,7 @@ for which run on a PR.
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/install-runs.bats](#install-runs) — 8 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 25 test(s)
-- [tests/unit/ableton-runtime.bats](#ableton-runtime) — 14 test(s)
+- [tests/unit/ableton-runtime.bats](#ableton-runtime) — 21 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 45 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
@@ -353,6 +353,13 @@ resolve through it instead of naming a directory.
 | 12 | use refuses a directory with no readable BUILD-INFO | — |
 | 13 | use refuses an entry with no wine binary | — |
 | 14 | use refuses when there is no store | — |
+| 15 | list shows the Wine base each build carries | — |
+| 16 | use is silent when the base is unchanged | — |
+| 17 | use refuses a base change with no terminal to ask on | the prefix cannot be taken back, so this must not happen quietly |
+| 18 | use --force accepts a base change deliberately | — |
+| 19 | a downgrade is named as a downgrade | forward Wine supports, backward it does not - the wording has to differ |
+| 20 | use with no argument refuses when there is no terminal | a script calling `use` with no argument must fail, not block forever |
+| 21 | use with no argument leaves the channel alone | — |
 
 <a id="runtime-env"></a>
 
@@ -483,6 +490,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `a dangling channel must not resolve to nothing and strand the launcher` | runtime-env: runtime root: a dangling channel falls back rather than resolving empty |
 | `a debug tree rolled back by the selector bug has no dist-version at` | migrate-layout: a rollback that cannot be named moves aside instead of blocking |
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
+| `a script calling `use` with no argument must fail, not block forever` | ableton-runtime: use with no argument refuses when there is no terminal |
 | `a stale exported ABLETON_WINE_ROOT from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
 | `an existing flat install is what nearly every user has` | install-runs: a flat install is migrated by the installer, not just by the library |
 | `an install that predates the migration must still resolve and launch` | runtime-env: runtime root: falls back to the legacy path before migrating |
@@ -494,6 +502,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `commit f84eaa4` | repo-hygiene: runtime name: every live file agrees on one wine-d2d1-nspa version |
 | `dated rollbacks are the reason the store exists` | migrate-layout: dated rollbacks are renamed by the build they hold |
 | `docs and scripts resolve through this instead of naming a directory,` | ableton-runtime: path answers on the flat layout |
+| `forward Wine supports, backward it does not - the wording has to differ` | ableton-runtime: a downgrade is named as a downgrade |
 | `install.sh aborting on its own first lines, which no resolver test can` | install-runs: install.sh gets past its own initialisation |
 | `issue #106` | repo-hygiene: desktop entries validate after substitution |
 | `issue #32` | launcher: gray text: the blend is 45% towards MenuText, per channel, not symmetric |
@@ -524,6 +533,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
 | `the id becomes a directory name, and a BUILD-INFO is just text in a tarball` | runtime-env: a BUILD-INFO carrying path traversal is refused, not turned into a path |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
+| `the prefix cannot be taken back, so this must not happen quietly` | ableton-runtime: use refuses a base change with no terminal to ask on |
 | `the promote step and its dated rollback, which is where the store's` | install-runs: a second install promotes and leaves the previous runtime behind |
 | `the published nightly carries this suffix so a filename-keyed consumer` | runtime-env: tarball predicate: a nightly label is refused |
 | `the resolver and the migration must agree, or the install replaces a` | migrate-layout: the resolver follows the runtime to its new name |

@@ -27,10 +27,11 @@ setup() {
 }
 
 plant() {
-    local dir="$1" ver="$2" disc="$3" at="${4:-}"
+    local dir="$1" ver="$2" disc="$3" at="${4:-}" base="${5:-wine-11.13}"
     mkdir -p "$dir/bin"
     printf '#!/bin/sh\necho wine-11.13\n' > "$dir/bin/wine"; chmod +x "$dir/bin/wine"
     { printf 'dist-version: %s\n' "$ver"; printf 'patch-stack:  %s\n' "$disc"
+      printf 'wine:         %s\n' "$base"
       [ -z "$at" ] || printf 'built-at:     %s\n' "$at"; } > "$dir/ABLETON-WINE-BUILD-INFO.txt"
 }
 
@@ -156,4 +157,70 @@ store() {
     plant "$LEGACY" 2026.01.01.1 aaaaaaaxxx
     run RT use anything
     [ "$status" -ne 0 ]
+}
+
+
+# --- the Wine base ------------------------------------------------------------
+# A Wire is bound to a base: Wine re-bootstraps the prefix when the runtime's
+# wine.inf and the prefix's .update-timestamp disagree, and it cannot go back.
+# Switching between bases is a one-way door and nothing said so.
+
+@test "list shows the Wine base each build carries" {
+    store
+    run RT list
+    [[ "$output" == *"WINE"* ]]
+    [[ "$output" == *"wine-11.13"* ]]
+}
+
+@test "use is silent when the base is unchanged" {
+    store
+    run RT use 2026.01.01.1+aaaaaaa
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"different Wine base"* ]]
+}
+
+# guards: the prefix cannot be taken back, so this must not happen quietly
+@test "use refuses a base change with no terminal to ask on" {
+    store
+    plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
+    run RT use 2026.07.01.1+ddddddd
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"different Wine base"* ]]
+    [[ "$output" == *"--force"* ]]
+    [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]
+}
+
+@test "use --force accepts a base change deliberately" {
+    store
+    plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
+    run RT use 2026.07.01.1+ddddddd --force
+    [ "$status" -eq 0 ]
+    [ "$(readlink "$C/stable")" = "2026.07.01.1+ddddddd" ]
+}
+
+# guards: forward Wine supports, backward it does not - the wording has to differ
+@test "a downgrade is named as a downgrade" {
+    plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
+    plant "$C/2026.01.01.1+aaaaaaa" 2026.01.01.1 aaaaaaaxxx 2026-01-01T00:00:00Z wine-11.13
+    ln -s "2026.07.01.1+ddddddd" "$C/stable"
+    run RT use 2026.01.01.1+aaaaaaa
+    [[ "$output" == *"DOWNGRADE"* ]]
+    [[ "$output" == *"does not support"* ]]
+}
+
+# --- the picker ---------------------------------------------------------------
+
+# guards: a script calling `use` with no argument must fail, not block forever
+@test "use with no argument refuses when there is no terminal" {
+    store
+    run RT use
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"no terminal"* ]]
+    [[ "$output" == *"ableton-runtime use 2026"* ]]
+}
+
+@test "use with no argument leaves the channel alone" {
+    store
+    RT use || true
+    [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]
 }
