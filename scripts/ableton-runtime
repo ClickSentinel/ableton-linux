@@ -55,6 +55,19 @@ sorted() {
     done < <(entries) | sort -rV | cut -f2
 }
 
+# Ask a yes/no on the controlling terminal, or fail. Deliberately the pattern
+# install.sh already uses: `[ -t 0 ]` answers "is stdin a tty", which is not the
+# question - a test harness run from a terminal inherits one and takes the
+# interactive branch by accident. Opening /dev/tty is the honest test. The
+# timeout matches install.sh's: a prompt nobody answers must not wedge anything.
+ask_tty() {
+    local prompt="$1" ans=""
+    { : >/dev/tty; } 2>/dev/null || return 2      # 2 = no terminal to ask on
+    printf '%s' "$prompt" > /dev/tty
+    read -r -t 60 ans < /dev/tty || { printf '\n' > /dev/tty 2>/dev/null || true; return 1; }
+    case "$ans" in y|Y|yes|Yes|YES) return 0 ;; *) return 1 ;; esac
+}
+
 cmd_path() {
     local r; r="$(ableton_wine_root)"
     [ -n "$r" ] || { echo "!! no runtime resolved" >&2; return 1; }
@@ -98,7 +111,7 @@ cmd_pick() {
     live="$(readlink -f "$channel" 2>/dev/null || true)"
     while read -r e; do [ -n "$e" ] && names+=("$e"); done < <(sorted)
     [ "${#names[@]}" -gt 0 ] || { echo "!! no installed builds" >&2; return 1; }
-    if [ ! -t 0 ]; then
+    if ! { : >/dev/tty; } 2>/dev/null; then
         echo "!! no terminal to ask on; name a build instead:" >&2
         for e in "${names[@]}"; do echo "     ableton-runtime use $e" >&2; done
         return 1
@@ -109,9 +122,9 @@ cmd_pick() {
         printf '  %2d) %-28s %-12s %s%s\n' "$i" "$e" "$(base_of "$e")" \
             "$(ableton_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)" "$cur"
     done
-    local ans
-    printf 'Which build? [1-%d, or q to cancel] ' "${#names[@]}"
-    read -r ans || ans=q
+    local ans=""
+    printf 'Which build? [1-%d, or q to cancel] ' "${#names[@]}" > /dev/tty
+    read -r -t 120 ans < /dev/tty || ans=q
     case "$ans" in
         q|Q|"")      echo "cancelled"; return 0 ;;
         *[!0-9]*)    echo "!! not a number: $ans" >&2; return 1 ;;
@@ -161,12 +174,14 @@ cmd_use() {
         fi
         if [ "$force" = "--force" ]; then
             echo "  (--force given)"
-        elif [ -t 0 ]; then
-            local ans; printf '  Continue? [y/N] '; read -r ans || ans=n
-            case "$ans" in y|Y|yes|Yes|YES) ;; *) echo "cancelled"; return 1 ;; esac
         else
-            echo "!! refusing a base change without a terminal; pass --force if you mean it" >&2
-            return 1
+            ask_tty "  Continue? [y/N] "
+            case "$?" in
+                0) ;;
+                2) echo "!! refusing a base change without a terminal; pass --force if you mean it" >&2
+                   return 1 ;;
+                *) echo "cancelled"; return 1 ;;
+            esac
         fi
     fi
 

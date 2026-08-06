@@ -183,7 +183,9 @@ store() {
 @test "use refuses a base change with no terminal to ask on" {
     store
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
-    run RT use 2026.07.01.1+ddddddd
+    # setsid detaches the controlling terminal. Without it this inherits the
+    # terminal of whoever ran the suite, takes the interactive branch, and blocks.
+    run setsid bash "$REPO/scripts/ableton-runtime" use 2026.07.01.1+ddddddd
     [ "$status" -ne 0 ]
     [[ "$output" == *"different Wine base"* ]]
     [[ "$output" == *"--force"* ]]
@@ -203,7 +205,7 @@ store() {
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
     plant "$C/2026.01.01.1+aaaaaaa" 2026.01.01.1 aaaaaaaxxx 2026-01-01T00:00:00Z wine-11.13
     ln -s "2026.07.01.1+ddddddd" "$C/stable"
-    run RT use 2026.01.01.1+aaaaaaa
+    run setsid bash "$REPO/scripts/ableton-runtime" use 2026.01.01.1+aaaaaaa
     [[ "$output" == *"DOWNGRADE"* ]]
     [[ "$output" == *"does not support"* ]]
 }
@@ -213,7 +215,7 @@ store() {
 # guards: a script calling `use` with no argument must fail, not block forever
 @test "use with no argument refuses when there is no terminal" {
     store
-    run RT use
+    run setsid bash "$REPO/scripts/ableton-runtime" use
     [ "$status" -ne 0 ]
     [[ "$output" == *"no terminal"* ]]
     [[ "$output" == *"ableton-runtime use 2026"* ]]
@@ -221,6 +223,6 @@ store() {
 
 @test "use with no argument leaves the channel alone" {
     store
-    RT use || true
+    setsid bash "$REPO/scripts/ableton-runtime" use || true
     [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]
 }
