@@ -375,10 +375,37 @@ make_tree() {
     ! ableton_is_runtime_tarball "wine-d2d1-nspa-11.13-2026.08.04.1-debug.tar.zst"
 }
 
-# guards: the published nightly carries this suffix so a filename-keyed consumer
-# cannot confuse it with the release it was built after
-@test "tarball predicate: a nightly label is refused" {
-    ! ableton_is_runtime_tarball "wine-d2d1-nspa-11.13-2026.08.04.1+nightly.bf76bb2.tar.zst"
+# guards: this is the only runtime artifact the nightly channel publishes, so
+# refusing it left that channel with nothing installable
+@test "tarball predicate: a nightly label is accepted" {
+    ableton_is_runtime_tarball "wine-d2d1-nspa-11.13-2026.08.04.1+nightly.bf76bb2.tar.zst"
+}
+
+# guards: a label is a suffix on the release form, not a licence to accept any
+# trailing text — `-debug` must keep falling out
+@test "tarball predicate: a labelled debug tree is still refused" {
+    ! ableton_is_runtime_tarball "wine-d2d1-nspa-11.13-2026.08.04.1+nightly.bf76bb2-debug.tar.zst"
+}
+
+@test "tarball predicate: an empty label is refused" {
+    ! ableton_is_runtime_tarball "wine-d2d1-nspa-11.13-2026.08.04.1+.tar.zst"
+}
+
+# guards: both in one directory is the nightly builder's own dist/, and the
+# labelled build must not become what an unqualified install picks up
+@test "tarball selector: the plain release wins over a labelled one beside it" {
+    local d="$BATS_TEST_TMPDIR/dist"; mkdir -p "$d"
+    local nm; nm="$(ableton_runtime_name)"
+    : > "$d/${nm}-2026.08.04.1.tar.zst"
+    : > "$d/${nm}-2026.08.04.1+nightly.bf76bb2.tar.zst"
+    [ "$(basename "$(ableton_pick_tarball "$d")")" = "${nm}-2026.08.04.1.tar.zst" ]
+}
+
+@test "tarball selector: a labelled build alone is selectable" {
+    local d="$BATS_TEST_TMPDIR/dist"; mkdir -p "$d"
+    local nm; nm="$(ableton_runtime_name)"
+    : > "$d/${nm}-2026.08.04.1+nightly.bf76bb2.tar.zst"
+    [ -n "$(ableton_pick_tarball "$d")" ]
 }
 
 @test "tarball predicate: another Wine base is refused" {

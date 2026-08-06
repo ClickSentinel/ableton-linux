@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-266 tests across 14 suites. See [README.md](README.md) for how to run
+270 tests across 14 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -24,7 +24,7 @@ for which run on a PR.
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 25 test(s)
 - [tests/unit/ableton-runtime.bats](#ableton-runtime) — 21 test(s)
 - [tests/unit/ableton-update.bats](#ableton-update) — 22 test(s)
-- [tests/unit/runtime-env.bats](#runtime-env) — 52 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 56 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 - [tests/release.bats](#release) — 4 test(s)
 
@@ -498,17 +498,21 @@ sandbox, which is the whole reason they echo instead of assigning.
 | 39 | tarball predicate: the dated release form is accepted | a kit packed around a name the installer cannot select builds cleanly |
 | 40 | tarball predicate: a full path is judged by its basename | — |
 | 41 | tarball predicate: a debug tree is refused | bin/ and lib/ with no share/ — passes `wine --version`, then fails at |
-| 42 | tarball predicate: a nightly label is refused | the published nightly carries this suffix so a filename-keyed consumer |
-| 43 | tarball predicate: another Wine base is refused | — |
-| 44 | tarball predicate: an undated artifact is refused | — |
-| 45 | tarball predicate: a partial download is refused | the same-day counter must not be read as a date component |
-| 46 | channel: defaults to stable with nothing configured | — |
-| 47 | channel: reads the configured file | — |
-| 48 | channel: tolerates trailing whitespace | — |
-| 49 | channel: an unknown value falls back to stable and says so | the value names a symlink and, for the updater, part of a URL — |
-| 50 | channel: the environment overrides the file | — |
-| 51 | runtime root: resolves through the configured channel | — |
-| 52 | retention never removes what a DIFFERENT channel points at | pruning on behalf of one channel must not strand another |
+| 42 | tarball predicate: a nightly label is accepted | this is the only runtime artifact the nightly channel publishes, so |
+| 43 | tarball predicate: a labelled debug tree is still refused | a label is a suffix on the release form, not a licence to accept any |
+| 44 | tarball predicate: an empty label is refused | — |
+| 45 | tarball selector: the plain release wins over a labelled one beside it | both in one directory is the nightly builder's own dist/, and the |
+| 46 | tarball selector: a labelled build alone is selectable | — |
+| 47 | tarball predicate: another Wine base is refused | — |
+| 48 | tarball predicate: an undated artifact is refused | — |
+| 49 | tarball predicate: a partial download is refused | the same-day counter must not be read as a date component |
+| 50 | channel: defaults to stable with nothing configured | — |
+| 51 | channel: reads the configured file | — |
+| 52 | channel: tolerates trailing whitespace | — |
+| 53 | channel: an unknown value falls back to stable and says so | the value names a symlink and, for the updater, part of a URL — |
+| 54 | channel: the environment overrides the file | — |
+| 55 | runtime root: resolves through the configured channel | — |
+| 56 | retention never removes what a DIFFERENT channel points at | pruning on behalf of one channel must not strand another |
 
 <a id="patch-stack"></a>
 
@@ -582,6 +586,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `a debug tree rolled back by the selector bug has no dist-version at` | migrate-layout: a rollback that cannot be named moves aside instead of blocking |
 | `a half-read manifest cannot answer "is this newer" or "does this` | ableton-update: an incomplete manifest is refused |
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
+| `a label is a suffix on the release form, not a licence to accept any` | runtime-env: tarball predicate: a labelled debug tree is still refused |
 | `a script calling `use` with no argument must fail, not block forever` | ableton-runtime: use with no argument refuses when there is no terminal |
 | `a stale exported ABLETON_WINE_ROOT from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
 | `a switch must move the channel it names, and only that one` | ableton-update: switching channel leaves the other channel where it was |
@@ -591,6 +596,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `an older .run over a migrated install writes a flat tree at the legacy` | migrate-layout: an older installer's tree beside a migrated one is adopted when newer |
 | `an unattended run must not hang waiting on a prompt nobody can answer` | ableton-update: with no terminal to ask on it stops rather than assuming yes |
 | `bin/ and lib/ with no share/` | runtime-env: tarball predicate: a debug tree is refused |
+| `both in one directory is the nightly builder's own dist/, and the` | runtime-env: tarball selector: the plain release wins over a labelled one beside it |
 | `commit 9cba3b0` | launcher: gray text: the dark fallback lands on classic GrayText |
 | `commit e221cc4` | release: VERSION has a matching CHANGELOG entry at the top |
 | `commit f0fc05e` | detect-scale: cosmic probe: a disabled lid never wins when it is marked non-primary<br>detect-scale: cosmic probe: a disabled lid never wins, even with no primary line |
@@ -637,7 +643,6 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
 | `the prefix cannot be taken back, so this must not happen quietly` | ableton-runtime: use refuses a base change with no terminal to ask on |
 | `the promote step and its dated rollback, which is where the store's` | install-runs: a second install promotes and leaves the previous runtime behind |
-| `the published nightly carries this suffix so a filename-keyed consumer` | runtime-env: tarball predicate: a nightly label is refused |
 | `the resolver and the migration must agree, or the install replaces a` | migrate-layout: the resolver follows the runtime to its new name |
 | `the resolver, the process scan and the install must all name the same` | install-runs: after installing, the resolver points at a real build directory |
 | `the same resolution a running process reports, so the two can be` | runtime-env: runtime root: matches what /proc would report for a process under it |
@@ -647,4 +652,5 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the value names a symlink and, for the updater, part of a URL` | runtime-env: channel: an unknown value falls back to stable and says so |
 | `the version string is identical across every nightly between releases,` | ableton-update: a new build with the same version is still an update |
 | `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
+| `this is the only runtime artifact the nightly channel publishes, so` | runtime-env: tarball predicate: a nightly label is accepted |
 | `two installs of one build collapse to one entry, and the loser is set` | migrate-layout: two rollbacks holding one build keep one and set the rest aside |

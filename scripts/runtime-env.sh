@@ -131,10 +131,15 @@ ableton_bind_runtime() {
 # told to pack. Those disagreeing is not hypothetical — a name this rejects
 # packs into a kit perfectly well, and the failure surfaces on the user's
 # machine, where the kit's own install.sh finds nothing to install.
+#
+# A `+<label>` suffix is part of the release form, not a variant of it: the
+# nightly channel publishes <name>-<version>+nightly.<sha>.tar.zst, and refusing
+# that meant the one artifact a nightly actually ships could not be packed or
+# installed. `-debug` stays refused — that is a different tree, not a label.
 ableton_is_runtime_tarball() {
     local _b="${1##*/}" _nm _re
     _nm="$(ableton_runtime_name)"
-    _re="^${_nm//./\\.}-[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]+\\.tar\\.zst\$"
+    _re="^${_nm//./\\.}-[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]+(\\+[A-Za-z0-9][A-Za-z0-9.]*)?\\.tar\\.zst\$"
     [[ "$_b" =~ $_re ]]
 }
 
@@ -142,15 +147,25 @@ ableton_is_runtime_tarball() {
 #
 # Locals are underscore-prefixed: this is sourced into scripts with their own
 # $found and $target.
+#
+# Labelled builds are held separately and used only when there is no plain
+# release, because `sort -V` orders `2026.08.04.1+nightly.bf76bb2` *after*
+# `2026.08.04.1` — so a directory holding a release and a nightly would hand
+# back the nightly, which is the same way round the `-debug` defect went. A
+# labelled build is opt-in, and ABLETON_RUNTIME_TARBALL is how you opt in.
 ableton_pick_tarball() {
     local _dir="$1" _nm _f
     _nm="$(ableton_runtime_name)"
-    local -a _found=()
+    local -a _found=() _labelled=()
     for _f in "$_dir"/"$_nm"-*.tar.zst; do
         [ -e "$_f" ] || continue          # no match: the glob came back literal
         ableton_is_runtime_tarball "$_f" || continue
-        _found+=("$_f")
+        case "${_f##*/}" in
+            *+*) _labelled+=("$_f") ;;
+            *)   _found+=("$_f") ;;
+        esac
     done
+    [ "${#_found[@]}" -gt 0 ] || _found=("${_labelled[@]}")
     [ "${#_found[@]}" -gt 0 ] || return 0
     printf '%s\n' "${_found[@]}" | sort -V | tail -1
 }
