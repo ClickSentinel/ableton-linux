@@ -281,7 +281,7 @@ if [ -n "$STORE" ]; then
     mv "$candidate" "$STORE/$id"
     promoted=1
     WINE_ROOT="$STORE/$id"
-    ln -sfn "$id" "$STORE/stable"
+    ln -sfn "$id" "$STORE/$(ableton_channel)"
     [ -z "$replaced" ] || { rm -rf "$replaced"; replaced=""; replaced_orig=""; }
     echo "   $id"
     # After the promote, never before: a failure earlier must not leave a user
