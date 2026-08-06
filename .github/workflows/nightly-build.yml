@@ -198,11 +198,12 @@ jobs:
               echo "!! the manifest is not stamped for the nightly channel" >&2
               cat dist/manifest.txt >&2; exit 1; }
 
-          # The runtime tarball is stamped from VERSION, so a nightly's and a
-          # release's are byte-different but identically named. Anything that
-          # fetches a runtime by filename — run-regression.sh --artifact does —
-          # would mix them silently. Publish it under the label instead, with a
-          # checksum regenerated to match the name it is served as.
+          # The tarball is stamped with the build date, so a nightly and the
+          # release it follows no longer share a name. One case remains: a
+          # release cut the same day this runs. Anything that fetches a runtime
+          # by filename — run-regression.sh --artifact does — would mix those two
+          # silently, so publish under the full label, with a checksum
+          # regenerated to match the name it is served as.
           version="${LABEL%%+*}"
           built="dist/wine-d2d1-nspa-11.13-${version}.tar.zst"
           [ -f "$built" ] || { echo "!! no runtime tarball at $built" >&2; exit 1; }

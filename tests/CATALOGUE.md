@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-284 tests across 14 suites. See [README.md](README.md) for how to run
+286 tests across 14 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -22,7 +22,7 @@ for which run on a PR.
 - [tests/unit/install-runs.bats](#install-runs) — 16 test(s)
 - [tests/unit/manifest.bats](#manifest) — 17 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 25 test(s)
-- [tests/unit/ableton-runtime.bats](#ableton-runtime) — 21 test(s)
+- [tests/unit/ableton-runtime.bats](#ableton-runtime) — 23 test(s)
 - [tests/unit/ableton-update.bats](#ableton-update) — 22 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 62 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
@@ -407,6 +407,8 @@ resolve through it instead of naming a directory.
 | 19 | a downgrade is named as a downgrade | forward Wine supports, backward it does not - the wording has to differ |
 | 20 | use with no argument refuses when there is no terminal | a script calling `use` with no argument must fail, not block forever |
 | 21 | use with no argument leaves the channel alone | — |
+| 22 | list: a nightly id does not crowd the WINE column | the BUILD column was exactly as wide as a nightly id -- |
+| 23 | use accepts a nightly build by its full name | the id contains dots and a plus, so anything treating it as a pattern |
 
 <a id="ableton-update"></a>
 
@@ -649,6 +651,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `set-aside trees are not builds you can choose, but their existence is` | ableton-runtime: list does not offer quarantined trees, but mentions them |
 | `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | runtime-env: the runtime wins over a debug tree sitting beside it |
+| `the BUILD column was exactly as wide as a nightly id --` | ableton-runtime: list: a nightly id does not crowd the WINE column |
 | `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
 | `the channel is user configuration and must never choose a host` | manifest: an unknown channel resolves no URL at all |
 | `the channel is what the launcher resolves through` | ableton-runtime: use refuses a name that is not installed |
@@ -659,6 +662,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
 | `the guard must not block the .run, where install.sh has already` | install-runs: setup-prefix gets past the guard when nothing is running |
 | `the id becomes a directory name, and a BUILD-INFO is just text in a tarball` | runtime-env: a BUILD-INFO carrying path traversal is refused, not turned into a path |
+| `the id contains dots and a plus, so anything treating it as a pattern` | ableton-runtime: use accepts a nightly build by its full name |
 | `the installer name becomes both a URL component and a filename` | manifest: an installer name containing a path is refused |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
 | `the prefix cannot be taken back, so this must not happen quietly` | ableton-runtime: use refuses a base change with no terminal to ask on |

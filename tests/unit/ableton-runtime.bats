@@ -226,3 +226,34 @@ store() {
     setsid bash "$REPO/scripts/ableton-runtime" use || true
     [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]
 }
+
+# --- a nightly's longer name --------------------------------------------------
+
+# guards: the BUILD column was exactly as wide as a nightly id --
+# 2026.08.06.1+nightly.79d8960 is 28 characters in what was a 28-wide field, so
+# it rendered with a single space and a same-day counter reaching .10 would have
+# run the two columns together
+@test "list: a nightly id does not crowd the WINE column" {
+    plant "$C/2026.08.06.1+nightly.79d8960" 2026.08.06.1 79d8960xxx 2026-08-06T16:11:28Z
+    plant "$C/2026.08.04.1+b0d847a"         2026.08.04.1 b0d847axxx 2026-08-04T09:31:00Z
+    ln -s "2026.08.06.1+nightly.79d8960" "$C/nightly"
+    run RT list
+    [ "$status" -eq 0 ]
+    while read -r line; do
+        case "$line" in
+            *wine-11.13*) [[ "$line" =~ [[:space:]][[:space:]]wine-11\.13 ]] \
+                || { echo "columns collided: $line" >&2; false; } ;;
+        esac
+    done <<< "$output"
+}
+
+# guards: the id contains dots and a plus, so anything treating it as a pattern
+# rather than a name would match the wrong entry or none
+@test "use accepts a nightly build by its full name" {
+    plant "$C/2026.08.06.1+nightly.79d8960" 2026.08.06.1 79d8960xxx 2026-08-06T16:11:28Z
+    plant "$C/2026.08.04.1+b0d847a"         2026.08.04.1 b0d847axxx 2026-08-04T09:31:00Z
+    ln -s "2026.08.04.1+b0d847a" "$C/stable"
+    run RT use 2026.08.06.1+nightly.79d8960
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [ "$(readlink "$C/stable")" = "2026.08.06.1+nightly.79d8960" ]
+}
