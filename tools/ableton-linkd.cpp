@@ -1,7 +1,7 @@
 /* ableton-linkd.cpp: native Ableton Link session anchor + probe.
  *
- * A small always-on peer for the Link session on 224.76.78.75:20808. It
- * exists for two reasons the platform cannot provide by itself:
+ * A small session-scoped peer for the Link session on 224.76.78.75:20808.
+ * It exists for two reasons the platform cannot provide by itself:
  *
  *  - anchoring: as the longest-lived peer it holds the session tempo and
  *    timeline across Live restarts, and relays Start Stop Sync
@@ -14,6 +14,13 @@
  * or requestBeatAtTime. The initial tempo only applies when this process
  * founds a new session; joining an existing session adopts its timeline.
  *
+ * The anchor runs only while it has a session to anchor: with no peer for
+ * --linger seconds (default 900) it exits 0. Live counts as a peer while
+ * Link is enabled in its preferences, so the timer spans Live restarts and
+ * crash recovery but not an idle machine. --linger 0 disables the exit;
+ * the user unit uses it, and enabling that unit is the explicit opt-in
+ * for an always-on anchor.
+ *
  * It deliberately does NOT bridge JACK transport: native Link-enabled
  * Linux apps join the same session over the network directly, and upstream
  * jack_link remains an option for JACK-only apps.
@@ -24,6 +31,8 @@
  *   --probe [s]   join, wait up to s seconds (default 10), print
  *                 "peers: N" and "tempo: T.T", exit 0 iff N >= 1
  *   --tempo BPM   initial tempo when founding a session (default 120.0)
+ *   --linger SECS exit 0 after SECS with no peers (whole seconds only;
+ *                 default 900; 0 = never; ABLETON_LINKD_LINGER sets the same)
  *   --verbose     also log a status line every 10 s (the pre-2026.08 default;
  *                 ABLETON_LINKD_VERBOSE=1 does the same)
  *   --help        usage
@@ -47,6 +56,7 @@
 
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstdarg>
 #include <csignal>
 #include <cstdio>
@@ -68,6 +78,11 @@ constexpr double kMaxBpm = 999.0;
 
 constexpr auto kStatusPeriod = std::chrono::seconds(10);
 constexpr int kDefaultProbeSecs = 10;
+/* Session scope: exit after this long with no peers. Long enough to hold
+ * the timeline across a Live crash and relaunch, short enough that an idle
+ * machine is not running a network daemon all day. 0 = never exit. */
+constexpr int kDefaultLingerSecs = 900;
+constexpr int kMaxLingerSecs = 7 * 24 * 3600;
 /* Grace after the first peer appears, so the session tempo has sync'd
  * before --probe reports it. */
 constexpr auto kProbeGrace = std::chrono::milliseconds(500);
@@ -213,8 +228,9 @@ int run_probe(double tempo, int secs)
     return peers >= 1 ? 0 : 1;
 }
 
-/* Foreground and --daemon: anchor the session until signalled. */
-int run_anchor(double tempo, bool as_daemon, bool verbose)
+/* Foreground and --daemon: anchor the session until signalled, or until it
+ * has had no peer for linger_secs (0 = anchor forever). */
+int run_anchor(double tempo, bool as_daemon, bool verbose, int linger_secs)
 {
     if (as_daemon) {
         std::string log_dir;
@@ -230,12 +246,23 @@ int run_anchor(double tempo, bool as_daemon, bool verbose)
     link.enable(true);
     log_line("Ableton Link enabled (initial tempo %.1f, start stop sync on)",
              tempo);
+    if (linger_secs > 0)
+        log_line("session scope: exiting after %d s with no peers "
+                 "(--linger 0 for an always-on anchor)", linger_secs);
     print_status(link);
 
     auto last_status = std::chrono::steady_clock::now();
+    auto last_peer = last_status;
     while (!g_quit) {
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         const auto now = std::chrono::steady_clock::now();
+        if (link.numPeers() > 0) {
+            last_peer = now;
+        } else if (linger_secs > 0
+                   && now - last_peer >= std::chrono::seconds(linger_secs)) {
+            log_line("no peers for %d s, session over: exiting", linger_secs);
+            break;
+        }
         if (verbose && now - last_status >= kStatusPeriod) {
             print_status(link);
             last_status = now;
@@ -252,7 +279,7 @@ void print_usage(const char* argv0)
     std::printf(
         "ableton-linkd: native Ableton Link session anchor and probe\n"
         "\n"
-        "usage: %s [--tempo BPM] [--verbose] [--daemon | --probe [secs] | --help]\n"
+        "usage: %s [--tempo BPM] [--linger SECS] [--verbose] [--daemon | --probe [secs] | --help]\n"
         "\n"
         "  (no options)   run in the foreground; log to stderr on peer, tempo and\n"
         "                 start-stop changes\n"
@@ -262,6 +289,9 @@ void print_usage(const char* argv0)
         "                 and \"tempo: T.T\"; exit 0 iff at least one peer was seen\n"
         "  --tempo BPM    initial tempo when founding a session (default 120.0,\n"
         "                 valid range %.0f-%.0f)\n"
+        "  --linger SECS  exit 0 after SECS seconds with no peers (whole seconds\n"
+        "                 only; default %d, 0 = anchor until signalled; the\n"
+        "                 ABLETON_LINKD_LINGER environment variable sets the same)\n"
         "  --verbose      also log a status line every 10 s\n"
         "                 (ABLETON_LINKD_VERBOSE=1 does the same)\n"
         "  --help         this text\n"
@@ -269,7 +299,7 @@ void print_usage(const char* argv0)
         "Strictly passive: after construction it never changes the session tempo\n"
         "or timeline (Ableton Link anti-hijack guidelines). SIGTERM/SIGINT shut\n"
         "down cleanly (Link disabled, exit 0).\n",
-        argv0, kDefaultProbeSecs, kMinBpm, kMaxBpm);
+        argv0, kDefaultProbeSecs, kMinBpm, kMaxBpm, kDefaultLingerSecs);
 }
 
 bool parse_double(const char* s, double lo, double hi, double& out)
@@ -283,6 +313,18 @@ bool parse_double(const char* s, double lo, double hi, double& out)
     return true;
 }
 
+/* Whole seconds only: a fractional linger would truncate toward 0 on the
+ * int conversion, silently landing on the never-exit sentinel, and the
+ * daemon cannot honor a sub-second linger anyway. */
+bool parse_secs(const char* s, double hi, int& out)
+{
+    double v;
+    if (!parse_double(s, 0.0, hi, v) || v != std::floor(v))
+        return false;
+    out = static_cast<int>(v);
+    return true;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -291,8 +333,19 @@ int main(int argc, char** argv)
     bool as_daemon = false;
     bool probe = false;
     int probe_secs = kDefaultProbeSecs;
+    int linger_secs = kDefaultLingerSecs;
     const char* verbose_env = std::getenv("ABLETON_LINKD_VERBOSE");
     bool verbose = verbose_env && *verbose_env && std::strcmp(verbose_env, "0") != 0;
+
+    /* Environment first, flags override: the launchers start the daemon
+     * without arguments, so the environment is the per-launch override. */
+    if (const char* env = std::getenv("ABLETON_LINKD_LINGER")) {
+        if (!parse_secs(env, kMaxLingerSecs, linger_secs) && *env) {
+            std::fprintf(stderr,
+                         "ableton-linkd: ignoring bad ABLETON_LINKD_LINGER '%s' "
+                         "(want whole seconds, 0-%d)\n", env, kMaxLingerSecs);
+        }
+    }
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -325,6 +378,15 @@ int main(int argc, char** argv)
                 return 2;
             }
             ++i;
+        } else if (arg == "--linger") {
+            if (i + 1 >= argc
+                || !parse_secs(argv[i + 1], kMaxLingerSecs, linger_secs)) {
+                std::fprintf(stderr,
+                             "ableton-linkd: --linger needs a whole-seconds value in 0-%d\n",
+                             kMaxLingerSecs);
+                return 2;
+            }
+            ++i;
         } else {
             std::fprintf(stderr, "ableton-linkd: unknown option '%s' (try --help)\n",
                          arg.c_str());
@@ -338,5 +400,5 @@ int main(int argc, char** argv)
     }
 
     return probe ? run_probe(tempo, probe_secs)
-                 : run_anchor(tempo, as_daemon, verbose);
+                 : run_anchor(tempo, as_daemon, verbose, linger_secs);
 }
