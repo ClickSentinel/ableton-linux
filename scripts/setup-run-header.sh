@@ -208,7 +208,7 @@ configure_link() {
         # configured 5 -> declined 5 -> declined 0 and a later --link can
         # mistake a deliberate post-v5 enablement for a legacy one.
         local baseline
-        baseline="$(sed -n 2p "$marker" 2>/dev/null)"
+        baseline="$(sed -n 2p "$marker" 2>/dev/null || true)"
         case "$baseline" in ''|*[!0-9]*) baseline=0 ;; esac
         mkdir -p "$(dirname "$marker")" 2>/dev/null || true
         printf 'declined\n%s\n' "$baseline" > "$marker" 2>/dev/null || true

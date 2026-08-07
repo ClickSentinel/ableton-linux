@@ -36,7 +36,7 @@ The script:
    without enabling it. The launchers start `ableton-linkd` when Live or Max
    starts, and the daemon exits on its own after 15 minutes with no peers,
    so nothing runs while Live is closed. Setup versions 1 to 3 enabled the
-   unit, which kept the daemon running from login; the version 4 setup
+   unit, which kept the daemon running from login; the version 5 setup
    disables that once. Enable the unit yourself if you want an always-on
    anchor:
 
