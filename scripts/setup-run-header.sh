@@ -199,8 +199,19 @@ configure_link() {
         # The decline is sticky, even over an earlier configured state: later
         # updates stay quiet until --link opts back in, which re-runs the
         # idempotent setup in full, so nothing is lost by recording it.
+        # Record the configured baseline, not this kit's required version:
+        # setup-link.sh reads the marker as prior_version and keys its
+        # one-time migrations off it, so a version whose migration never ran
+        # must not be written here.
+        # Keep an already-recorded numeric baseline even when the marker is
+        # already declined. Otherwise repeated --no-link updates turn
+        # configured 5 -> declined 5 -> declined 0 and a later --link can
+        # mistake a deliberate post-v5 enablement for a legacy one.
+        local baseline
+        baseline="$(sed -n 2p "$marker" 2>/dev/null)"
+        case "$baseline" in ''|*[!0-9]*) baseline=0 ;; esac
         mkdir -p "$(dirname "$marker")" 2>/dev/null || true
-        printf 'declined\n%s\n' "$required_version" > "$marker" 2>/dev/null || true
+        printf 'declined\n%s\n' "$baseline" > "$marker" 2>/dev/null || true
         warn_stale_link_hook
         return 0
     fi

@@ -82,7 +82,8 @@ make verify
 - `ABLETON_POWER=off` keeps the computer's power mode unchanged for one
   launch.
 - `ABLETON_LINKD_LINGER` sets how many seconds `ableton-linkd` waits with no
-  Link peers before it exits. The default is 900; 0 keeps it running.
+  Link peers before it exits. Whole seconds only. The default is 900; 0
+  keeps it running.
 - `PIPEASIO_*` variables override PipeASIO settings for one launch.
 - `ENGINE` selects the container engine used by build scripts. The default is
   `podman`.

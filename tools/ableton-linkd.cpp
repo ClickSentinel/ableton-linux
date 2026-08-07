@@ -31,8 +31,8 @@
  *   --probe [s]   join, wait up to s seconds (default 10), print
  *                 "peers: N" and "tempo: T.T", exit 0 iff N >= 1
  *   --tempo BPM   initial tempo when founding a session (default 120.0)
- *   --linger SECS exit 0 after SECS with no peers (default 900; 0 = never;
- *                 ABLETON_LINKD_LINGER sets the same)
+ *   --linger SECS exit 0 after SECS with no peers (whole seconds only;
+ *                 default 900; 0 = never; ABLETON_LINKD_LINGER sets the same)
  *   --verbose     also log a status line every 10 s (the pre-2026.08 default;
  *                 ABLETON_LINKD_VERBOSE=1 does the same)
  *   --help        usage
@@ -56,6 +56,7 @@
 
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstdarg>
 #include <csignal>
 #include <cstdio>
@@ -288,9 +289,9 @@ void print_usage(const char* argv0)
         "                 and \"tempo: T.T\"; exit 0 iff at least one peer was seen\n"
         "  --tempo BPM    initial tempo when founding a session (default 120.0,\n"
         "                 valid range %.0f-%.0f)\n"
-        "  --linger SECS  exit 0 after SECS seconds with no peers (default %d,\n"
-        "                 0 = anchor until signalled; the ABLETON_LINKD_LINGER\n"
-        "                 environment variable sets the same)\n"
+        "  --linger SECS  exit 0 after SECS seconds with no peers (whole seconds\n"
+        "                 only; default %d, 0 = anchor until signalled; the\n"
+        "                 ABLETON_LINKD_LINGER environment variable sets the same)\n"
         "  --verbose      also log a status line every 10 s\n"
         "                 (ABLETON_LINKD_VERBOSE=1 does the same)\n"
         "  --help         this text\n"
@@ -312,6 +313,18 @@ bool parse_double(const char* s, double lo, double hi, double& out)
     return true;
 }
 
+/* Whole seconds only: a fractional linger would truncate toward 0 on the
+ * int conversion, silently landing on the never-exit sentinel, and the
+ * daemon cannot honor a sub-second linger anyway. */
+bool parse_secs(const char* s, double hi, int& out)
+{
+    double v;
+    if (!parse_double(s, 0.0, hi, v) || v != std::floor(v))
+        return false;
+    out = static_cast<int>(v);
+    return true;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -327,13 +340,10 @@ int main(int argc, char** argv)
     /* Environment first, flags override: the launchers start the daemon
      * without arguments, so the environment is the per-launch override. */
     if (const char* env = std::getenv("ABLETON_LINKD_LINGER")) {
-        double secs;
-        if (parse_double(env, 0.0, kMaxLingerSecs, secs)) {
-            linger_secs = static_cast<int>(secs);
-        } else if (*env) {
+        if (!parse_secs(env, kMaxLingerSecs, linger_secs) && *env) {
             std::fprintf(stderr,
                          "ableton-linkd: ignoring bad ABLETON_LINKD_LINGER '%s' "
-                         "(want seconds, 0-%d)\n", env, kMaxLingerSecs);
+                         "(want whole seconds, 0-%d)\n", env, kMaxLingerSecs);
         }
     }
 
@@ -369,15 +379,13 @@ int main(int argc, char** argv)
             }
             ++i;
         } else if (arg == "--linger") {
-            double secs;
             if (i + 1 >= argc
-                || !parse_double(argv[i + 1], 0.0, kMaxLingerSecs, secs)) {
+                || !parse_secs(argv[i + 1], kMaxLingerSecs, linger_secs)) {
                 std::fprintf(stderr,
-                             "ableton-linkd: --linger needs a seconds value in 0-%d\n",
+                             "ableton-linkd: --linger needs a whole-seconds value in 0-%d\n",
                              kMaxLingerSecs);
                 return 2;
             }
-            linger_secs = static_cast<int>(secs);
             ++i;
         } else {
             std::fprintf(stderr, "ableton-linkd: unknown option '%s' (try --help)\n",

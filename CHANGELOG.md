@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- Link setup records its version marker only when the service step
+  completed, so a host where that step failed retries it on the next
+  update instead of counting itself configured. The version moves to 5.
+- The session power-profile hold now covers launches through ableton://
+  URLs and .auz files. Live is started with `start /w`, so the launcher
+  waits on Live itself and the hold no longer ends right after the
+  handoff.
+- The launchers bound the power-profile probe with a 10-second timeout,
+  so an unresponsive power daemon no longer stalls Live's launch.
+- The uninstaller now names the boot-time CPU speed setting that earlier
+  releases installed, and prints the commands to remove it.
+- The realtime setup script and the troubleshooting guide now warn
+  Pop!_OS and other System76 users off power-profiles-daemon: the
+  package manager removes the System76 power tools to install it.
+- ableton-linkd rejects fractional `--linger` values instead of
+  truncating them toward the never-exit setting.
+
 ## 2026.08.04.1
 
 - Full Screen works (issue 42). Entering it no longer shifts Live's

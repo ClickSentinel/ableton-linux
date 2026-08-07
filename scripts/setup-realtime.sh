@@ -117,6 +117,10 @@ else
 -- NOTE: powerprofilesctl not found — the launcher cannot raise CPU speed for
    Live sessions. Install power-profiles-daemon (or tuned-ppd), or manage the
    governor yourself through your desktop's power settings.
+   On Pop!_OS and other System76 computers, do not install
+   power-profiles-daemon: the package manager removes the System76 power
+   management tools to install it. The power settings in your desktop
+   already control CPU speed there.
 EOF
     fi
 fi

@@ -45,8 +45,10 @@ The script:
    ```
 
 The script can be repeated and refuses to run while Live is open. If the
-daemon or unit file is missing, it keeps the firewall change and reports that
-the daemon setup was skipped.
+daemon or unit file is missing, it keeps the firewall change and reports
+that the daemon setup was skipped. It records the setup version only when
+the service step completed, so a skipped or unchecked service step is
+retried on the next update.
 
 Setup versions 1 and 2 added a `224.0.0.0/4` route on the LAN interface and
 a NetworkManager hook to maintain it. Version 3 removed both. The Link SDK
@@ -81,8 +83,9 @@ stops soon after you finish working. `--linger` changes the wait.
 
 Its modes are:
 
-- No arguments: run in the foreground and write status to stderr every ten
-  seconds.
+- No arguments: run in the foreground and log to stderr on peer count,
+  tempo, and transport changes. It writes its startup lines and one status
+  line, then a quiet session writes nothing more.
 - `--daemon`: run in the background and write
   `~/.log/ableton-linkd/ableton-linkd.log`. The launchers use this mode.
 - `--probe [seconds]`: join, wait up to ten seconds by default, print
@@ -90,9 +93,13 @@ Its modes are:
   peer.
 - `--tempo BPM`: set only the construction tempo used when this process
   creates a new session.
-- `--linger SECONDS`: exit after this long with no peers. The default is
-  900. `--linger 0` never exits; the systemd unit uses it. The
-  `ABLETON_LINKD_LINGER` environment variable sets the same value.
+- `--linger SECONDS`: exit after this long with no peers. Whole seconds
+  only. The default is 900. `--linger 0` never exits; the systemd unit uses
+  it. The `ABLETON_LINKD_LINGER` environment variable sets the same value.
+- `--verbose` (or `ABLETON_LINKD_VERBOSE=1`): also write a status line
+  every ten seconds. Before 2026.08 this was unconditional. Under the
+  systemd unit it wrote 8640 identical journal lines a day. That read as a
+  stuck process and invited force quits.
 
 The Live and Max launchers start `ableton-linkd --daemon` when the binary
 exists and no process with that name is running. `ABLETON_LINKD` overrides
@@ -162,7 +169,7 @@ two native SDK instances can join. It does not identify Live as the peer.
 From a checkout, test Wine's local multicast socket behavior:
 
 ```bash
-WINEPREFIX="$HOME/.wine-ableton" \
+env WINEPREFIX="$HOME/.wine-ableton" \
   "$HOME/.local/opt/wine-d2d1-nspa-11.13/bin/wine" tools/linkprobe.exe
 ```
 

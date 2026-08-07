@@ -800,9 +800,17 @@ fi
 # setup-realtime.sh installed before 2026-08; ABLETON_POWER=off skips it for
 # one launch. The probe runs the exact call with `true`, so a missing daemon,
 # a host without a performance profile, or an old powerprofilesctl all fall
-# back to launching without the hold.
+# back to launching without the hold. The timeout bounds a wedged daemon:
+# powerprofilesctl waits on GLib's 25 s D-Bus default per call, and the hold
+# call would wait a second time. The start.exe paths below pass /w so
+# start.exe waits on the process it spawns; without it start.exe exits right
+# after the handoff and the hold dies with it, leaving cold starts through
+# ableton:// URLs and .auz files uncovered. The chrt wrapper is unaffected
+# either way: scheduling policy is inherited across fork/exec. One side
+# effect: with /w the spawned process sits in a kill-on-close job object, so
+# killing the launcher chain now takes Live down with it.
 if [ "${ABLETON_POWER:-on}" != off ] && command -v powerprofilesctl >/dev/null 2>&1 \
-    && powerprofilesctl launch -p performance -r "Ableton Live session" -i ableton-live -- true >/dev/null 2>&1; then
+    && timeout 10 powerprofilesctl launch -p performance -r "Ableton Live session" -i ableton-live -- true >/dev/null 2>&1; then
     run=(powerprofilesctl launch -p performance -r "Ableton Live session" -i ableton-live -- "${run[@]}")
 fi
 
@@ -857,9 +865,9 @@ elif [ "$#" -gt 0 ]; then
                 fi
                 ;;
         esac
-        case "$1" in /*) exec "${run[@]}" start /unix "$1" ;; esac
+        case "$1" in /*) exec "${run[@]}" start /w /unix "$1" ;; esac
     fi
-    exec "${run[@]}" start "$@"
+    exec "${run[@]}" start /w "$@"
 else
     require_live
     exec "${run[@]}" "$EXE"

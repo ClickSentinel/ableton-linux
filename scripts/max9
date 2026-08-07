@@ -31,9 +31,11 @@ if [ "${ABLETON_RT:-on}" != off ] && command -v chrt >/dev/null 2>&1 \
 fi
 
 # Same session-scoped performance power-profile hold as the ableton-live
-# launcher; released when Max exits.
+# launcher; released when Max exits. The timeout bounds a wedged daemon:
+# powerprofilesctl waits on GLib's 25 s D-Bus default per call, and the hold
+# call would wait a second time.
 if [ "${ABLETON_POWER:-on}" != off ] && command -v powerprofilesctl >/dev/null 2>&1 \
-    && powerprofilesctl launch -p performance -r "Max session" -i max9 -- true >/dev/null 2>&1; then
+    && timeout 10 powerprofilesctl launch -p performance -r "Max session" -i max9 -- true >/dev/null 2>&1; then
     run=(powerprofilesctl launch -p performance -r "Max session" -i max9 -- "${run[@]}")
 fi
 
