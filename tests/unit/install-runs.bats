@@ -97,3 +97,117 @@ setup() {
     n="$(find "$(dirname "$root")" -maxdepth 1 -name "$(basename "$root")-rollback-*" | wc -l)"
     [ "$n" -eq 1 ] || { echo "expected 1 rollback, found $n" >&2; false; }
 }
+
+# --- the store ----------------------------------------------------------------
+# These are the ones that would have caught the promote defect: against a
+# correctly shaped store, one ordinary install replaced the channel with a real
+# directory, left a rollback symlink pointing into the store, and filed the new
+# build under no name at all. The store survived no installs, and the migration
+# read the result as already migrated.
+
+@test "a fresh install lands in the store, not the flat path" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set ABLETON_TEST_TARBALL to run this"
+
+    run env ABLETON_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+
+    container="$(ableton_container_root)"
+    [ -L "$container/stable" ]
+    id="$(readlink "$container/stable")"
+    [ -f "$container/$id/bin/wine" ]
+    [ "$id" = "$(ableton_runtime_id "$container/$id")" ]
+    # a new user never sees the flat layout
+    [ ! -e "$(ableton_legacy_root)" ]
+}
+
+@test "the channel stays a symlink across a second install" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set ABLETON_TEST_TARBALL to run this"
+
+    env ABLETON_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    run env ABLETON_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+
+    container="$(ableton_container_root)"
+    [ -L "$container/stable" ] || { echo "the channel is no longer a symlink" >&2; false; }
+    # and no rollback symlink was left pointing into the store
+    [ -z "$(find "$container" -maxdepth 1 -name 'stable-rollback-*')" ]
+    [ -z "$(find "$container" -maxdepth 1 -name '.replaced-*')" ]
+}
+
+# guards: the resolver, the process scan and the install must all name the same
+# tree, which is what /proc/PID/exe reporting resolved paths makes non-obvious
+@test "after installing, the resolver points at a real build directory" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set ABLETON_TEST_TARBALL to run this"
+
+    env ABLETON_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    root="$(ableton_wine_root)"
+    [ -d "$root" ] && [ ! -L "$root" ]
+    [ -x "$root/bin/wine" ]
+    [ "$root" = "$(readlink -f "$(ableton_container_root)/stable")" ]
+}
+
+# guards: an existing flat install is what nearly every user has
+@test "a flat install is migrated by the installer, not just by the library" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set ABLETON_TEST_TARBALL to run this"
+
+    legacy="$(ableton_legacy_root)"
+    mkdir -p "$legacy/bin"
+    : > "$legacy/bin/wine"
+    printf 'dist-version: 2026.01.01.1\npatch-stack:  0ldbui1daaa\n' \
+        > "$legacy/ABLETON-WINE-BUILD-INFO.txt"
+
+    run env ABLETON_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+
+    container="$(ableton_container_root)"
+    [ ! -e "$legacy" ]
+    [ -d "$container/2026.01.01.1+0ldbui1" ]   # the old build, now readable
+    [ -L "$container/stable" ]
+    [ "$(readlink "$container/stable")" != "2026.01.01.1+0ldbui1" ]  # channel moved on
+}
+
+
+
+# --- setup-prefix.sh's own guard ----------------------------------------------
+# Through the .run this never fires, because install.sh stops everything first.
+# Standalone it is the only guard there is -- and install.sh's last line tells
+# you to run it standalone, so that path is the documented one.
+
+# guards: `wineboot -u` rewriting the registry under a live wineserver
+@test "setup-prefix refuses while something runs from the runtime" {
+    root="$BATS_TEST_TMPDIR/rt"; mkdir -p "$root/bin"
+    export ABLETON_WINE_ROOT="$root"
+    cp "$(command -v sleep)" "$root/bin/wineserver"
+    "$root/bin/wineserver" 30 &
+    local pid=$!
+    run bash "$REPO/scripts/setup-prefix.sh"
+    kill "$pid" 2>/dev/null || true
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Close Live"* ]]
+}
+
+# guards: the refusal must not depend on a terminal -- an unattended run is
+# exactly when nobody notices the prefix being rewritten
+@test "setup-prefix refuses with no terminal too" {
+    root="$BATS_TEST_TMPDIR/rt"; mkdir -p "$root/bin"
+    export ABLETON_WINE_ROOT="$root"
+    cp "$(command -v sleep)" "$root/bin/wineserver"
+    "$root/bin/wineserver" 30 &
+    local pid=$!
+    run setsid --wait bash "$REPO/scripts/setup-prefix.sh"
+    kill "$pid" 2>/dev/null || true
+    [ "$status" -ne 0 ]
+}
+
+# guards: the guard must not block the .run, where install.sh has already
+# stopped everything -- getting past it is the whole requirement
+@test "setup-prefix gets past the guard when nothing is running" {
+    root="$BATS_TEST_TMPDIR/rt"; mkdir -p "$root/bin"
+    export ABLETON_WINE_ROOT="$root"
+    run bash "$REPO/scripts/setup-prefix.sh"
+    [[ "$output" != *"Close Live"* ]]
+}
