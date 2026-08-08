@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-291 tests across 13 suites. See [README.md](README.md) for how to run
+302 tests across 14 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -22,6 +22,7 @@ for which run on a PR.
 - [tests/unit/install-runs.bats](#install-runs) — 16 test(s)
 - [tests/unit/manifest.bats](#manifest) — 19 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 25 test(s)
+- [tests/unit/promote.bats](#promote) — 11 test(s)
 - [tests/unit/ableton-runtime.bats](#ableton-runtime) — 23 test(s)
 - [tests/unit/ableton-update.bats](#ableton-update) — 27 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 62 test(s)
@@ -372,6 +373,33 @@ a throwaway tree.
 | 24 | removal refuses a pinned root that is not a runtime | a stale exported ABLETON_WINE_ROOT from a test session would otherwise |
 | 25 | removal refuses a pinned root of \$HOME | — |
 
+<a id="promote"></a>
+
+## tests/unit/promote.bats
+
+
+scripts/promote-nightly.sh — a nightly becomes a release without a rebuild.
+
+The promise under test: the Wine bits survive verbatim, the identity fields
+that tie the release back to the soaked build survive verbatim, and only the
+naming changes. Every refusal is a state where that promise cannot hold.
+
+  ./tests/run.sh tests/unit/promote.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | a nightly promotes: plain name, checksum, and both BUILD-INFO copies | — |
+| 2 | the output is a tarball the selector accepts as a release | — |
+| 3 | dist-version is the release, build-kind is gone, promoted-from records the origin | — |
+| 4 | source-commit and built-at survive the restamp unchanged | the updater compares source-commit and retention orders by built-at — |
+| 5 | the payload bits survive verbatim | — |
+| 6 | the unpacked result names itself <version>+<short-commit> in the store | — |
+| 7 | a plain release tarball is refused: nothing to promote | — |
+| 8 | a tarball with no source-commit is refused, because identity is the point | — |
+| 9 | a labelled tarball whose BUILD-INFO says release is refused | — |
+| 10 | a malformed target version is refused before anything is unpacked | — |
+| 11 | a real nightly tarball promotes losslessly | — |
+
 <a id="ableton-runtime"></a>
 
 ## tests/unit/ableton-runtime.bats
@@ -664,6 +692,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the same-day counter must not be read as a date component` | runtime-env: tarball predicate: a partial download is refused |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
 | `the two ids differ in length by design -- a nightly carries its kind --` | ableton-update: the report's columns line up between available and installed |
+| `the updater compares source-commit and retention orders by built-at` | promote: source-commit and built-at survive the restamp unchanged |
 | `the updater compares source-commit to decide "do I already have this"` | manifest: the source commit is carried, not truncated |
 | `the updater compares the manifest's source-commit against` | manifest: the runtime's BUILD-INFO is read straight out of a tarball |
 | `the value names a symlink and, for the updater, part of a URL` | runtime-env: channel: an unknown value falls back to stable and says so |
