@@ -19,6 +19,36 @@
 #   WINE_ROOT="$(works_runtime_path)"           # just the path
 #   works_bind_runtime                       # the full launcher binding
 
+# Names this library answered to before the runtime was its own thing. They are
+# honoured for one release and say so once, because the rename lands in the same
+# breath as a migration that moves every path a person or a script had learned -
+# breaking both at once turns one afternoon of adjustment into two.
+#
+# Only infrastructure is listed. ABLETON_DPI_MODE, ABLETON_LIVE_VERSION and the
+# rest configure Ableton Live and keep their names for good: the split is the
+# point, and a second application should be able to read the difference.
+works_env_compat() {
+    local _pair _old _new
+    for _pair in \
+        ABLETON_WINE_ROOT:WORKS_RUNTIME \
+        ABLETON_WINEPREFIX:WORKS_PLUG \
+        ABLETON_OPT_DIR:WORKS_HOME \
+        ABLETON_RUNTIME_KEEP:WORKS_RUNTIME_KEEP \
+        ABLETON_RUNTIME_TARBALL:WORKS_RUNTIME_TARBALL \
+        ABLETON_CHANNEL:WORKS_CHANNEL \
+        ABLETON_CHANNEL_FILE:WORKS_CHANNEL_FILE \
+        ABLETON_MANIFEST_URL:WORKS_MANIFEST_URL
+    do
+        _old="${_pair%%:*}"; _new="${_pair##*:}"
+        # The new name always wins: someone setting both has migrated and left
+        # the old one in a shell profile.
+        [ -n "${!_old:-}" ] && [ -z "${!_new:-}" ] || continue
+        export "$_new=${!_old}"
+        echo "   note: $_old is now $_new, and will stop being read after the next release" >&2
+    done
+}
+works_env_compat
+
 # The directory installs live under. A seam for the tests; nothing else sets it.
 works_home() {
     printf '%s\n' "${WORKS_HOME:-$HOME/works}"

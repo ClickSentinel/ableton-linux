@@ -533,3 +533,36 @@ id_of() {   # id_of <build-info lines...>
 @test "tarball predicate: the nightly artifact name is accepted" {
     works_is_runtime_tarball "wine-d2d1-nspa-11.13-2026.08.06.1+nightly.badafaf.tar.zst"
 }
+
+# --- the names this library used to answer to ---------------------------------
+# The rename arrives with a migration that moves every path as well; honouring
+# the old names for a release means a person adjusts once, not twice. The VM
+# harness alone sets ABLETON_WINEPREFIX in seven places.
+
+@test "compat: an old infrastructure name is honoured, and says so once" {
+    run env -u WORKS_PLUG ABLETON_WINEPREFIX=/tmp/oldpfx bash -c \
+        '. "$REPO/scripts/runtime-env.sh"; works_plug_path'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"/tmp/oldpfx"* ]]
+    [[ "$stderr$output" == *"now WORKS_PLUG"* ]]
+}
+
+# guards: someone with both set has already migrated and left the old one in a
+# shell profile — the new name is the deliberate one
+@test "compat: the new name wins when both are set" {
+    run env ABLETON_WINEPREFIX=/tmp/oldpfx WORKS_PLUG=/tmp/newpfx bash -c \
+        '. "$REPO/scripts/runtime-env.sh"; works_plug_path'
+    [ "$output" = "/tmp/newpfx" ] || [[ "$output" == *"/tmp/newpfx"* ]]
+}
+
+@test "compat: an application's own settings are not renamed" {
+    run env ABLETON_DPI_MODE=dpi120 bash -c \
+        '. "$REPO/scripts/runtime-env.sh"; printf "%s|%s\n" "${ABLETON_DPI_MODE:-}" "${WORKS_DPI_MODE:-unset}"'
+    [[ "$output" == *"dpi120|unset"* ]]
+}
+
+@test "compat: nothing is said when no old name is set" {
+    run env -u ABLETON_WINEPREFIX -u ABLETON_WINE_ROOT bash -c \
+        '. "$REPO/scripts/runtime-env.sh"; works_plug_path >/dev/null'
+    [ -z "$stderr" ] || [[ "$stderr" != *"will stop being read"* ]]
+}

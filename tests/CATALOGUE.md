@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-316 tests across 14 suites. See [README.md](README.md) for how to run
+320 tests across 14 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -25,7 +25,7 @@ for which run on a PR.
 - [tests/unit/promote.bats](#promote) — 11 test(s)
 - [tests/unit/works-runtime.bats](#works-runtime) — 23 test(s)
 - [tests/unit/works-update.bats](#works-update) — 27 test(s)
-- [tests/unit/runtime-env.bats](#runtime-env) — 62 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 66 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 
 <a id="repo-hygiene"></a>
@@ -579,6 +579,10 @@ sandbox, which is the whole reason they echo instead of assigning.
 | 60 | runtime id: a kind with a path separator is refused, not sanitised | build-kind becomes a directory name like everything else in the id |
 | 61 | runtime id: dates order correctly across both channels | this is the whole point -- the directory name answers "when" |
 | 62 | tarball predicate: the nightly artifact name is accepted | — |
+| 63 | compat: an old infrastructure name is honoured, and says so once | — |
+| 64 | compat: the new name wins when both are set | someone with both set has already migrated and left the old one in a |
+| 65 | compat: an application's own settings are not renamed | — |
+| 66 | compat: nothing is said when no old name is set | — |
 
 <a id="patch-stack"></a>
 
@@ -685,6 +689,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `scripts/setup-run-header.sh line 19` | repo-hygiene: the installer header survives being run by a real POSIX sh |
 | `set-aside trees are not builds you can choose, but their existence is` | works-runtime: list does not offer quarantined trees, but mentions them |
 | `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
+| `someone with both set has already migrated and left the old one in a` | runtime-env: compat: the new name wins when both are set |
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | runtime-env: the runtime wins over a debug tree sitting beside it |
 | `the BUILD column was exactly as wide as a nightly id --` | works-runtime: list: a nightly id does not crowd the WINE column |
 | `the Plug holds Live, its authorisation and the user's sets` | install-runs: uninstalling keeps the Plug, and the work inside it |
