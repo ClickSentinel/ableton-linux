@@ -426,6 +426,83 @@ make_tree() {
     ! ableton_is_runtime_tarball "wine-d2d1-nspa-11.13-2026.08.04.1.tar.zst.part"
 }
 
+# --- channels -----------------------------------------------------------------
+# One channel was assumed throughout: `stable` was hardcoded in six places and
+# retention protected only that one. A second channel needs both generalised.
+
+@test "channel: defaults to stable with nothing configured" {
+    export ABLETON_CHANNEL_FILE="$BATS_TEST_TMPDIR/none"
+    [ "$(ableton_channel)" = "stable" ]
+}
+
+@test "channel: reads the configured file" {
+    export ABLETON_CHANNEL_FILE="$BATS_TEST_TMPDIR/chan"
+    printf 'nightly\n' > "$ABLETON_CHANNEL_FILE"
+    [ "$(ableton_channel)" = "nightly" ]
+}
+
+@test "channel: tolerates trailing whitespace" {
+    export ABLETON_CHANNEL_FILE="$BATS_TEST_TMPDIR/chan"
+    printf '  nightly  \n' > "$ABLETON_CHANNEL_FILE"
+    [ "$(ableton_channel)" = "nightly" ]
+}
+
+# guards: the value names a symlink and, for the updater, part of a URL —
+# configuration the build does not control must not shape a request
+@test "channel: an unknown value falls back to stable and says so" {
+    export ABLETON_CHANNEL_FILE="$BATS_TEST_TMPDIR/chan"
+    printf 'https://evil.example/x\n' > "$ABLETON_CHANNEL_FILE"
+    run ableton_channel
+    [ "$output" != "https://evil.example/x" ]
+    [[ "$output" == *"stable"* ]]
+}
+
+@test "channel: the environment overrides the file" {
+    export ABLETON_CHANNEL_FILE="$BATS_TEST_TMPDIR/chan"
+    printf 'stable\n' > "$ABLETON_CHANNEL_FILE"
+    ABLETON_CHANNEL=nightly
+    export ABLETON_CHANNEL
+    [ "$(ableton_channel)" = "nightly" ]
+}
+
+@test "runtime root: resolves through the configured channel" {
+    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
+    export ABLETON_CHANNEL=nightly
+    mkdir -p "$ABLETON_OPT_DIR/ableton-wine/2026.08.05.1+abc1234"
+    ln -s "2026.08.05.1+abc1234" "$ABLETON_OPT_DIR/ableton-wine/nightly"
+    [ "$(ableton_wine_root)" = "$ABLETON_OPT_DIR/ableton-wine/2026.08.05.1+abc1234" ]
+}
+
+# guards: pruning on behalf of one channel must not strand another
+@test "retention never removes what a DIFFERENT channel points at" {
+    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
+    C="$ABLETON_OPT_DIR/ableton-wine"
+    for v in 2026.01.01.1 2026.02.01.1 2026.03.01.1; do
+        mkdir -p "$C/$v+aaaaaaa"
+        printf 'dist-version: %s\npatch-stack:  aaaaaaaxx\nbuilt-at:     %sT00:00:00Z\n' \
+            "$v" "${v//./-}" > "$C/$v+aaaaaaa/ABLETON-WINE-BUILD-INFO.txt"
+    done
+    ln -s "2026.03.01.1+aaaaaaa" "$C/stable"
+    ln -s "2026.01.01.1+aaaaaaa" "$C/nightly"    # nightly pinned to the OLDEST
+    ABLETON_RUNTIME_KEEP=1 ableton_prune_runtimes
+    [ -d "$C/2026.03.01.1+aaaaaaa" ] || { echo "stable's target went" >&2; false; }
+    [ -d "$C/2026.01.01.1+aaaaaaa" ] || { echo "nightly's target was pruned" >&2; false; }
+    [ ! -e "$C/2026.02.01.1+aaaaaaa" ]           # the unpinned one goes
+}
+
+
+# --- how a nightly is named ---------------------------------------------------
+# dist-version is the date the build happened, for every build. `nightly` rides
+# in the discriminator, so the date is written once and the id keeps its single
+# separator. Putting the kind in dist-version instead would need either a second
+# date or a second `+`, and the id is <version>+<discriminator>.
+
+id_of() {   # id_of <build-info lines...>
+    local d="$BATS_TEST_TMPDIR/rt"; mkdir -p "$d"
+    printf '%s\n' "$@" > "$d/ABLETON-WINE-BUILD-INFO.txt"
+    ableton_runtime_id "$d"
+}
+
 @test "tarball predicate: the nightly artifact name is accepted" {
     ableton_is_runtime_tarball "wine-d2d1-nspa-11.13-2026.08.06.1+nightly.badafaf.tar.zst"
 }
