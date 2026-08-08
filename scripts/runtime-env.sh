@@ -30,6 +30,23 @@ ableton_runtime_name() {
     printf '%s\n' "wine-d2d1-nspa-11.13"
 }
 
+# Which channel this machine follows. One word, validated against an allowlist
+# rather than trusted: it selects a symlink name and, for the updater, part of a
+# URL - and configuration the build does not control must not shape a request.
+# That is the same constraint that ended the source-repo experiment.
+ableton_channel() {
+    local _f _c
+    _f="${ABLETON_CHANNEL_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/ableton-wine/channel}"
+    _c="${ABLETON_CHANNEL:-}"
+    [ -n "$_c" ] || { [ -r "$_f" ] && _c="$(head -1 "$_f" 2>/dev/null | tr -d '[:space:]')"; }
+    case "$_c" in
+        stable|nightly) printf '%s\n' "$_c" ;;
+        "")             printf 'stable\n' ;;
+        *)              echo "!! unknown channel '$_c' in $_f; using stable" >&2
+                        printf 'stable\n' ;;
+    esac
+}
+
 # The directory holding every installed runtime, one per build.
 ableton_container_root() {
     printf '%s\n' "$(ableton_opt_dir)/ableton-wine"
@@ -64,7 +81,7 @@ ableton_wine_root() {
         printf '%s\n' "$ABLETON_WINE_ROOT"
         return
     fi
-    _chan="$(ableton_container_root)/stable"
+    _chan="$(ableton_container_root)/$(ableton_channel)"
     if [ -e "$_chan" ]; then
         _target="$(readlink -f "$_chan" 2>/dev/null || true)"
         if [ -n "$_target" ]; then
@@ -315,7 +332,7 @@ ableton_migrate_layout() {
     local legacy container chan stamp id other d
     legacy="$(ableton_legacy_root)"
     container="$(ableton_container_root)"
-    chan="$container/stable"
+    chan="$container/$(ableton_channel)"
     stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 
     if [ -n "${ABLETON_WINE_ROOT:-}" ]; then
@@ -410,7 +427,15 @@ ableton_prune_runtimes() {
     _container="$(ableton_container_root)"
     [ -d "$_container" ] || return 0
     _keep="$(ableton_runtime_keep)"
-    _live="$(readlink -f "$_container/stable" 2>/dev/null || true)"
+    # Every channel's target, not just this machine's. A second channel pointing
+    # at an entry pruned on behalf of the first is a broken install produced by
+    # housekeeping - the rule has to hold for all of them.
+    local -a _pinned=()
+    for _e in "$_container"/*; do
+        [ -L "$_e" ] || continue
+        _live="$(readlink -f "$_e" 2>/dev/null || true)"
+        [ -n "$_live" ] && _pinned+=("$_live")
+    done
 
     local -a _victims=()
     while IFS=$'\t' read -r _key _e; do
@@ -428,8 +453,13 @@ ableton_prune_runtimes() {
         done | sort -V | head -n -"$_keep"
     )
 
+    local _p _keepit
     for _e in ${_victims+"${_victims[@]}"}; do
-        [ "$_e" != "$_live" ] || continue
+        _keepit=""
+        for _p in ${_pinned+"${_pinned[@]}"}; do
+            [ "$_e" = "$_p" ] && { _keepit=1; break; }
+        done
+        [ -z "$_keepit" ] || continue
         rm -rf "$_e" && echo "   pruned $(basename "$_e")"
     done
 }

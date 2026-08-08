@@ -27,7 +27,7 @@ command -v ableton_wine_root >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0 or in ~/.local/share/ableton-wine" >&2; exit 1; }
 
 container="$(ableton_container_root)"
-channel="$container/stable"
+channel="$container/$(ableton_channel)"
 
 # Entries only: a directory the id reader can name. Quarantined trees
 # (superseded-*, failed-*) and the channel link are not builds you can choose.

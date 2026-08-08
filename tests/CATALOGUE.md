@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-226 tests across 11 suites. See [README.md](README.md) for how to run
+236 tests across 11 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -19,10 +19,10 @@ for which run on a PR.
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/install-runs.bats](#install-runs) — 11 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 14 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 25 test(s)
 - [tests/unit/ableton-runtime.bats](#ableton-runtime) — 21 test(s)
-- [tests/unit/runtime-env.bats](#runtime-env) — 50 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 57 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 
 <a id="repo-hygiene"></a>
@@ -275,9 +275,12 @@ tree ships.
 | 6 | the channel stays a symlink across a second install | — |
 | 7 | after installing, the resolver points at a real build directory | the resolver, the process scan and the install must all name the same |
 | 8 | a flat install is migrated by the installer, not just by the library | an existing flat install is what nearly every user has |
-| 9 | setup-prefix refuses while something runs from the runtime | `wineboot -u` rewriting the registry under a live wineserver |
-| 10 | setup-prefix refuses with no terminal too | the refusal must not depend on a terminal -- an unattended run is |
-| 11 | setup-prefix gets past the guard when nothing is running | the guard must not block the .run, where install.sh has already |
+| 9 | a kit declares its channel and the installer promotes into it | — |
+| 10 | installing records the channel, so the updater follows it | — |
+| 11 | a kit with no channel marker is stable, as every older kit was | — |
+| 12 | setup-prefix refuses while something runs from the runtime | `wineboot -u` rewriting the registry under a live wineserver |
+| 13 | setup-prefix refuses with no terminal too | the refusal must not depend on a terminal -- an unattended run is |
+| 14 | setup-prefix gets past the guard when nothing is running | the guard must not block the .run, where install.sh has already |
 
 <a id="migrate-layout"></a>
 
@@ -429,7 +432,14 @@ sandbox, which is the whole reason they echo instead of assigning.
 | 47 | tarball predicate: another Wine base is refused | — |
 | 48 | tarball predicate: an undated artifact is refused | — |
 | 49 | tarball predicate: a partial download is refused | the same-day counter must not be read as a date component |
-| 50 | tarball predicate: the nightly artifact name is accepted | — |
+| 50 | channel: defaults to stable with nothing configured | — |
+| 51 | channel: reads the configured file | — |
+| 52 | channel: tolerates trailing whitespace | — |
+| 53 | channel: an unknown value falls back to stable and says so | the value names a symlink and, for the updater, part of a URL — |
+| 54 | channel: the environment overrides the file | — |
+| 55 | runtime root: resolves through the configured channel | — |
+| 56 | retention never removes what a DIFFERENT channel points at | pruning on behalf of one channel must not strand another |
+| 57 | tarball predicate: the nightly artifact name is accepted | — |
 
 <a id="patch-stack"></a>
 
@@ -506,6 +516,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `no released runtime carries source-commit` | runtime-env: a runtime without source-commit is named from its patch stack |
 | `nothing is left behind for an older .run to overwrite, and a migrated` | migrate-layout: nothing remains at the legacy path |
 | `observed during the first real migration` | runtime-env: live pids: a process that exits mid-scan is skipped, not an error |
+| `pruning on behalf of one channel must not strand another` | runtime-env: retention never removes what a DIFFERENT channel points at |
 | `scoping` | runtime-env: runtime pids: a process from another Wine install is ignored |
 | `scripts/ableton-live` | launcher-cli: a stale wineserver is killed and the session booted before registry writes<br>launcher: windowmetrics: a value wrapped across continuation lines is rejoined |
 | `scripts/build-audit.sh` | patch-stack: audit: every wine patch is registered in FINGERPRINTS or STAMP_ONLY |
@@ -532,6 +543,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the same resolution a running process reports, so the two can be` | runtime-env: runtime root: matches what /proc would report for a process under it |
 | `the same-day counter must not be read as a date component` | runtime-env: tarball predicate: a partial download is refused |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
+| `the value names a symlink and, for the updater, part of a URL` | runtime-env: channel: an unknown value falls back to stable and says so |
 | `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
 | `this is the only runtime artifact the nightly channel publishes, so` | runtime-env: tarball predicate: a nightly label is accepted |
 | `two installs of one build collapse to one entry, and the loser is set` | migrate-layout: two rollbacks holding one build keep one and set the rest aside |
