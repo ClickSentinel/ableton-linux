@@ -92,6 +92,17 @@ jobs:
               echo "no matching asset on the latest release; integration tests will skip"
           fi
 
+      # install.sh refuses a package with no ableton-linkd, and building the
+      # real one needs the Podman build image - the exact cost this workflow
+      # exists to avoid. This checkout is disposable, install.sh only checks
+      # presence, and nothing here executes linkd, so a stub lets the install
+      # tests run; the real binary is exercised by every kit install.
+      - name: Stub ableton-linkd, which only the container build produces
+        run: |
+          mkdir -p dist
+          [ -f dist/ableton-linkd ] || printf 'int main(void){return 0;}\n' | cc -x c -o dist/ableton-linkd -
+          readelf -h dist/ableton-linkd >/dev/null
+
       - name: Shell unit tests
         env:
           ABLETON_TEST_TARBALL: ${{ steps.fixture.outputs.tarball }}

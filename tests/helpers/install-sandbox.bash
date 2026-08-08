@@ -33,6 +33,12 @@ install_sandbox() {
 # skips, because the deep binary checks in install.sh need real ELF files with
 # real DT_NEEDED entries and no fixture can honestly stand in for them.
 sandbox_tarball() {
+    # install.sh also refuses a package with no ableton-linkd, and a fresh
+    # checkout has none - it is built by the container build, or stubbed by CI
+    # into its disposable checkout. Returning empty here makes the callers skip
+    # rather than fail; a stub is NOT created locally, because a leftover stub
+    # in dist/ would be staged into the next real kit make-installer packs.
+    { [ -f "$REPO/dist/ableton-linkd" ] || [ -f "$REPO/bin/ableton-linkd" ]; } || return 0
     if [ -n "${ABLETON_TEST_TARBALL:-}" ] && [ -f "$ABLETON_TEST_TARBALL" ]; then
         printf '%s\n' "$ABLETON_TEST_TARBALL"
         return 0
