@@ -227,15 +227,33 @@ setup() {
 }
 
 # guards: the config directory is not ours to clear out — only the one file is
-@test "uninstalling leaves anything else under the config directory alone" {
+# guards: the Plug holds Live, its authorisation and the user's sets — the one
+# thing here that cannot be reinstalled, so removal must be asked for
+@test "uninstalling keeps the Plug, and the work inside it" {
     tarball="$(sandbox_tarball)"
     [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
-    export XDG_CONFIG_HOME="$HOME/.config"
     env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
-    printf 'keep me\n' > "$HOME/.config/works/notes.txt"
+    plug="$HOME/works/plugs/studio"
+    mkdir -p "$plug/drive_c"
+    printf 'my set\n' > "$plug/drive_c/mine.als"
 
     setsid --wait bash "$REPO/scripts/uninstall.sh" --yes >/dev/null 2>&1
-    [ -r "$HOME/.config/works/notes.txt" ]
+    [ "$(cat "$plug/drive_c/mine.als")" = "my set" ]
+}
+
+@test "uninstalling takes the shared toolkit only when no application is left" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    [ -r "$HOME/works/lib/runtime-env.sh" ]
+
+    mkdir -p "$HOME/works/apps/another-app"      # a second tenant, mid-uninstall
+    setsid --wait bash "$REPO/scripts/uninstall.sh" --yes >/dev/null 2>&1
+    [ -r "$HOME/works/lib/runtime-env.sh" ] || { echo "the toolkit went while another app still needs it" >&2; false; }
+
+    rmdir "$HOME/works/apps/another-app"
+    setsid --wait bash "$REPO/scripts/uninstall.sh" --yes >/dev/null 2>&1
+    [ ! -e "$HOME/works/lib" ]
 }
 
 # --- setup-prefix.sh's own guard ----------------------------------------------

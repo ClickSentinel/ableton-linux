@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-309 tests across 14 suites. See [README.md](README.md) for how to run
+310 tests across 14 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -19,7 +19,7 @@ for which run on a PR.
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/install-runs.bats](#install-runs) — 16 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 17 test(s)
 - [tests/unit/manifest.bats](#manifest) — 19 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 32 test(s)
 - [tests/unit/promote.bats](#promote) — 11 test(s)
@@ -282,10 +282,11 @@ tree ships.
 | 10 | installing records the channel, so the updater follows it | — |
 | 11 | a kit with no channel marker is stable, as every older kit was | — |
 | 12 | uninstalling takes the recorded channel back | install.sh writes the channel file, so "removed everything install.sh |
-| 13 | uninstalling leaves anything else under the config directory alone | the config directory is not ours to clear out — only the one file is |
-| 14 | setup-prefix refuses while something runs from the runtime | `wineboot -u` rewriting the registry under a live wineserver |
-| 15 | setup-prefix refuses with no terminal too | the refusal must not depend on a terminal -- an unattended run is |
-| 16 | setup-prefix gets past the guard when nothing is running | the guard must not block the .run, where install.sh has already |
+| 13 | uninstalling keeps the Plug, and the work inside it | the Plug holds Live, its authorisation and the user's sets — the one |
+| 14 | uninstalling takes the shared toolkit only when no application is left | — |
+| 15 | setup-prefix refuses while something runs from the runtime | `wineboot -u` rewriting the registry under a live wineserver |
+| 16 | setup-prefix refuses with no terminal too | the refusal must not depend on a terminal -- an unattended run is |
+| 17 | setup-prefix gets past the guard when nothing is running | the guard must not block the .run, where install.sh has already |
 
 <a id="manifest"></a>
 
@@ -678,11 +679,11 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | runtime-env: the runtime wins over a debug tree sitting beside it |
 | `the BUILD column was exactly as wide as a nightly id --` | ableton-runtime: list: a nightly id does not crowd the WINE column |
+| `the Plug holds Live, its authorisation and the user's sets` | install-runs: uninstalling keeps the Plug, and the work inside it |
 | `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
 | `the channel is user configuration and must never choose a host` | manifest: an unknown channel resolves no URL at all |
 | `the channel is what the launcher resolves through` | ableton-runtime: use refuses a name that is not installed |
 | `the checksum is the only thing making the manifest's URL trustworthy` | ableton-update: a checksum mismatch stops the install |
-| `the config directory is not ours to clear out` | install-runs: uninstalling leaves anything else under the config directory alone |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |

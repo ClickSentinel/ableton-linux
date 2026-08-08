@@ -330,9 +330,11 @@ install -m755 "$here/ableton-live" "$BIN/ableton-live"
 install -m755 "$here/ableton-runtime" "$BIN/ableton-runtime"
 install -m755 "$here/ableton-update" "$BIN/ableton-update"
 
-echo "== install detection libs -> ~/works/apps/ableton-live =="
+echo "== install the shared toolkit -> ~/works/lib =="
 # The launcher sources these on every start (DPI auto-calibration, light/dark theme sync).
-mkdir -p "$HOME/works/apps/ableton-live"
+# Two directories because they hold two different things: the toolkit any
+# application sources, and this application's own payload.
+mkdir -p "$HOME/works/lib" "$HOME/works/apps/ableton-live"
 # The launchers live in ~/.local/bin with no sibling lib, so the shared
 # resolver has to be here for them to source. Without it ableton-live exits
 # on its own first lines and Live never starts.

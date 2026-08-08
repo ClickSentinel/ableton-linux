@@ -31,6 +31,16 @@ rm -f  "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/ableton-linkd.service" \
     && echo "removed ~/.config/systemd/user/ableton-linkd.service"
 systemctl --user daemon-reload 2>/dev/null || true
 rm -rf "$HOME/works/apps/ableton-live" && echo "removed ~/works/apps/ableton-live"
+# The toolkit is shared, so it goes only when nothing is left to source it.
+# Asking the directory rather than tracking a count: a second application's
+# uninstall runs this same line and gets the right answer without either
+# knowing about the other.
+if [ -d "$HOME/works/apps" ] && [ -z "$(ls -A "$HOME/works/apps" 2>/dev/null)" ]; then
+    rm -rf "$HOME/works/lib" "$HOME/works/apps" && echo "removed ~/works/lib (no application left to source it)"
+fi
+# Leave no empty shell behind, but never take a Plug with it: rmdir refuses a
+# directory that still holds anything.
+rmdir "$HOME/works" 2>/dev/null && echo "removed ~/works" || true
 # The channel install.sh recorded. Not prompted for, unlike the prefix: this is
 # one word of preference, not data, and leaving it behind means a later install
 # is followed by an `ableton-update` pointed at a channel nothing here chose.
