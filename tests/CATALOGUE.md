@@ -7,14 +7,14 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-136 tests across 8 suites. See [README.md](README.md) for how to run
+137 tests across 8 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
 ## Contents
 
 - [tests/repo-hygiene.bats](#repo-hygiene) — 16 test(s)
-- [tests/packaging.bats](#packaging) — 8 test(s)
+- [tests/packaging.bats](#packaging) — 9 test(s)
 - [tests/launcher-cli.bats](#launcher-cli) — 19 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
@@ -79,6 +79,7 @@ staging list and checks it against what the kit's own scripts reference.
 | 6 | release.yml's asset list matches what make-installer.sh actually produces | — |
 | 7 | every shell function a script calls is actually defined | lifting runtime_pids into the lib renamed it, and a replace that only |
 | 8 | make-installer refuses a tarball the kit's installer cannot select | make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check, |
+| 9 | kit-relative desktop and vendor paths are staged wholesale | — |
 
 <a id="launcher-cli"></a>
 

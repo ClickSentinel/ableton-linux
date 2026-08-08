@@ -102,7 +102,24 @@ install -m644 scripts/ableton-linkd.service "$kit/scripts/ableton-linkd.service"
 install -m644 tools/setsyscolors.exe "$kit/scripts/setsyscolors.exe"
 install -m644 tools/learnheal.exe "$kit/scripts/learnheal.exe"
 cp -a desktop "$kit/desktop"
-cp -a vendor/winetricks vendor/winetricks-cache "$kit/vendor/"
+cp -a vendor/winetricks "$kit/vendor/"
+# The cache is staged by tracked path, not wholesale. Copying the directory as
+# it stands ships whatever the build machine has downloaded: on the development
+# machine an untracked win7sp1 entry made the kit 1.6G against CI's 112M, so the
+# installer's size depended on who built it. What the repository tracks is its
+# own statement of what it ships; anything else in there is a local download.
+mkdir -p "$kit/vendor/winetricks-cache"
+if git -C . rev-parse --git-dir >/dev/null 2>&1; then
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        install -Dm644 "$f" "$kit/${f#vendor/}" 2>/dev/null || install -Dm644 "$f" "$kit/$f"
+    done < <(git -C . ls-files vendor/winetricks-cache)
+else
+    # Not a checkout (an exported tarball): nothing says which entries are ours,
+    # so take them all rather than ship an incomplete cache.
+    echo "   (not a git checkout: staging the whole winetricks cache)"
+    cp -a vendor/winetricks-cache "$kit/vendor/"
+fi
 # Bitstream Vera must ship: it is the terminal entry of Max for Live's font
 # fallback chain, and without it any M4L device that requests a typeface the
 # prefix lacks hangs Live outright (frozen window, audio still playing). Not a
