@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-302 tests across 14 suites. See [README.md](README.md) for how to run
+309 tests across 14 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -21,7 +21,7 @@ for which run on a PR.
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/install-runs.bats](#install-runs) — 16 test(s)
 - [tests/unit/manifest.bats](#manifest) — 19 test(s)
-- [tests/unit/migrate-layout.bats](#migrate-layout) — 25 test(s)
+- [tests/unit/migrate-layout.bats](#migrate-layout) — 32 test(s)
 - [tests/unit/promote.bats](#promote) — 11 test(s)
 - [tests/unit/ableton-runtime.bats](#ableton-runtime) — 23 test(s)
 - [tests/unit/ableton-update.bats](#ableton-update) — 27 test(s)
@@ -372,6 +372,13 @@ a throwaway tree.
 | 23 | removal handles a flat install that never migrated | — |
 | 24 | removal refuses a pinned root that is not a runtime | a stale exported WORKS_RUNTIME from a test session would otherwise |
 | 25 | removal refuses a pinned root of \$HOME | — |
+| 26 | plug: a flat prefix moves into the store | — |
+| 27 | plug: the contents survive the move intact | the prefix is the one thing here that cannot be re-downloaded |
+| 28 | plug: re-running after a successful move is a no-op | — |
+| 29 | plug: nothing installed is not an error | — |
+| 30 | plug: a prefix at both paths refuses, naming both | two prefixes can hold different Lives and different authorisations — |
+| 31 | plug: a symlink where the prefix belongs refuses | — |
+| 32 | plug: an explicit WORKS_PLUG is left alone | a pinned prefix is a deliberate choice — the VM harness runs two |
 
 <a id="promote"></a>
 
@@ -621,6 +628,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `a half-read manifest cannot answer "is this newer" or "does this` | ableton-update: an incomplete manifest is refused |
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
 | `a label is a suffix on the release form, not a licence to accept any` | runtime-env: tarball predicate: a labelled debug tree is still refused |
+| `a pinned prefix is a deliberate choice` | migrate-layout: plug: an explicit WORKS_PLUG is left alone |
 | `a release has no kind, and must not grow one` | ableton-update: a release is reported without a kind |
 | `a script calling `use` with no argument must fail, not block forever` | ableton-runtime: use with no argument refuses when there is no terminal |
 | `a stale exported WORKS_RUNTIME from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
@@ -684,6 +692,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the installer name becomes both a URL component and a filename` | manifest: an installer name containing a path is refused |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
 | `the prefix cannot be taken back, so this must not happen quietly` | ableton-runtime: use refuses a base change with no terminal to ask on |
+| `the prefix is the one thing here that cannot be re-downloaded` | migrate-layout: plug: the contents survive the move intact |
 | `the promote step and its dated rollback, which is where the store's` | install-runs: a second install promotes and leaves the previous runtime behind |
 | `the refusal must not depend on a terminal -- an unattended run is` | install-runs: setup-prefix refuses with no terminal too |
 | `the resolver and the migration must agree, or the install replaces a` | migrate-layout: the resolver follows the runtime to its new name |
@@ -703,3 +712,4 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `this is the whole point -- the directory name answers "when"` | runtime-env: runtime id: dates order correctly across both channels |
 | `two builds can share a timestamp -- the same build published on two` | ableton-update: a build with the same timestamp is not called older |
 | `two installs of one build collapse to one entry, and the loser is set` | migrate-layout: two rollbacks holding one build keep one and set the rest aside |
+| `two prefixes can hold different Lives and different authorisations` | migrate-layout: plug: a prefix at both paths refuses, naming both |

@@ -167,6 +167,7 @@ fi
 # A later failure does not undo it and does not need to: it only moves trees
 # that stay valid, and re-running is a no-op.
 works_migrate_layout
+works_migrate_plug
 
 # Where this install lands. Unpinned, that is always the store - including on a
 # fresh machine, so a new user never sees the flat layout and never becomes a

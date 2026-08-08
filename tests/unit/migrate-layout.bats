@@ -299,3 +299,77 @@ plant_at() { plant "$1" "$2" "$3" "$4"; }
     [ "$status" -ne 0 ]
     [ -d "$HOME" ]
 }
+
+# --- the prefix becomes a Plug -------------------------------------------------
+# A runtime can be downloaded again; a prefix holds Live, its authorisation and
+# the user's settings, and cannot. Every branch that is not certain refuses.
+
+plug_setup() {
+    LEGACY_PLUG="$HOME/.wine-ableton"
+    DEST_PLUG="$(works_plug_path)"
+}
+
+a_prefix() {   # a_prefix <dir>
+    mkdir -p "$1/drive_c/users" "$1/dosdevices"
+    : > "$1/system.reg"
+    ln -sfn ../drive_c "$1/dosdevices/c:"
+    printf 'a set\n' > "$1/drive_c/users/mine.als"
+}
+
+@test "plug: a flat prefix moves into the store" {
+    plug_setup; a_prefix "$LEGACY_PLUG"
+    run works_migrate_plug
+    [ "$status" -eq 0 ]
+    [ -d "$DEST_PLUG" ] && [ ! -e "$LEGACY_PLUG" ]
+}
+
+# guards: the prefix is the one thing here that cannot be re-downloaded
+@test "plug: the contents survive the move intact" {
+    plug_setup; a_prefix "$LEGACY_PLUG"
+    works_migrate_plug >/dev/null
+    [ "$(cat "$DEST_PLUG/drive_c/users/mine.als")" = "a set" ]
+    [ -L "$DEST_PLUG/dosdevices/c:" ]
+    [ "$(readlink "$DEST_PLUG/dosdevices/c:")" = "../drive_c" ]
+}
+
+@test "plug: re-running after a successful move is a no-op" {
+    plug_setup; a_prefix "$LEGACY_PLUG"
+    works_migrate_plug >/dev/null
+    run works_migrate_plug
+    [ "$status" -eq 0 ]
+    [ -f "$DEST_PLUG/drive_c/users/mine.als" ]
+}
+
+@test "plug: nothing installed is not an error" {
+    plug_setup
+    run works_migrate_plug
+    [ "$status" -eq 0 ]
+    [ ! -e "$DEST_PLUG" ]
+}
+
+# guards: two prefixes can hold different Lives and different authorisations —
+# picking one silently loses the other's work
+@test "plug: a prefix at both paths refuses, naming both" {
+    plug_setup; a_prefix "$LEGACY_PLUG"; a_prefix "$DEST_PLUG"
+    run works_migrate_plug
+    [ "$status" -eq 1 ]
+    [[ "$stderr$output" == *"$LEGACY_PLUG"* ]]
+    [[ "$stderr$output" == *"$DEST_PLUG"* ]]
+    [ -d "$LEGACY_PLUG" ]
+}
+
+@test "plug: a symlink where the prefix belongs refuses" {
+    plug_setup; mkdir -p "$HOME/elsewhere"
+    ln -s "$HOME/elsewhere" "$LEGACY_PLUG"
+    run works_migrate_plug
+    [ "$status" -eq 1 ]
+    [[ "$stderr$output" == *"symlink"* ]]
+}
+
+# guards: a pinned prefix is a deliberate choice — the VM harness runs two
+@test "plug: an explicit WORKS_PLUG is left alone" {
+    plug_setup; a_prefix "$LEGACY_PLUG"
+    WORKS_PLUG="$HOME/pinned" run works_migrate_plug
+    [ "$status" -eq 0 ]
+    [ -d "$LEGACY_PLUG" ]
+}

@@ -352,6 +352,48 @@ works_store_absorb() {
 #
 # The caller must already have established that nothing is running from the
 # runtime: this renames the directory a running Wine executes from.
+# Move a flat prefix into the Plug store. Separate from the runtime migration
+# because it is a different object with different failure modes: a runtime can
+# be re-downloaded and a prefix cannot, so every branch here that is not certain
+# refuses rather than guesses.
+#
+# The move is a plain rename and needs no repair. Wine resolves everything
+# relative to $WINEPREFIX, which is supplied per launch; a used prefix carries
+# no absolute host path in its registry (checked against a real Live 12 install,
+# plain and hex-encoded), dosdevices/c: is relative, and the absolute symlinks
+# under drive_c/users point outward at the real home, which is not moving.
+works_migrate_plug() {
+    local legacy dest
+    legacy="$HOME/.wine-ableton"
+    dest="$(works_plug_path)"
+
+    if [ -n "${WORKS_PLUG:-}" ]; then
+        echo "   plug: WORKS_PLUG is set; leaving the prefix where it is"
+        return 0
+    fi
+    [ "$legacy" != "$dest" ] || return 0
+
+    # A symlink at the legacy path is someone else's arrangement, not ours.
+    if [ -L "$legacy" ]; then
+        echo "!! $legacy is a symlink, not a prefix; remove it and rerun" >&2
+        return 1
+    fi
+    [ -d "$legacy" ] || return 0        # nothing to move
+
+    # Both present is the one genuinely ambiguous state: two prefixes, each
+    # possibly holding a different Live and different authorisation. Guessing
+    # loses work, so name both and stop.
+    if [ -e "$dest" ]; then
+        echo "!! a prefix already exists at $dest and another at $legacy;" \
+             "keep the one you want and remove the other, then rerun" >&2
+        return 1
+    fi
+
+    mkdir -p "$(dirname "$dest")"
+    mv "$legacy" "$dest"
+    echo "   plug: moved the prefix to $dest"
+}
+
 works_migrate_layout() {
     local legacy container chan stamp id other d
     legacy="$(works_legacy_root)"
