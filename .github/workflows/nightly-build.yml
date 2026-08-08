@@ -161,6 +161,13 @@ jobs:
           ABLETON_PUBLISH_AS=install-ableton-nightly.run \
           ./scripts/make-installer.sh
 
+      # The suite executes the checkout's install.sh; nothing executed the
+      # packed kit's own installer until a published kit failed to install.
+      # Runtime-only: the prefix phase needs a display, and what this gate
+      # honestly answers is whether the artifact installs and runs at all.
+      - name: The kit installs on this runner before anyone else gets it
+        run: ./scripts/check-kit-installs.sh "dist/ableton-wine-setup-${LABEL}.run" nightly
+
       - name: ccache stats
         if: always()
         continue-on-error: true
