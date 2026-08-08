@@ -306,6 +306,9 @@ if [ -e "$BIN/ableton-live" ]; then
     cp -a "$BIN/ableton-live" "$launcher_backup"
 fi
 install -m755 "$here/ableton-live" "$BIN/ableton-live"
+# The store makes rollback possible; this is what exposes it. Installed beside
+# the launcher because it is a user-facing command, not a helper.
+install -m755 "$here/ableton-runtime" "$BIN/ableton-runtime"
 
 echo "== install detection libs -> ~/.local/share/ableton-wine =="
 # The launcher sources these on every start (DPI auto-calibration, light/dark theme sync).

@@ -40,7 +40,7 @@ Set a policy with this project's Wine:
 
 ```bash
 WINEPREFIX="$HOME/.wine-ableton" \
-  "$HOME/.local/opt/wine-d2d1-nspa-11.13/bin/wine" reg add \
+  "$(ableton-runtime path)/bin/wine" reg add \
   'HKCU\Software\Wine\X11 Driver' \
   /v FileDialogPortal /t REG_SZ /d auto /f
 ```
