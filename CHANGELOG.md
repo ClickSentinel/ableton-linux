@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026.08.08.1
 
 - Link setup records its version marker only when the service step
   completed, so a host where that step failed retries it on the next
