@@ -35,6 +35,12 @@
 name: release-build
 
 on:
+  # Test-branch only: a dispatch-only workflow is invisible to GitHub until it
+  # exists on the default branch, but a schedule trigger is scanned on every
+  # branch and registers the workflow. Schedules never execute from a
+  # non-default branch, and the job guard below refuses them anyway.
+  schedule:
+    - cron: "0 12 31 12 *"
   workflow_dispatch:
     inputs:
       mode:
@@ -54,6 +60,7 @@ concurrency:
 
 jobs:
   release:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
