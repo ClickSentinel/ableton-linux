@@ -21,6 +21,9 @@ vendor-cache:                 ## populate vendor/winetricks-cache for offline se
 verify:                       ## check vendored inputs against pinned checksums
 	cd vendor && sha256sum -c wine-base.sha256 pipeasio.sha256 pipewire-sdk.sha256 ntsync-uapi.sha256 link.sha256
 
+test:                         ## run the test suite (~20s; no build, prefix, display or network)
+	./tests/run.sh
+
 clean:                        ## remove build outputs
 	rm -rf dist
 

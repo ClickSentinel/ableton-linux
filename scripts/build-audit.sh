@@ -4,7 +4,14 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
-NAME="wine-d2d1-nspa-11.13"
+# Runtime naming and tarball selection resolve in one place; see
+# scripts/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" "$root/scripts/runtime-env.sh"; do
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v ableton_pick_tarball >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
+NAME="$(ableton_runtime_name)"
 SERIES="$root/patches/SERIES.sha256"
 
 say()  { printf '%s\n' "$*"; }
@@ -30,7 +37,11 @@ grep -qP 'x' <<<'x' 2>/dev/null || fail "grep -P not supported on this system (n
 # --- resolve the artifact: tarball (unpack to tmp) or tree --------------------
 target="${1:-}"
 if [ -z "$target" ]; then
-    target="$(ls "$root"/dist/${NAME}-*.tar.zst 2>/dev/null | sort -V | tail -1 || true)"
+    # Never a bare glob: sort -V orders the -debug suffix last, so this gate
+    # would certify the debug tree instead of the runtime it is vouching for.
+    # nightly-build.yml calls this with no argument, so the fallback is the
+    # path CI actually takes.
+    target="$(ableton_pick_tarball "$root/dist")"
     [ -n "$target" ] || fail "no ${NAME}-*.tar.zst in dist/ and no argument given"
 fi
 cleanup_dir=""
@@ -64,6 +75,7 @@ while read -r sum file; do
         sha_ok["$file"]=0
     fi
 done < "$SERIES"
+# shellcheck disable=SC2010  # patch filenames are ASCII by construction (series numbering)
 extras="$(cd "$root/patches" && ls 00*.patch pipeasio/*.patch 2>/dev/null | grep -vxF -f <(awk '{print $2}' "$SERIES") || true)"
 [ -z "$extras" ] && ok "no unlisted patches" "" || bad "unlisted patches present" "$extras"
 # Retired numbers stay retired (renumbering would break cross-references in patch

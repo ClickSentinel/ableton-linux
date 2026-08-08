@@ -35,6 +35,8 @@ xdrag
 xsettle
 !/tools/learnheal.exe
 
+# test harness (vendored bats-core; see tests/run.sh)
+.bats-core/
 # hang captures from tools/m4l-hang-capture.sh
 m4l-hang-*/
 
