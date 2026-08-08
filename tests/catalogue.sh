@@ -34,6 +34,7 @@ SUITES=(
     tests/unit/launcher.bats
     tests/unit/install-runs.bats
     tests/unit/migrate-layout.bats
+    tests/unit/ableton-runtime.bats
     tests/unit/runtime-env.bats
     tests/patch-stack.bats
 )

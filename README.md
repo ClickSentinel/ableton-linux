@@ -181,7 +181,7 @@ There are two common ways to install Windows plugins:
 
    ```bash
    WINEPREFIX="$HOME/.wine-ableton" \
-     "$HOME/.local/opt/wine-d2d1-nspa-11.13/bin/wine" \
+     "$(ableton-runtime path)/bin/wine" \
      "/path/to/PluginInstaller.exe"
    ```
 
