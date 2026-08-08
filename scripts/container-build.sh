@@ -208,9 +208,44 @@ echo "== [6/8] package =="
 stack_stamp="$PREFIX_ROOT/ABLETON-WINE-PATCH-STACK.txt"
 ( cd "$SRC/patches" && sha256sum 00*.patch pipeasio/*.patch ) > "$stack_stamp"
 stack_sha="$(sha256sum "$stack_stamp" | awk '{print $1}')"
+
+# The commit of THIS repository that produced the build. patch-head below is
+# the HEAD of the patched Wine tree and names no object here, so without this a
+# built runtime cannot say what source made it — which is why a nightly and the
+# release it was built after are indistinguishable by dist-version alone.
+# build.sh resolves this on the host and passes it in, because the container
+# frequently cannot: in a git worktree /src/.git is a file naming a gitdir under
+# the main repository, which is not mounted, so rev-parse fails here and the
+# fallback below records "unknown" without saying so. Measured 2026-08-05, and
+# this repository is worked in worktrees — so every local build was producing a
+# runtime that could not say what made it, while CI, building a plain clone,
+# looked correct.
+#
+# The in-container attempt stays for a direct invocation of this script, where
+# nothing set the variable. /src is read-only; rev-parse does not write, and the
+# safe.directory it needs goes to the container's own HOME.
+if [ -n "${SOURCE_COMMIT:-}" ]; then
+    source_commit="$SOURCE_COMMIT"
+else
+    git config --global --add safe.directory "$SRC" 2>/dev/null || true
+    source_commit="$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)"
+fi
+
+# When this build ran. source-commit identifies a build; it does not order two,
+# because a sha has no order outside the commit graph and the installer does not
+# have one. Nothing else here serves: dist-version is `cat VERSION` and is equal
+# across every nightly between two releases, patch-stack is equal unless the
+# patches changed, and patch-head is nondeterministic. So an update cannot tell
+# the user whether it is moving them forward, and retention cannot prune oldest
+# first, without this.
+#
+# built-on below is the OS the build ran on, not a date.
+built_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 build_info="$PREFIX_ROOT/ABLETON-WINE-BUILD-INFO.txt"
 {
     echo "dist-version: $VERSION"
+    echo "source-commit: $source_commit"
+    echo "built-at:     $built_at"
     echo "wine:         $("$PREFIX_ROOT/bin/wine" --version)"
     echo "base:         giang17/wine d2d1-dcomp-11.13 @ 5c23dd1c"
     echo "prefix:       $CONFIGURE_PREFIX (configure-time only; tarball is relocatable, see relocation gate)"
