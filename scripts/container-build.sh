@@ -217,10 +217,22 @@ stack_sha="$(sha256sum "$stack_stamp" | awk '{print $1}')"
 # to the container's own HOME.
 git config --global --add safe.directory "$SRC" 2>/dev/null || true
 source_commit="$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)"
+
+# When this build ran. source-commit identifies a build; it does not order two,
+# because a sha has no order outside the commit graph and the installer does not
+# have one. Nothing else here serves: dist-version is `cat VERSION` and is equal
+# across every nightly between two releases, patch-stack is equal unless the
+# patches changed, and patch-head is nondeterministic. So an update cannot tell
+# the user whether it is moving them forward, and retention cannot prune oldest
+# first, without this.
+#
+# built-on below is the OS the build ran on, not a date.
+built_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 build_info="$PREFIX_ROOT/ABLETON-WINE-BUILD-INFO.txt"
 {
     echo "dist-version: $VERSION"
     echo "source-commit: $source_commit"
+    echo "built-at:     $built_at"
     echo "wine:         $("$PREFIX_ROOT/bin/wine" --version)"
     echo "base:         giang17/wine d2d1-dcomp-11.13 @ 5c23dd1c"
     echo "prefix:       $CONFIGURE_PREFIX (configure-time only; tarball is relocatable, see relocation gate)"
