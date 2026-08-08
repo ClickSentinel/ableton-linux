@@ -60,12 +60,16 @@ jobs:
         run: bats --print-output-on-failure tests/launcher-cli.bats
 
       # Without a runtime tarball, every test that actually executes install.sh
-      # skips -- and they are the ones that matter. bats reports a skip as `ok`,
-      # so the summary line and the exit status are identical to a run that
-      # covered everything.
+      # skips -- eleven of them, and they are the ones that matter. bats reports
+      # a skip as `ok`, so the summary line and the exit status are identical to
+      # a run that covered everything. That is the exact shape of the defect this
+      # suite was written for: install.sh could not run at all for thirteen
+      # commits while 172 tests passed, because nothing executed it.
       #
-      # The released runtime is the honest fixture -- it is what every user has.
-      # Deep ELF checks in install.sh mean no hand-made tree can stand in.
+      # The released runtime is the honest fixture -- it is what every user has,
+      # and its BUILD-INFO carries neither of the fields added since, which is
+      # the state a migration has to handle. Deep ELF checks in install.sh mean
+      # no hand-made tree can stand in.
       #
       # Fetched from upstream rather than this repo: a fork has no releases of
       # its own, and this is the same artifact either way.

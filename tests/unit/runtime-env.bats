@@ -503,6 +503,33 @@ id_of() {   # id_of <build-info lines...>
     ableton_runtime_id "$d"
 }
 
+@test "runtime id: a nightly says so, once, after the date" {
+    [ "$(id_of 'dist-version: 2026.08.06.1' 'source-commit: badafaf995572b26' 'build-kind:   nightly')" \
+      = "2026.08.06.1+nightly.badafaf" ]
+}
+
+@test "runtime id: a release carries no kind at all" {
+    [ "$(id_of 'dist-version: 2026.08.04.1' 'source-commit: b0d847af6fcc7ab9')" \
+      = "2026.08.04.1+b0d847a" ]
+}
+
+# guards: every runtime installed anywhere today predates source-commit
+@test "runtime id: the patch-stack fallback still works with a kind" {
+    [ "$(id_of 'dist-version: 2026.07.29.1' 'patch-stack:  9614003aabb' 'build-kind:   nightly')" \
+      = "2026.07.29.1+nightly.9614003" ]
+}
+
+# guards: build-kind becomes a directory name like everything else in the id
+@test "runtime id: a kind with a path separator is refused, not sanitised" {
+    [ -z "$(id_of 'dist-version: 2026.08.06.1' 'source-commit: badafaf9' 'build-kind:   ../evil')" ]
+}
+
+# guards: this is the whole point -- the directory name answers "when"
+@test "runtime id: dates order correctly across both channels" {
+    run bash -c "printf '%s\n' '2026.08.04.1+b0d847a' '2026.08.06.1+nightly.badafaf' '2026.08.09.1+ddddddd' | sort -V | tail -1"
+    [ "$output" = "2026.08.09.1+ddddddd" ]
+}
+
 @test "tarball predicate: the nightly artifact name is accepted" {
     ableton_is_runtime_tarball "wine-d2d1-nspa-11.13-2026.08.06.1+nightly.badafaf.tar.zst"
 }

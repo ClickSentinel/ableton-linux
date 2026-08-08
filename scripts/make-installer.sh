@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Assemble dist/ableton-wine-setup-<VERSION>.run: setup-run-header.sh + a tar of the end-user kit
+# Assemble dist/ableton-wine-setup-<LABEL>.run: setup-run-header.sh + a tar of the end-user kit
 # (runtime tarball, scripts, winetricks payloads, static cabextract, ableton-linkd).
 # Repackaging only; Wine is not rebuilt.
 set -euo pipefail
@@ -23,6 +23,13 @@ command -v ableton_pick_tarball >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
 NAME="$(ableton_runtime_name)"
 VERSION="$(cat VERSION)"
+# What the finished installer is called, as opposed to which runtime goes in it.
+# They are the same for a release and differ for a nightly, which must not bump
+# VERSION: that file is committed, and repo-hygiene and release.bats both assert
+# its format and its pairing with CHANGELOG and BUILD-INFO. Everything that
+# locates a build input keeps using VERSION; only the artifact's name, the
+# header stamp and the version recorded into the installed kit use LABEL.
+LABEL="${ABLETON_DIST_LABEL:-$VERSION}"
 # ABLETON_RUNTIME_TARBALL pins one outright; otherwise the exact-version
 # runtime if present, else the newest properly-named one. Never a bare glob.
 if [ -n "${ABLETON_RUNTIME_TARBALL:-}" ]; then
@@ -94,7 +101,7 @@ mkdir -p "$kit/bin" "$kit/dist" "$kit/vendor"
 cp -a "$tarball" "$tarball.sha256" "$kit/dist/"
 cp -a "dist/BUILD-INFO-${VERSION}.txt" "$kit/" 2>/dev/null || true
 mkdir -p "$kit/scripts"
-cp -a scripts/runtime-env.sh scripts/ableton-runtime scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
+cp -a scripts/runtime-env.sh scripts/ableton-runtime scripts/ableton-update scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
       scripts/ableton-live scripts/max9 scripts/detect-scale.sh \
       scripts/detect-theme.sh scripts/check-live-audio.sh scripts/setup-link.sh \
       "$kit/scripts/"
@@ -132,7 +139,11 @@ mkdir -p "$kit/vendor/fonts/bitstream-vera"
 install -m644 vendor/fonts/bitstream-vera/*.ttf \
               vendor/fonts/bitstream-vera/COPYRIGHT.TXT \
               "$kit/vendor/fonts/bitstream-vera/"
-cp -a VERSION README.md TROUBLESHOOTING.md BUILDING.md "$kit/"
+cp -a README.md TROUBLESHOOTING.md BUILDING.md "$kit/"
+# The kit records LABEL, not VERSION: a nightly and the release it was built
+# after share a VERSION, and the installed tree has to be able to say which of
+# the two it is.
+printf '%s\n' "$LABEL" > "$kit/VERSION"
 # The kit says which channel it belongs to. Without it install.sh promotes into
 # whatever channel the machine already followed, so installing a nightly while
 # configured for stable would point `stable` at a nightly build.
@@ -165,16 +176,47 @@ payload="$stage/payload.tar"
 tar --sort=name --owner=0 --group=0 --numeric-owner \
     -cf "$payload" -C "$kit" .
 payload_sha="$(sha256sum "$payload" | awk '{print $1}')"
-out="dist/ableton-wine-setup-${VERSION}.run"
-sed -e "s/@VERSION@/$VERSION/g" -e "s/@PAYLOAD_SHA@/$payload_sha/g" \
+out="dist/ableton-wine-setup-${LABEL}.run"
+sed -e "s/@VERSION@/$LABEL/g" -e "s/@PAYLOAD_SHA@/$payload_sha/g" \
     scripts/setup-run-header.sh > "$out"
 cat "$payload" >> "$out"
 chmod +x "$out"
 ( cd dist && sha256sum "$(basename "$out")" > "$(basename "$out").sha256" )
+
+# The channel manifest, beside the kit. Written from the runtime's own
+# BUILD-INFO by the same function that reads it, so a manifest this repo
+# publishes is one its updater accepts - the round trip is tested. The publish
+# step uploads it; nothing here decides which channel a build is for, so it
+# takes one, defaulting to stable.
+#
+# The installer is named as *published*, which is not what it is called here:
+# both channels upload a second copy under a fixed name (install-ableton-latest
+# .run, install-ableton-nightly.run) so the download URL survives a release. The
+# updater resolves that name against the manifest's own URL, so naming the
+# versioned artifact would send it to a URL that stops existing next release.
+# Same bytes either way, so the checksum is the built file's.
+# Read from the runtime being packed, not from dist/BUILD-INFO-<version>.txt:
+# the tarball's copy is the one that lands on the user's machine and the one the
+# updater compares against. See ableton_tarball_buildinfo.
+info="$stage/runtime-BUILD-INFO.txt"
+if ableton_tarball_buildinfo "$tarball" > "$info" && [ -s "$info" ]; then
+    ableton_manifest_write "${ABLETON_CHANNEL_PUBLISH:-stable}" "$info" \
+        "${ABLETON_PUBLISH_AS:-$(basename "$out")}" \
+        "$(awk '{print $1}' "$out.sha256")" > dist/manifest.txt
+    ableton_manifest_valid dist/manifest.txt || {
+        echo "!! the manifest this build would publish is incomplete:" >&2
+        sed 's/^/   /' dist/manifest.txt >&2
+        echo "   the runtime's BUILD-INFO is missing a field -- rebuild it" >&2
+        exit 1; }
+    echo "   manifest: dist/manifest.txt -> ${ABLETON_PUBLISH_AS:-$(basename "$out")}"
+else
+    echo "!! could not read BUILD-INFO out of $(basename "$tarball")" >&2
+    exit 1
+fi
 
 echo "== [5/5] wrapper self-check =="
 sh "$out" --help >/dev/null
 echo
 echo "OK: $out ($(du -h "$out" | cut -f1))"
 echo "Copy it (plus your Ableton installer .exe) to a USB stick and run:"
-echo "  sh /run/media/*/*/ableton-wine-setup-${VERSION}.run"
+echo "  sh /run/media/*/*/ableton-wine-setup-${LABEL}.run"

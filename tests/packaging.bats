@@ -96,6 +96,53 @@ kit_script_names() {
         echo "referenced as a kit sibling but not staged:$missing" >&2; false; }
 }
 
+@test "kit-relative desktop and vendor paths are staged wholesale" {
+    cd "$REPO"
+    # In the kit, \$root is the kit root, so a "\$root/desktop/..." or
+    # "\$root/vendor/..." reference resolves only because make-installer.sh
+    # copies those trees entire. Assert those copies are still there.
+    grep -qE '^cp -a desktop "\$kit/desktop"' "$MK" || {
+        echo "make-installer.sh no longer stages desktop/ — install.sh reads \$root/desktop/*" >&2
+        false; }
+    grep -qE '^cp -a vendor/winetricks "' "$MK" || {
+        echo "make-installer.sh no longer stages winetricks itself — setup-prefix.sh needs it" >&2
+        false; }
+    grep -qF 'ls-files vendor/winetricks-cache' "$MK" || {
+        echo "make-installer.sh no longer stages the winetricks cache by tracked path" >&2
+        false; }
+    # guards: staging the cache directory wholesale ships whatever the build
+    # machine downloaded — 1.6G against CI's 112M, measured 2026-08-05
+    ! grep -qE '^cp -a vendor/winetricks-cache|winetricks vendor/winetricks-cache' "$MK" || {
+        echo "make-installer.sh stages the whole winetricks cache again" >&2
+        false; }
+}
+
+@test "only the shared lib and the build side spell the runtime name" {
+    cd "$REPO"
+    # install.sh and make-installer.sh used to hardcode it and were compared
+    # against each other; they now derive it from ableton_runtime_name, so they
+    # cannot disagree. What is left to check is that nobody reintroduces a
+    # second spelling on the install side.
+    #
+    # build.sh and container-build.sh legitimately keep a literal: it is the
+    # configure prefix and the artifact name, which is the one place the Wine
+    # version genuinely belongs. setup-run-header.sh keeps one because it runs
+    # before anything is installed and cannot source the lib.
+    allowed="scripts/runtime-env.sh build.sh scripts/container-build.sh scripts/build-audit.sh scripts/release.sh scripts/setup-run-header.sh"
+    offenders=""
+    while read -r f; do
+        case " $allowed " in *" $f "*) continue ;; esac
+        grep -qE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' "$f" && offenders="$offenders $f"
+    done < <(git ls-files 'scripts/*' 'build.sh')
+    [ -z "$offenders" ] || {
+        echo "these spell the runtime name instead of deriving it:$offenders" >&2; false; }
+
+    lib="$(grep -oE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' scripts/runtime-env.sh | head -1)"
+    bs="$(grep -oE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' build.sh | head -1)"
+    [ "$lib" = "$bs" ] || {
+        echo "lib says '$lib', build.sh says '$bs'" >&2; false; }
+}
+
 # guards: licence GPLv2+ — Ableton Link has no linking exception, so the source must travel with the binary
 @test "the kit ships the GPL source and licence Ableton Link requires" {
     cd "$REPO"
@@ -167,51 +214,4 @@ kit_script_names() {
     grep -qF 'ableton_is_runtime_tarball "$tarball"' "$MK" || {
         echo "make-installer.sh no longer checks the tarball it packs against the selector" >&2
         false; }
-}
-
-@test "kit-relative desktop and vendor paths are staged wholesale" {
-    cd "$REPO"
-    # In the kit, \$root is the kit root, so a "\$root/desktop/..." or
-    # "\$root/vendor/..." reference resolves only because make-installer.sh
-    # copies those trees entire. Assert those copies are still there.
-    grep -qE '^cp -a desktop "\$kit/desktop"' "$MK" || {
-        echo "make-installer.sh no longer stages desktop/ — install.sh reads \$root/desktop/*" >&2
-        false; }
-    grep -qE '^cp -a vendor/winetricks "' "$MK" || {
-        echo "make-installer.sh no longer stages winetricks itself — setup-prefix.sh needs it" >&2
-        false; }
-    grep -qF 'ls-files vendor/winetricks-cache' "$MK" || {
-        echo "make-installer.sh no longer stages the winetricks cache by tracked path" >&2
-        false; }
-    # guards: staging the cache directory wholesale ships whatever the build
-    # machine downloaded — 1.6G against CI's 112M, measured 2026-08-05
-    ! grep -qE '^cp -a vendor/winetricks-cache|winetricks vendor/winetricks-cache' "$MK" || {
-        echo "make-installer.sh stages the whole winetricks cache again" >&2
-        false; }
-}
-
-@test "only the shared lib and the build side spell the runtime name" {
-    cd "$REPO"
-    # install.sh and make-installer.sh used to hardcode it and were compared
-    # against each other; they now derive it from ableton_runtime_name, so they
-    # cannot disagree. What is left to check is that nobody reintroduces a
-    # second spelling on the install side.
-    #
-    # build.sh and container-build.sh legitimately keep a literal: it is the
-    # configure prefix and the artifact name, which is the one place the Wine
-    # version genuinely belongs. setup-run-header.sh keeps one because it runs
-    # before anything is installed and cannot source the lib.
-    allowed="scripts/runtime-env.sh build.sh scripts/container-build.sh scripts/build-audit.sh scripts/release.sh scripts/setup-run-header.sh"
-    offenders=""
-    while read -r f; do
-        case " $allowed " in *" $f "*) continue ;; esac
-        grep -qE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' "$f" && offenders="$offenders $f"
-    done < <(git ls-files 'scripts/*' 'build.sh')
-    [ -z "$offenders" ] || {
-        echo "these spell the runtime name instead of deriving it:$offenders" >&2; false; }
-
-    lib="$(grep -oE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' scripts/runtime-env.sh | head -1)"
-    bs="$(grep -oE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' build.sh | head -1)"
-    [ "$lib" = "$bs" ] || {
-        echo "lib says '$lib', build.sh says '$bs'" >&2; false; }
 }
