@@ -9,25 +9,24 @@ export LC_ALL=C.UTF-8
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 
-OPT="$HOME/.local/opt"
 BIN="$HOME/.local/bin"
 APPS="$HOME/.local/share/applications"
-# Runtime naming and tarball selection resolve in one place; see
-# scripts/runtime-env.sh.
+# Runtime naming, path resolution, tarball selection and the process scan all
+# resolve in one place; see scripts/runtime-env.sh.
 for _l in "$(dirname "$0")/runtime-env.sh" "$root/scripts/runtime-env.sh"; do
     # shellcheck source=scripts/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
-command -v ableton_pick_tarball >/dev/null 2>&1 || {
+command -v ableton_wine_root >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
 NAME="$(ableton_runtime_name)"
 # Where this install lands. scripts/ableton-live and scripts/setup-prefix.sh
 # already honour ABLETON_WINE_ROOT; install.sh and uninstall.sh hardcoded it,
 # which is the only reason two runtimes could not sit side by side. Staging,
-# the dated rollbacks, and — since PR #120 — the runtime_pids scan and the
+# the dated rollbacks, and — since PR #120 — the runtime pid scan and the
 # wineserver stop all follow the target, so an overridden root is guarded by
 # the same gate as the default one rather than silently unprotected.
-WINE_ROOT="${ABLETON_WINE_ROOT:-$OPT/$NAME}"
+WINE_ROOT="$(ableton_wine_root)"
 WINE_ROOT_DIR="$(dirname "$WINE_ROOT")"
 WINE_ROOT_BASE="$(basename "$WINE_ROOT")"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -94,41 +93,18 @@ fi
 # something behind. ableton-linkd is not part of the runtime and is
 # handled at its own install step below.
 
-# Every process running from the installed runtime. Wine's in-prefix
-# helpers show a Windows path in argv (C:\windows\system32\...), so no
-# command-line pattern reaches them, and a pattern also catches unrelated
-# processes that merely mention the path. /proc/PID/exe is the binary
-# itself: bin/wineserver, or the wine-preloader every in-prefix process
-# runs from.
-runtime_pids()
-{
-    local d
-    for d in /proc/[0-9]*; do
-        case "$(readlink "$d/exe" 2>/dev/null)" in
-            "$WINE_ROOT"/*) printf '%s\n' "${d#/proc/}" ;;
-        esac
-    done
-}
-# Live's exe resolves to the same wine-preloader, so runtime_pids covers
-# it; the name match stays as a second opinion, since detection failing
-# open here means installing over a running runtime.
-ableton_up()
-{
-    [ -n "$(runtime_pids)" ] || \
-        pgrep -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1
-}
+# The scan, the busy predicate and the Live-only variant are in runtime-env.sh:
+# they have to agree with the root resolved above about which tree is being
+# replaced, and a second copy here is exactly how that agreement is lost.
+#
 # Live itself, as opposed to the support processes: the prompt below is
 # about unsaved work and only Live has any. Scoped to this runtime, so a
 # Live under an unrelated Wine install is neither prompted for nor killed.
 live_up=0
-for p in $(runtime_pids); do
-    case "$(tr -s '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)" in
-        *"Ableton Live"*.exe*) live_up=1; break ;;
-    esac
-done
-if ableton_up; then
+[ -z "$(ableton_live_pids)" ] || live_up=1
+if ableton_runtime_busy; then
     echo "== stop processes using the installed runtime =="
-    echo "   $(runtime_pids | wc -l) found"
+    echo "   $(ableton_runtime_pids | wc -l) found"
     # Closing Live discards unsaved work, so require an explicit yes.
     # -r and -w cannot ask that: they stat a 0666 device node and pass
     # even with no controlling terminal, and the printf would then fail
@@ -153,21 +129,21 @@ if ableton_up; then
         fi
     fi
     if [ -x "$WINE_ROOT/bin/wineserver" ]; then
-        WINEPREFIX="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}" \
+        WINEPREFIX="$(ableton_wine_prefix)" \
             "$WINE_ROOT/bin/wineserver" -k 2>/dev/null || true
         for _ in $(seq 1 20); do
-            ableton_up || break
+            ableton_runtime_busy || break
             sleep 0.5
         done
     fi
-    if ableton_up; then
-        runtime_pids | xargs -r kill 2>/dev/null || true
+    if ableton_runtime_busy; then
+        ableton_runtime_pids | xargs -r kill 2>/dev/null || true
         pkill -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
         for _ in $(seq 1 10); do
-            ableton_up || break
+            ableton_runtime_busy || break
             sleep 0.5
         done
-        runtime_pids | xargs -r kill -9 2>/dev/null || true
+        ableton_runtime_pids | xargs -r kill -9 2>/dev/null || true
         pkill -9 -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
     fi
 fi
@@ -271,6 +247,10 @@ install -m755 "$here/ableton-live" "$BIN/ableton-live"
 echo "== install detection libs -> ~/.local/share/ableton-wine =="
 # The launcher sources these on every start (DPI auto-calibration, light/dark theme sync).
 mkdir -p "$HOME/.local/share/ableton-wine"
+# The launchers live in ~/.local/bin with no sibling lib, so the shared
+# resolver has to be here for them to source. Without it ableton-live exits
+# on its own first lines and Live never starts.
+install -m644 "$here/runtime-env.sh" "$HOME/.local/share/ableton-wine/runtime-env.sh"
 install -m644 "$here/detect-scale.sh" "$HOME/.local/share/ableton-wine/detect-scale.sh"
 install -m644 "$here/detect-theme.sh" "$HOME/.local/share/ableton-wine/detect-theme.sh"
 # setsyscolors.exe repaints the top bar mid-session when the Live theme changes;
@@ -328,7 +308,7 @@ mkdir -p "$APPS"
 live_name="Ableton Live"
 live_icon="live-suite"
 live_wmclass="ableton live 12 suite.exe"
-live_prefix="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}"
+live_prefix="$(ableton_wine_prefix)"
 newest=""
 for exe in "$live_prefix"/drive_c/ProgramData/Ableton/Live*/Program/Ableton\ Live*.exe; do
     [ -e "$exe" ] || continue
