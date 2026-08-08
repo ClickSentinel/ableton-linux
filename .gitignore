@@ -41,3 +41,6 @@ m4l-hang-*/
 # bytecode from tools/m4l-font-audit.py
 __pycache__/
 *.pyc
+
+# pinned bats-core, cloned by tests/run.sh (see BATS_VERSION there)
+/.bats-core/
