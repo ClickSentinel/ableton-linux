@@ -171,3 +171,43 @@ setup() {
 }
 
 
+
+# --- setup-prefix.sh's own guard ----------------------------------------------
+# Through the .run this never fires, because install.sh stops everything first.
+# Standalone it is the only guard there is -- and install.sh's last line tells
+# you to run it standalone, so that path is the documented one.
+
+# guards: `wineboot -u` rewriting the registry under a live wineserver
+@test "setup-prefix refuses while something runs from the runtime" {
+    root="$BATS_TEST_TMPDIR/rt"; mkdir -p "$root/bin"
+    export ABLETON_WINE_ROOT="$root"
+    cp "$(command -v sleep)" "$root/bin/wineserver"
+    "$root/bin/wineserver" 30 &
+    local pid=$!
+    run bash "$REPO/scripts/setup-prefix.sh"
+    kill "$pid" 2>/dev/null || true
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Close Live"* ]]
+}
+
+# guards: the refusal must not depend on a terminal -- an unattended run is
+# exactly when nobody notices the prefix being rewritten
+@test "setup-prefix refuses with no terminal too" {
+    root="$BATS_TEST_TMPDIR/rt"; mkdir -p "$root/bin"
+    export ABLETON_WINE_ROOT="$root"
+    cp "$(command -v sleep)" "$root/bin/wineserver"
+    "$root/bin/wineserver" 30 &
+    local pid=$!
+    run setsid --wait bash "$REPO/scripts/setup-prefix.sh"
+    kill "$pid" 2>/dev/null || true
+    [ "$status" -ne 0 ]
+}
+
+# guards: the guard must not block the .run, where install.sh has already
+# stopped everything -- getting past it is the whole requirement
+@test "setup-prefix gets past the guard when nothing is running" {
+    root="$BATS_TEST_TMPDIR/rt"; mkdir -p "$root/bin"
+    export ABLETON_WINE_ROOT="$root"
+    run bash "$REPO/scripts/setup-prefix.sh"
+    [[ "$output" != *"Close Live"* ]]
+}
