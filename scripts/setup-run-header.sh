@@ -28,6 +28,13 @@ export LC_ALL=C.UTF-8
 VERSION="@VERSION@"
 PAYLOAD_SHA="@PAYLOAD_SHA@"
 RUNTIME_NAME="wine-d2d1-nspa-11.13"
+# Resolve the same two paths install.sh does, and for the same reason: this
+# wrapper checks for an existing install and then runs Live's installer through
+# the runtime, so if it looks somewhere other than where install.sh puts things
+# it will offer a fresh install over an existing one, or run the Ableton
+# installer against a runtime that is not the one it just installed.
+WINE_ROOT="${ABLETON_WINE_ROOT:-$HOME/.local/opt/$RUNTIME_NAME}"
+PREFIX_DIR="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}"
 
 self="$(readlink -f -- "$0")"
 stick_dir="$(dirname -- "$self")"
@@ -69,8 +76,8 @@ say "== Ableton-on-Wine installer $VERSION =="
 # runtime, launcher, and prefix policy to this kit's version. It preserves the
 # Live installation, authorization, and projects; compatibility settings may
 # change.
-if [ "$mode" = install ] && [ -x "$HOME/.local/opt/$RUNTIME_NAME/bin/wine" ] \
-   && [ -f "${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}/system.reg" ]; then
+if [ "$mode" = install ] && [ -x "$WINE_ROOT/bin/wine" ] \
+   && [ -f "$PREFIX_DIR/system.reg" ]; then
     installed_ver="$(cat "$HOME/.local/share/ableton-wine/VERSION" 2>/dev/null || true)"
     say ""
     say "An existing installation was found${installed_ver:+ (version $installed_ver)}."
@@ -316,7 +323,7 @@ if [ -z "${ABLETON_DPI_MODE:-}" ]; then
     if block="$(ableton_dpi_block_for_scale "$scale" "$family")"; then
         export ABLETON_DPI_MODE="$block"
         say "-- display scale: $(awk -v s="$scale" 'BEGIN { printf "%d", s*100 + 0.5 }')% (auto-detected)"
-    elif [ -d "$HOME/.wine-ableton" ]; then
+    elif [ -d "$PREFIX_DIR" ]; then
         export ABLETON_DPI_MODE=preserve
         say "-- display scale: ${scale:-could not be detected}${scale:+ (outside the calibrated 100-250% range)}; keeping your existing display settings"
     else
@@ -365,16 +372,16 @@ if [ "$manual_install" -eq 0 ]; then
         fi
         # run from the installer's own directory so its relative payload lookups resolve
         if ( cd "$(dirname -- "$live_exe")" && \
-                 WINEPREFIX="$HOME/.wine-ableton" \
-                 "$HOME/.local/opt/$RUNTIME_NAME/bin/wine" \
+                 WINEPREFIX="$PREFIX_DIR" \
+                 "$WINE_ROOT/bin/wine" \
                  "./$(basename -- "$live_exe")" "${live_flags[@]}" ); then
             live_installed=1
         else
             say "!! the Ableton installer exited with an error; instructions below"
             manual_install=1
         fi
-        WINEPREFIX="$HOME/.wine-ableton" \
-            "$HOME/.local/opt/$RUNTIME_NAME/bin/wineserver" -w 2>/dev/null || true
+        WINEPREFIX="$PREFIX_DIR" \
+            "$WINE_ROOT/bin/wineserver" -w 2>/dev/null || true
         rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/ableton-wine-setup" 2>/dev/null || true
     fi
 fi
@@ -389,8 +396,8 @@ else
     say "       unzip /path/to/ableton_live*.zip -d ~/live-installer"
     say "       (no unzip? try: bsdtar -xf FILE.zip -C ~/live-installer)"
     say "  2) run the installer through this Wine, from inside that directory:"
-    say "       cd ~/live-installer && WINEPREFIX=~/.wine-ableton \\"
-    say "           ~/.local/opt/$RUNTIME_NAME/bin/wine ./*.exe \\"
+    say "       cd ~/live-installer && WINEPREFIX=$PREFIX_DIR \\"
+    say "           $WINE_ROOT/bin/wine ./*.exe \\"
     say "           /SILENT /SUPPRESSMSGBOXES /NORESTART '/MERGETASKS=!audiodriver'"
     say "     (Live 12: the flags let it install by itself and skip a Windows-only driver;"
     say "      Live 11: drop them and click through its installer window instead)"

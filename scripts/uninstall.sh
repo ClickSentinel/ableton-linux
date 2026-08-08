@@ -1,7 +1,19 @@
 #!/usr/bin/env bash
 # Remove what install.sh added. The Wine prefix (~/.wine-ableton) is kept unless you pass --prefix.
 set -euo pipefail
-OPT="$HOME/.local/opt/wine-d2d1-nspa-11.13"
+# Matches install.sh: ABLETON_WINE_ROOT picks a non-default runtime to remove.
+# Resolved by the same function install.sh uses, rather than by a second copy
+# carrying its own literal of the runtime name — this is a script that runs
+# `rm -rf` on whatever it resolves, so the two disagreeing is not a cosmetic
+# problem.
+for _l in "$(dirname "$0")/runtime-env.sh" \
+          "$(cd "$(dirname "$0")/.." && pwd)/scripts/runtime-env.sh"; do
+    # shellcheck source=scripts/runtime-env.sh
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v ableton_wine_root >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
+OPT="$(ableton_wine_root)"
 BIN="$HOME/.local/bin/ableton-live"
 APPS="$HOME/.local/share/applications"
 

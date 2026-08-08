@@ -7,19 +7,20 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-137 tests across 8 suites. See [README.md](README.md) for how to run
+167 tests across 9 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
 ## Contents
 
 - [tests/repo-hygiene.bats](#repo-hygiene) — 16 test(s)
-- [tests/packaging.bats](#packaging) — 9 test(s)
+- [tests/packaging.bats](#packaging) — 10 test(s)
 - [tests/launcher-cli.bats](#launcher-cli) — 19 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/runtime-env.bats](#runtime-env) — 19 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 4 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 44 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 
 <a id="repo-hygiene"></a>
@@ -80,6 +81,7 @@ staging list and checks it against what the kit's own scripts reference.
 | 7 | every shell function a script calls is actually defined | lifting runtime_pids into the lib renamed it, and a replace that only |
 | 8 | make-installer refuses a tarball the kit's installer cannot select | make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check, |
 | 9 | kit-relative desktop and vendor paths are staged wholesale | — |
+| 10 | only the shared lib and the build side spell the runtime name | — |
 
 <a id="launcher-cli"></a>
 
@@ -233,41 +235,100 @@ End-to-end launch behaviour is in tests/launcher-cli.bats.
 | 19 | windowmetrics: a value in another section is not picked up | — |
 | 20 | windowmetrics: a missing user.reg is silent, not an error cascade | — |
 
+<a id="install-runs"></a>
+
+## tests/unit/install-runs.bats
+
+
+scripts/install.sh — does it run at all, and does it install what it claims?
+
+This file exists because nothing executed install.sh. The suite sourced
+runtime-env.sh directly and checked the resolvers, which is worth doing and
+says nothing about whether the script that uses them starts. On 2026-08-05 a
+merge reordered install.sh's head so it called ableton_runtime_name eight
+lines before sourcing the file that defines it; under `set -euo pipefail` it
+aborted on that line. 172 tests passed for thirteen commits.
+
+The first test here is deliberately cheap and hermetic: it asserts only that
+the script gets past its own initialisation to the point where it looks for a
+tarball. That is the whole failure mode, and it needs no fixture.
+
+The second does a real install into a throwaway HOME, and skips when there is
+no tarball to install. That is not a gap that can be closed with a fixture:
+install.sh runs `readelf -d` against the packaged libusb and PipeASIO shims
+and greps for real DT_NEEDED entries, so a stand-in tree would either fail
+those checks or force them to be weakened, and weakening them is how a debug
+tree ships.
+
+  ./tests/run.sh tests/unit/install-runs.bats
+  ABLETON_TEST_TARBALL=/path/to/runtime.tar.zst ./tests/run.sh tests/unit/install-runs.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | install.sh gets past its own initialisation | install.sh aborting on its own first lines, which no resolver test can |
+| 2 | install.sh resolves its roots from the shared lib, not from its own copy | — |
+| 3 | a real tarball installs, and the tree identifies itself | the whole install path — staging, the required-file gate, promote, |
+| 4 | a second install promotes and leaves the previous runtime behind | the promote step and its dated rollback, which is where the store's |
+
 <a id="runtime-env"></a>
 
 ## tests/unit/runtime-env.bats
 
 
-scripts/runtime-env.sh — the shared runtime-tarball selection.
+scripts/runtime-env.sh — the shared runtime and prefix resolution.
 
-Three scripts carried their own copy of the selector until this existed, with
-the same defect in all three. The functions are pure so they can be tested
-here rather than through a launcher sandbox, which is the whole reason they
-echo instead of assigning.
+Seven scripts resolved these paths independently until this existed. The
+resolvers are pure so they can be tested here rather than through a launcher
+sandbox, which is the whole reason they echo instead of assigning.
 
   ./tests/run.sh tests/unit/runtime-env.bats
 
 | # | Test | Guards |
 | --- | --- | --- |
-| 1 | the runtime wins over a debug tree sitting beside it | sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/ |
-| 2 | the newest dated runtime wins when several are present | — |
-| 3 | the same-day counter orders numerically, not lexically | — |
-| 4 | a debug tree on its own selects nothing, so the caller fails loudly | — |
-| 5 | an undated or suffixed artifact is not mistaken for the runtime | the beta channel — a nightly artifact must never be taken for the stable runtime |
-| 6 | an empty directory selects nothing rather than erroring | — |
-| 7 | a missing directory selects nothing rather than erroring | — |
-| 8 | tarball predicate: the dated release form is accepted | a kit packed around a name the installer cannot select builds cleanly |
-| 9 | tarball predicate: a full path is judged by its basename | — |
-| 10 | tarball predicate: a debug tree is refused | bin/ and lib/ with no share/ — passes `wine --version`, then fails at |
-| 11 | tarball predicate: a nightly label is accepted | this is the only runtime artifact the nightly channel publishes, so |
-| 12 | tarball predicate: a labelled debug tree is still refused | a label is a suffix on the release form, not a licence to accept any |
-| 13 | tarball predicate: an empty label is refused | — |
-| 14 | tarball selector: the plain release wins over a labelled one beside it | both in one directory is the nightly builder's own dist/, and the |
-| 15 | tarball selector: a labelled build alone is selectable | — |
-| 16 | tarball predicate: another Wine base is refused | — |
-| 17 | tarball predicate: an undated artifact is refused | — |
-| 18 | tarball predicate: a partial download is refused | the same-day counter must not be read as a date component |
-| 19 | tarball predicate: the nightly artifact name is accepted | — |
+| 1 | runtime root: defaults under the user's own opt directory | — |
+| 2 | runtime root: ABLETON_WINE_ROOT wins, so a bisect or VM run can pin one | — |
+| 3 | prefix: defaults to ~/.wine-ableton | — |
+| 4 | prefix: ABLETON_WINEPREFIX wins, which the clone workflow depends on | — |
+| 5 | root and prefix are independent: overriding one leaves the other alone | — |
+| 6 | the resolvers are pure: calling them exports and unsets nothing | — |
+| 7 | binding exports the prefix, the server, and the runtime's bin on PATH | — |
+| 8 | binding clears inherited Wine settings that would reach the wrong build | the four cleared here are the launchers' long-standing set |
+| 9 | binding leaves the sync backends alone, unlike setup-prefix.sh's own unset | setup-prefix.sh clears these two itself; folding them in would drop a |
+| 10 | runtime pids: a process running from the runtime is found | — |
+| 11 | runtime pids: a process from another Wine install is ignored | scoping — a Live under an unrelated Wine is neither counted nor killed |
+| 12 | runtime pids: non-numeric entries in the tree are skipped | — |
+| 13 | live pids: Live is told apart from the support processes around it | — |
+| 14 | a lingering wineserver means busy, but not that Live is running | the launcher's stale-wineserver kill — a lingering server must still |
+| 15 | an idle machine is neither busy nor running Live | — |
+| 16 | live pids: a process that exits mid-scan is skipped, not an error | observed during the first real migration — six "/proc/PID/cmdline: |
+| 17 | the runtime wins over a debug tree sitting beside it | sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/ |
+| 18 | the newest dated runtime wins when several are present | — |
+| 19 | the same-day counter orders numerically, not lexically | — |
+| 20 | a debug tree on its own selects nothing, so the caller fails loudly | — |
+| 21 | an undated or suffixed artifact is not mistaken for the runtime | the beta channel — a nightly artifact must never be taken for the stable runtime |
+| 22 | an empty directory selects nothing rather than erroring | — |
+| 23 | a missing directory selects nothing rather than erroring | — |
+| 24 | a runtime without source-commit is named from its patch stack | no released runtime carries source-commit — measured across all 11 trees on the dev machine 2026-08-04 |
+| 25 | source-commit is preferred over the patch stack when both are present | — |
+| 26 | two builds of one version under different patch stacks get different ids | 2026.07.29.1 appears four times on the dev machine under two patch stacks |
+| 27 | the same build named twice collapses to one id, so duplicates merge | — |
+| 28 | a tree with no BUILD-INFO cannot be named, and says so by echoing nothing | — |
+| 29 | a version with no discriminator at all cannot be named | — |
+| 30 | a discriminator with no version cannot be named | — |
+| 31 | a BUILD-INFO carrying path traversal is refused, not turned into a path | the id becomes a directory name, and a BUILD-INFO is just text in a tarball |
+| 32 | a BUILD-INFO carrying a slash is refused | — |
+| 33 | tarball predicate: the dated release form is accepted | a kit packed around a name the installer cannot select builds cleanly |
+| 34 | tarball predicate: a full path is judged by its basename | — |
+| 35 | tarball predicate: a debug tree is refused | bin/ and lib/ with no share/ — passes `wine --version`, then fails at |
+| 36 | tarball predicate: a nightly label is accepted | this is the only runtime artifact the nightly channel publishes, so |
+| 37 | tarball predicate: a labelled debug tree is still refused | a label is a suffix on the release form, not a licence to accept any |
+| 38 | tarball predicate: an empty label is refused | — |
+| 39 | tarball selector: the plain release wins over a labelled one beside it | both in one directory is the nightly builder's own dist/, and the |
+| 40 | tarball selector: a labelled build alone is selectable | — |
+| 41 | tarball predicate: another Wine base is refused | — |
+| 42 | tarball predicate: an undated artifact is refused | — |
+| 43 | tarball predicate: a partial download is refused | the same-day counter must not be read as a date component |
+| 44 | tarball predicate: the nightly artifact name is accepted | — |
 
 <a id="patch-stack"></a>
 
@@ -308,6 +369,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | Reference | Tests |
 | --- | --- |
 | `.bats-core is a full clone of another project; run.sh's comment said it` | repo-hygiene: the vendored bats clone is ignored |
+| `2026.07.29.1 appears four times on the dev machine under two patch stacks` | runtime-env: two builds of one version under different patch stacks get different ids |
 | `a bats on PATH used to beat the pin, so a checkout ran whatever the` | repo-hygiene: CI runs the bats tests/run.sh pins, not one of its own |
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
 | `a label is a suffix on the release form, not a licence to accept any` | runtime-env: tarball predicate: a labelled debug tree is still refused |
@@ -316,6 +378,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `commit 9cba3b0` | launcher: gray text: the dark fallback lands on classic GrayText |
 | `commit f0fc05e` | detect-scale: cosmic probe: a disabled lid never wins when it is marked non-primary<br>detect-scale: cosmic probe: a disabled lid never wins, even with no primary line |
 | `commit f84eaa4` | repo-hygiene: runtime name: every live file agrees on one wine-d2d1-nspa version |
+| `install.sh aborting on its own first lines, which no resolver test can` | install-runs: install.sh gets past its own initialisation |
 | `issue #106` | repo-hygiene: desktop entries validate after substitution |
 | `issue #32` | launcher: gray text: the blend is 45% towards MenuText, per channel, not symmetric |
 | `issue #38` | launcher-cli: a .als set goes straight to the Live exe, never through start.exe<br>launcher-cli: clips and packs route the same way as sets, case-insensitively |
@@ -323,14 +386,23 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `licence GPLv2+` | packaging: the kit ships the GPL source and licence Ableton Link requires |
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
 | `make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
+| `no released runtime carries source-commit` | runtime-env: a runtime without source-commit is named from its patch stack |
+| `observed during the first real migration` | runtime-env: live pids: a process that exits mid-scan is skipped, not an error |
+| `scoping` | runtime-env: runtime pids: a process from another Wine install is ignored |
 | `scripts/ableton-live` | launcher-cli: a stale wineserver is killed and the session booted before registry writes<br>launcher: windowmetrics: a value wrapped across continuation lines is rejoined |
 | `scripts/build-audit.sh` | patch-stack: audit: every wine patch is registered in FINGERPRINTS or STAMP_ONLY |
 | `scripts/container-build.sh` | patch-stack: no patch needs the 3-way fallback — context drift is worth acting on |
 | `scripts/detect-scale.sh DPI policy` | detect-scale: block map: gnome scales collapse onto the ceil-based matched set<br>detect-scale: block map: non-gnome scales round to plain LogPixels with no IFEO |
 | `scripts/detect-theme.sh` | detect-theme: newest prefs dir: mtime wins, not a version sort<br>detect-theme: newest prefs dir: the sort -V trap case, stated explicitly |
 | `scripts/setup-run-header.sh line 19` | repo-hygiene: the installer header survives being run by a real POSIX sh |
+| `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | runtime-env: the runtime wins over a debug tree sitting beside it |
 | `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
+| `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
+| `the id becomes a directory name, and a BUILD-INFO is just text in a tarball` | runtime-env: a BUILD-INFO carrying path traversal is refused, not turned into a path |
+| `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
+| `the promote step and its dated rollback, which is where the store's` | install-runs: a second install promotes and leaves the previous runtime behind |
 | `the same-day counter must not be read as a date component` | runtime-env: tarball predicate: a partial download is refused |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
+| `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
 | `this is the only runtime artifact the nightly channel publishes, so` | runtime-env: tarball predicate: a nightly label is accepted |
