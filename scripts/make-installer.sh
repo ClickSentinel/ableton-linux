@@ -13,13 +13,41 @@ cd "$root"
 
 ENGINE="${ENGINE:-podman}"
 IMAGE="${IMAGE:-ableton-wine-build:22.04}"
-NAME="wine-d2d1-nspa-11.13"
+# Runtime naming and tarball selection resolve in one place; see
+# scripts/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" "$here/runtime-env.sh"; do
+    # shellcheck source=scripts/runtime-env.sh
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v ableton_pick_tarball >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
+NAME="$(ableton_runtime_name)"
 VERSION="$(cat VERSION)"
-# exact-version runtime if present, else the newest built one
-tarball="dist/${NAME}-${VERSION}.tar.zst"
-[ -f "$tarball" ] || tarball="$(ls dist/${NAME}-*.tar.zst 2>/dev/null | sort -V | tail -1 || true)"
+# ABLETON_RUNTIME_TARBALL pins one outright; otherwise the exact-version
+# runtime if present, else the newest properly-named one. Never a bare glob.
+if [ -n "${ABLETON_RUNTIME_TARBALL:-}" ]; then
+    tarball="$ABLETON_RUNTIME_TARBALL"
+    [ -f "$tarball" ] || { echo "!! ABLETON_RUNTIME_TARBALL is not a file: $tarball" >&2; exit 1; }
+else
+    tarball="dist/${NAME}-${VERSION}.tar.zst"
+    [ -f "$tarball" ] || tarball="$(ableton_pick_tarball dist)"
+fi
 
 [ -n "$tarball" ] && [ -f "$tarball" ] || { echo "!! no ${NAME}-*.tar.zst in dist/: run ./build.sh first" >&2; exit 1; }
+# The kit carries this tarball and the kit's own install.sh selects it by name,
+# so a name the selector rejects builds a kit that packs cleanly and then dies
+# on the user's machine with "no tarball found". Only the pin reaches here with
+# an unchecked name — the branch above already filters — but the pin is exactly
+# how a published nightly gets packed, and those are named
+# <name>-<version>+nightly.<sha>.tar.zst.
+#
+# install.sh honours its own pin whatever the name, deliberately: there the
+# consequence lands on whoever set the variable. Here it lands on whoever is
+# handed the .run, so this refuses instead.
+ableton_is_runtime_tarball "$tarball" || {
+    echo "!! not a name the kit's install.sh will select: $(basename "$tarball")" >&2
+    echo "   expected ${NAME}-<YYYY.MM.DD.N>.tar.zst — rename it, or drop it in dist/ under that name" >&2
+    exit 1; }
 [ -f "$tarball.sha256" ] || { echo "!! $tarball.sha256 missing" >&2; exit 1; }
 echo "   runtime: $(basename "$tarball")"
 
@@ -66,7 +94,7 @@ mkdir -p "$kit/bin" "$kit/dist" "$kit/vendor"
 cp -a "$tarball" "$tarball.sha256" "$kit/dist/"
 cp -a "dist/BUILD-INFO-${VERSION}.txt" "$kit/" 2>/dev/null || true
 mkdir -p "$kit/scripts"
-cp -a scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
+cp -a scripts/runtime-env.sh scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
       scripts/ableton-live scripts/max9 scripts/detect-scale.sh \
       scripts/detect-theme.sh scripts/check-live-audio.sh scripts/setup-link.sh \
       "$kit/scripts/"

@@ -159,3 +159,12 @@ kit_script_names() {
         printf '%s' "$missing" >&2; false; }
 }
 
+# guards: make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check,
+# packed a 1.6G kit, and the kit's own install.sh then selected nothing from its
+# own payload — observed 2026-08-05
+@test "make-installer refuses a tarball the kit's installer cannot select" {
+    cd "$REPO"
+    grep -qF 'ableton_is_runtime_tarball "$tarball"' "$MK" || {
+        echo "make-installer.sh no longer checks the tarball it packs against the selector" >&2
+        false; }
+}
