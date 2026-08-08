@@ -17,8 +17,8 @@ setup() {
     HOME="$BATS_TEST_TMPDIR/home"
     mkdir -p "$HOME"
     . "$REPO/scripts/runtime-env.sh"
-    NAME="$(ableton_runtime_name)"
-    export ABLETON_PROMOTE_DEST="$BATS_TEST_TMPDIR/out"
+    NAME="$(works_runtime_name)"
+    export WORKS_PROMOTE_DEST="$BATS_TEST_TMPDIR/out"
 }
 
 # A miniature runtime tarball: the real one is 60M of Wine, but promotion only
@@ -43,27 +43,27 @@ mk_nightly() {   # mk_nightly [field-to-omit]
     mk_nightly
     run bash "$REPO/scripts/promote-nightly.sh" "$TARBALL" 2026.08.09.1
     [ "$status" -eq 0 ]
-    [ -f "$ABLETON_PROMOTE_DEST/$NAME-2026.08.09.1.tar.zst" ]
-    [ -f "$ABLETON_PROMOTE_DEST/$NAME-2026.08.09.1.tar.zst.sha256" ]
-    [ -f "$ABLETON_PROMOTE_DEST/BUILD-INFO-2026.08.09.1.txt" ]
-    [ -f "$ABLETON_PROMOTE_DEST/BUILD-INFO.txt" ]
-    ( cd "$ABLETON_PROMOTE_DEST" && sha256sum -c "$NAME-2026.08.09.1.tar.zst.sha256" )
+    [ -f "$WORKS_PROMOTE_DEST/$NAME-2026.08.09.1.tar.zst" ]
+    [ -f "$WORKS_PROMOTE_DEST/$NAME-2026.08.09.1.tar.zst.sha256" ]
+    [ -f "$WORKS_PROMOTE_DEST/BUILD-INFO-2026.08.09.1.txt" ]
+    [ -f "$WORKS_PROMOTE_DEST/BUILD-INFO.txt" ]
+    ( cd "$WORKS_PROMOTE_DEST" && sha256sum -c "$NAME-2026.08.09.1.tar.zst.sha256" )
 }
 
 @test "the output is a tarball the selector accepts as a release" {
     mk_nightly
     bash "$REPO/scripts/promote-nightly.sh" "$TARBALL" 2026.08.09.1 >/dev/null
-    ableton_is_runtime_tarball "$ABLETON_PROMOTE_DEST/$NAME-2026.08.09.1.tar.zst"
-    [ "$(basename "$(ableton_pick_tarball "$ABLETON_PROMOTE_DEST")")" = "$NAME-2026.08.09.1.tar.zst" ]
+    works_is_runtime_tarball "$WORKS_PROMOTE_DEST/$NAME-2026.08.09.1.tar.zst"
+    [ "$(basename "$(works_pick_tarball "$WORKS_PROMOTE_DEST")")" = "$NAME-2026.08.09.1.tar.zst" ]
 }
 
 @test "dist-version is the release, build-kind is gone, promoted-from records the origin" {
     mk_nightly
     bash "$REPO/scripts/promote-nightly.sh" "$TARBALL" 2026.08.09.1 >/dev/null
-    info="$ABLETON_PROMOTE_DEST/BUILD-INFO-2026.08.09.1.txt"
-    [ "$(ableton_buildinfo_field "$info" dist-version)" = "2026.08.09.1" ]
-    [ -z "$(ableton_buildinfo_field "$info" build-kind)" ]
-    [ "$(ableton_buildinfo_field "$info" promoted-from)" = "2026.08.06.1+nightly.79d8960" ]
+    info="$WORKS_PROMOTE_DEST/BUILD-INFO-2026.08.09.1.txt"
+    [ "$(works_buildinfo_field "$info" dist-version)" = "2026.08.09.1" ]
+    [ -z "$(works_buildinfo_field "$info" build-kind)" ]
+    [ "$(works_buildinfo_field "$info" promoted-from)" = "2026.08.06.1+nightly.79d8960" ]
 }
 
 # guards: the updater compares source-commit and retention orders by built-at —
@@ -71,16 +71,16 @@ mk_nightly() {   # mk_nightly [field-to-omit]
 @test "source-commit and built-at survive the restamp unchanged" {
     mk_nightly
     bash "$REPO/scripts/promote-nightly.sh" "$TARBALL" 2026.08.09.1 >/dev/null
-    info="$ABLETON_PROMOTE_DEST/BUILD-INFO-2026.08.09.1.txt"
-    [ "$(ableton_buildinfo_field "$info" source-commit)" = "79d8960aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ]
-    [ "$(ableton_buildinfo_field "$info" built-at)" = "2026-08-06T04:12:00Z" ]
+    info="$WORKS_PROMOTE_DEST/BUILD-INFO-2026.08.09.1.txt"
+    [ "$(works_buildinfo_field "$info" source-commit)" = "79d8960aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ]
+    [ "$(works_buildinfo_field "$info" built-at)" = "2026-08-06T04:12:00Z" ]
 }
 
 @test "the payload bits survive verbatim" {
     mk_nightly
     before="$(zstd -dc "$TARBALL" | tar -xO "$NAME/bin/wine" | sha256sum)"
     bash "$REPO/scripts/promote-nightly.sh" "$TARBALL" 2026.08.09.1 >/dev/null
-    after="$(zstd -dc "$ABLETON_PROMOTE_DEST/$NAME-2026.08.09.1.tar.zst" | tar -xO "$NAME/bin/wine" | sha256sum)"
+    after="$(zstd -dc "$WORKS_PROMOTE_DEST/$NAME-2026.08.09.1.tar.zst" | tar -xO "$NAME/bin/wine" | sha256sum)"
     [ "$before" = "$after" ]
 }
 
@@ -88,8 +88,8 @@ mk_nightly() {   # mk_nightly [field-to-omit]
     mk_nightly
     bash "$REPO/scripts/promote-nightly.sh" "$TARBALL" 2026.08.09.1 >/dev/null
     d="$BATS_TEST_TMPDIR/unpacked"; mkdir -p "$d"
-    zstd -dc "$ABLETON_PROMOTE_DEST/$NAME-2026.08.09.1.tar.zst" | tar -x -C "$d"
-    [ "$(ableton_runtime_id "$d/$NAME")" = "2026.08.09.1+79d8960" ]
+    zstd -dc "$WORKS_PROMOTE_DEST/$NAME-2026.08.09.1.tar.zst" | tar -x -C "$d"
+    [ "$(works_runtime_id "$d/$NAME")" = "2026.08.09.1+79d8960" ]
 }
 
 @test "a plain release tarball is refused: nothing to promote" {
@@ -124,13 +124,13 @@ mk_nightly() {   # mk_nightly [field-to-omit]
 
 # The honest fixture, when one is on disk: promote the real published nightly
 # and prove the Wine binary inside is bit-identical. Mirrors the
-# ABLETON_TEST_TARBALL convention in install-runs.bats.
+# WORKS_TEST_TARBALL convention in install-runs.bats.
 @test "a real nightly tarball promotes losslessly" {
-    [ -n "${ABLETON_TEST_NIGHTLY_TARBALL:-}" ] && [ -f "$ABLETON_TEST_NIGHTLY_TARBALL" ] \
-        || skip "no nightly tarball; set ABLETON_TEST_NIGHTLY_TARBALL to run this"
-    before="$(zstd -dc --long=27 "$ABLETON_TEST_NIGHTLY_TARBALL" | tar -xO "$NAME/bin/wine" | sha256sum)"
-    bash "$REPO/scripts/promote-nightly.sh" "$ABLETON_TEST_NIGHTLY_TARBALL" 2026.08.09.1 >/dev/null
-    out="$ABLETON_PROMOTE_DEST/$NAME-2026.08.09.1.tar.zst"
+    [ -n "${WORKS_TEST_NIGHTLY_TARBALL:-}" ] && [ -f "$WORKS_TEST_NIGHTLY_TARBALL" ] \
+        || skip "no nightly tarball; set WORKS_TEST_NIGHTLY_TARBALL to run this"
+    before="$(zstd -dc --long=27 "$WORKS_TEST_NIGHTLY_TARBALL" | tar -xO "$NAME/bin/wine" | sha256sum)"
+    bash "$REPO/scripts/promote-nightly.sh" "$WORKS_TEST_NIGHTLY_TARBALL" 2026.08.09.1 >/dev/null
+    out="$WORKS_PROMOTE_DEST/$NAME-2026.08.09.1.tar.zst"
     after="$(zstd -dc --long=27 "$out" | tar -xO "$NAME/bin/wine" | sha256sum)"
     [ "$before" = "$after" ]
 }

@@ -79,11 +79,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
-          name="$(bash -c '. scripts/runtime-env.sh; ableton_runtime_name')"
+          name="$(bash -c '. scripts/runtime-env.sh; works_runtime_name')"
           mkdir -p .fixture
           if gh release download --repo shibco/ableton-linux \
                  --pattern "${name}-*.tar.zst*" --dir .fixture 2>/dev/null; then
-              t="$(bash -c '. scripts/runtime-env.sh; ableton_pick_tarball .fixture')"
+              t="$(bash -c '. scripts/runtime-env.sh; works_pick_tarball .fixture')"
               if [ -n "$t" ]; then
                   ( cd .fixture && sha256sum -c "$(basename "$t").sha256" ) \
                       || { echo "!! the released tarball failed its own checksum" >&2; exit 1; }
@@ -109,7 +109,7 @@ jobs:
 
       - name: Shell unit tests
         env:
-          ABLETON_TEST_TARBALL: ${{ steps.fixture.outputs.tarball }}
+          WORKS_TEST_TARBALL: ${{ steps.fixture.outputs.tarball }}
         run: bats --recursive --print-output-on-failure tests/unit
 
       # A skip reads as a pass, so say plainly what did not run. Not a failure:
@@ -118,7 +118,7 @@ jobs:
       - name: Say what skipped
         if: always()
         env:
-          ABLETON_TEST_TARBALL: ${{ steps.fixture.outputs.tarball }}
+          WORKS_TEST_TARBALL: ${{ steps.fixture.outputs.tarball }}
         run: |
           bats --recursive tests/unit 2>/dev/null | grep -E '# skip' \
               | sed 's/^ok [0-9]* //' > /tmp/skips.txt || true

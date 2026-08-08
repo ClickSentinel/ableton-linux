@@ -109,14 +109,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ABLETON_DIST_VERSION pins the runtime's own BUILD-INFO to the committed
+      # WORKS_DIST_VERSION pins the runtime's own BUILD-INFO to the committed
       # VERSION — for a release they are the same thing, and the guard above has
-      # already said which. No ABLETON_BUILD_KIND: absent is what release means.
+      # already said which. No WORKS_BUILD_KIND: absent is what release means.
       - name: Build Wine + PipeASIO + ableton-linkd
         if: inputs.mode == 'build'
         run: |
           ENGINE=docker JOBS="$(nproc)" \
-          ABLETON_DIST_VERSION="${{ steps.v.outputs.version }}" \
+          WORKS_DIST_VERSION="${{ steps.v.outputs.version }}" \
           ./build.sh
 
       - name: Fix ownership of container output
@@ -132,7 +132,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get install -y --no-install-recommends zstd >/dev/null
-          name="$(bash -c '. scripts/runtime-env.sh; ableton_runtime_name')"
+          name="$(bash -c '. scripts/runtime-env.sh; works_runtime_name')"
           mkdir -p nightly-in
           gh release download nightly --repo "$GITHUB_REPOSITORY" --dir nightly-in \
               -p "${name}-*+nightly.*.tar.zst" -p "${name}-*+nightly.*.tar.zst.sha256" \
@@ -174,15 +174,15 @@ jobs:
 
       - name: Build audit (every patch verified in the shipped binaries)
         run: |
-          name="$(bash -c '. scripts/runtime-env.sh; ableton_runtime_name')"
+          name="$(bash -c '. scripts/runtime-env.sh; works_runtime_name')"
           ./scripts/build-audit.sh "dist/${name}-${{ steps.v.outputs.version }}.tar.zst"
 
       - name: Assemble the installer
         run: |
-          name="$(bash -c '. scripts/runtime-env.sh; ableton_runtime_name')"
+          name="$(bash -c '. scripts/runtime-env.sh; works_runtime_name')"
           ENGINE=docker \
-          ABLETON_RUNTIME_TARBALL="dist/${name}-${{ steps.v.outputs.version }}.tar.zst" \
-          ABLETON_PUBLISH_AS=install-ableton-latest.run \
+          WORKS_RUNTIME_TARBALL="dist/${name}-${{ steps.v.outputs.version }}.tar.zst" \
+          WORKS_PUBLISH_AS=install-ableton-latest.run \
           ./scripts/make-installer.sh
 
       - name: The manifest agrees with the assets beside it
@@ -228,7 +228,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ steps.v.outputs.version }}"
-          name="$(bash -c '. scripts/runtime-env.sh; ableton_runtime_name')"
+          name="$(bash -c '. scripts/runtime-env.sh; works_runtime_name')"
           run="dist/ableton-wine-setup-${VERSION}.run"
           tarball="dist/${name}-${VERSION}.tar.zst"
           {

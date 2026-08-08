@@ -40,11 +40,11 @@ prefix. Clear the endpoint registry once, using this project's Wine and
 prefix:
 
 ```bash
-WINEPREFIX="$HOME/.wine-ableton" \
+WINEPREFIX="$HOME/works/plugs/studio" \
   "$(ableton-runtime path)/bin/wine" reg delete \
   'HKLM\Software\Microsoft\Windows\CurrentVersion\MMDevices\Audio' /f
 ```
 
-Set the paths to your `ABLETON_WINEPREFIX` and `ABLETON_WINE_ROOT` values if
+Set the paths to your `WORKS_PLUG` and `WORKS_RUNTIME` values if
 you use launcher overrides. Active endpoints return with flat names on the
 next launch. Disconnected endpoints return only after the device reconnects.

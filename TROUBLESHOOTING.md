@@ -126,7 +126,7 @@ Check these in order:
 3. Otherwise, close Live and retry the setup:
 
    ```bash
-   ~/.local/share/ableton-wine/setup-link.sh
+   ~/works/apps/ableton-live/setup-link.sh
    ```
 
 Start Live and enable **Show Link Toggle** and Link again. See

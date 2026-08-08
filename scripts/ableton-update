@@ -15,13 +15,13 @@
 set -uo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-for _l in "$here/runtime-env.sh" "$HOME/.local/share/ableton-wine/runtime-env.sh" \
+for _l in "$here/runtime-env.sh" "$HOME/works/lib/runtime-env.sh" \
           "$here/../scripts/runtime-env.sh"; do
     # shellcheck source=scripts/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
-command -v ableton_manifest_url >/dev/null 2>&1 || {
-    echo "!! runtime-env.sh not found next to $0 or in ~/.local/share/ableton-wine" >&2; exit 1; }
+command -v works_manifest_url >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/works/apps/ableton-live" >&2; exit 1; }
 
 CHECK=0; ASSUME_YES=0; WANT_CHANNEL=""
 while [ $# -gt 0 ]; do
@@ -39,17 +39,17 @@ done
 
 # A channel names a symlink and selects a URL, so it is checked against the
 # allowlist rather than trusted — the same constraint that ended the source-repo
-# experiment. ableton_channel does that; asking it is how the value is validated.
+# experiment. works_channel does that; asking it is how the value is validated.
 if [ -n "$WANT_CHANNEL" ]; then
-    if [ "$(ABLETON_CHANNEL="$WANT_CHANNEL" ableton_channel 2>/dev/null)" != "$WANT_CHANNEL" ]; then
+    if [ "$(WORKS_CHANNEL="$WANT_CHANNEL" works_channel 2>/dev/null)" != "$WANT_CHANNEL" ]; then
         echo "!! not a channel: $WANT_CHANNEL" >&2; exit 1
     fi
     CHANNEL="$WANT_CHANNEL"
 else
-    CHANNEL="$(ableton_channel)"
+    CHANNEL="$(works_channel)"
 fi
 
-url="$(ableton_manifest_url "$CHANNEL")" || { echo "!! no manifest URL for $CHANNEL" >&2; exit 1; }
+url="$(works_manifest_url "$CHANNEL")" || { echo "!! no manifest URL for $CHANNEL" >&2; exit 1; }
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
 echo "== channel: $CHANNEL =="
@@ -58,28 +58,28 @@ if ! curl -fsSL --retry 2 --max-time 60 -o "$tmp/manifest.txt" "$url"; then
     echo "!! could not fetch the manifest. Offline, or the channel has published nothing yet." >&2
     exit 1
 fi
-ableton_manifest_valid "$tmp/manifest.txt" || {
+works_manifest_valid "$tmp/manifest.txt" || {
     echo "!! the manifest is incomplete; refusing to act on it" >&2
     sed 's/^/   /' "$tmp/manifest.txt" >&2; exit 1; }
 
-want_commit="$(ableton_buildinfo_field "$tmp/manifest.txt" source-commit)"
-want_at="$(ableton_buildinfo_field "$tmp/manifest.txt" built-at)"
-want_wine="$(ableton_buildinfo_field "$tmp/manifest.txt" wine)"
-want_ver="$(ableton_buildinfo_field "$tmp/manifest.txt" dist-version)"
-installer="$(ableton_buildinfo_field "$tmp/manifest.txt" installer)"
-want_sha="$(ableton_buildinfo_field "$tmp/manifest.txt" sha256)"
+want_commit="$(works_buildinfo_field "$tmp/manifest.txt" source-commit)"
+want_at="$(works_buildinfo_field "$tmp/manifest.txt" built-at)"
+want_wine="$(works_buildinfo_field "$tmp/manifest.txt" wine)"
+want_ver="$(works_buildinfo_field "$tmp/manifest.txt" dist-version)"
+installer="$(works_buildinfo_field "$tmp/manifest.txt" installer)"
+want_sha="$(works_buildinfo_field "$tmp/manifest.txt" sha256)"
 
-root="$(ableton_wine_root)"
+root="$(works_runtime_path)"
 have_info="$root/ABLETON-WINE-BUILD-INFO.txt"
-have_commit="$(ableton_buildinfo_field "$have_info" source-commit)"
-have_at="$(ableton_buildinfo_field "$have_info" built-at)"
-have_wine="$(ableton_buildinfo_field "$have_info" wine)"
+have_commit="$(works_buildinfo_field "$have_info" source-commit)"
+have_at="$(works_buildinfo_field "$have_info" built-at)"
+have_wine="$(works_buildinfo_field "$have_info" wine)"
 
 # Both sides show the same thing: the id a build lands under. Reporting the
 # channel's bare dist-version against the installed id put a version beside an
 # identifier and invited comparing them, when only one of them is a name.
-want_id="$(ableton_compose_id "$want_ver" "$want_commit" \
-    "$(ableton_buildinfo_field "$tmp/manifest.txt" build-kind)")"
+want_id="$(works_compose_id "$want_ver" "$want_commit" \
+    "$(works_buildinfo_field "$tmp/manifest.txt" build-kind)")"
 # Same columns and same order as `ableton-runtime list`, so the two commands
 # describe a build the same way. Fixed widths because the ids differ in length
 # by design -- a nightly carries its kind -- and unpadded output left the dates
@@ -87,12 +87,12 @@ want_id="$(ableton_compose_id "$want_ver" "$want_commit" \
 printf '   available: %-32s %-12s %s\n' \
     "${want_id:-$want_ver}" "${want_wine:-?}" "${want_at:-—}"
 printf '   installed: %-32s %-12s %s\n' \
-    "$(ableton_runtime_id "$root" 2>/dev/null || echo 'none')" "${have_wine:-?}" "${have_at:-—}"
+    "$(works_runtime_id "$root" 2>/dev/null || echo 'none')" "${have_wine:-?}" "${have_at:-—}"
 
 # The case that had no answer at all before: same build, nothing to do. Compared
 # on source-commit rather than the version, which is identical across every
 # nightly between two releases.
-if [ -n "$want_commit" ] && [ "$want_commit" = "$have_commit" ] && [ "$CHANNEL" = "$(ableton_channel)" ]; then
+if [ -n "$want_commit" ] && [ "$want_commit" = "$have_commit" ] && [ "$CHANNEL" = "$(works_channel)" ]; then
     echo
     echo "You already have this build."
     exit 0
@@ -100,15 +100,15 @@ fi
 
 # Already in the store from an earlier install? Then this is a channel switch,
 # not a download.
-container="$(ableton_container_root)"
+container="$(works_runtime_store)"
 for e in "$container"/*; do
     [ -d "$e" ] && [ ! -L "$e" ] || continue
-    [ "$(ableton_buildinfo_field "$e/ABLETON-WINE-BUILD-INFO.txt" source-commit)" = "$want_commit" ] || continue
+    [ "$(works_buildinfo_field "$e/ABLETON-WINE-BUILD-INFO.txt" source-commit)" = "$want_commit" ] || continue
     echo
     echo "That build is already installed as ${e##*/} — no download needed."
     [ "$CHECK" -eq 0 ] || exit 0
     ln -sfn "${e##*/}" "$container/$CHANNEL"
-    printf '%s\n' "$CHANNEL" > "${XDG_CONFIG_HOME:-$HOME/.config}/ableton-wine/channel"
+    printf '%s\n' "$CHANNEL" > "$(works_channel_file)"
     echo "channel $CHANNEL -> ${e##*/}"
     exit 0
 done
@@ -137,7 +137,7 @@ if [ -n "$have_wine" ] && [ -n "$want_wine" ] && [ "$have_wine" != "$want_wine" 
     exit 1
 fi
 
-if ableton_runtime_busy; then
+if works_runtime_busy; then
     echo; echo "!! something is running from the runtime. Close Live first." >&2
     exit 1
 fi
@@ -156,7 +156,7 @@ fi
 echo
 echo "== downloading $installer =="
 curl -fL --retry 2 --progress-bar -o "$tmp/$installer" \
-    "$(ableton_manifest_installer_url "$url" "$installer")" || {
+    "$(works_manifest_installer_url "$url" "$installer")" || {
         echo "!! download failed" >&2; exit 1; }
 
 echo "== verifying =="

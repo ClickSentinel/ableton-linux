@@ -77,7 +77,7 @@ jobs:
           # date appears once and the id keeps its single separator:
           #   dist-version  2026.08.06.1
           #   directory     2026.08.06.1+nightly.badafaf
-          # See ableton_runtime_id.
+          # See works_runtime_id.
           dist="$(date -u +%Y.%m.%d).1"
           printf 'dist=%s\n'  "$dist" >> "$GITHUB_OUTPUT"
           printf 'label=%s+nightly.%s\n' "$dist" "${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
@@ -127,7 +127,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ABLETON_DIST_VERSION and ABLETON_BUILD_KIND go to the build, not just to
+      # WORKS_DIST_VERSION and WORKS_BUILD_KIND go to the build, not just to
       # the packaging: they land in the runtime's own BUILD-INFO, which is what
       # names the installed directory and what the updater compares against.
       # Stamping only the installer would leave the tree a user actually runs
@@ -135,7 +135,7 @@ jobs:
       - name: Build Wine + PipeASIO + ableton-linkd
         run: |
           ENGINE=docker JOBS="$(nproc)" \
-          ABLETON_DIST_VERSION="$DIST" ABLETON_BUILD_KIND=nightly \
+          WORKS_DIST_VERSION="$DIST" WORKS_BUILD_KIND=nightly \
           ./build.sh
 
       # container-build.sh writes dist/ and .ccache/ as the container's root
@@ -148,17 +148,17 @@ jobs:
         run: ./scripts/build-audit.sh
 
       # ENGINE because make-installer.sh defaults to podman and the runner has
-      # docker; ABLETON_DIST_LABEL so the installer is named and stamped for
+      # docker; WORKS_DIST_LABEL so the installer is named and stamped for
       # this build without touching the committed VERSION.
-      # ABLETON_CHANNEL_PUBLISH stamps the kit's own `channel` marker, so
+      # WORKS_CHANNEL_PUBLISH stamps the kit's own `channel` marker, so
       # installing this promotes into `nightly` and leaves `stable` alone.
-      # ABLETON_PUBLISH_AS names the fixed asset the manifest must point at:
+      # WORKS_PUBLISH_AS names the fixed asset the manifest must point at:
       # the labelled .run's URL changes every night, this one does not.
       - name: Assemble the installer
         run: |
-          ENGINE=docker ABLETON_DIST_LABEL="$LABEL" \
-          ABLETON_CHANNEL_PUBLISH=nightly \
-          ABLETON_PUBLISH_AS=install-ableton-nightly.run \
+          ENGINE=docker WORKS_DIST_LABEL="$LABEL" \
+          WORKS_CHANNEL_PUBLISH=nightly \
+          WORKS_PUBLISH_AS=install-ableton-nightly.run \
           ./scripts/make-installer.sh
 
       # The suite executes the checkout's install.sh; nothing executed the

@@ -121,7 +121,7 @@ Close Live and `Push2DisplayProcess.exe`, then remove the helper override with
 this project's Wine:
 
 ```bash
-WINEPREFIX="$HOME/.wine-ableton" \
+WINEPREFIX="$HOME/works/plugs/studio" \
   "$(ableton-runtime path)/bin/wine" reg delete \
   'HKCU\Software\Wine\AppDefaults\Push2DisplayProcess.exe\DllOverrides' \
   /v libusb-1.0 /f

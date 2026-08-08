@@ -7,7 +7,7 @@
 # across, a runtime something is still running from. Those refusals are the
 # feature — the download is the easy part — so this file is mostly about them.
 #
-# Nothing here reaches the network. ABLETON_MANIFEST_URL points curl at a
+# Nothing here reaches the network. WORKS_MANIFEST_URL points curl at a
 # file:// URL, which is the same code path a real channel takes.
 #
 #   ./tests/run.sh tests/unit/ableton-update.bats
@@ -21,13 +21,13 @@ UPD="$REPO/scripts/ableton-update"
 setup() {
     HOME="$BATS_TEST_TMPDIR/home"
     export HOME XDG_CONFIG_HOME="$HOME/.config"
-    export ABLETON_OPT_DIR="$HOME/.local/opt"
-    export ABLETON_CHANNEL_FILE="$XDG_CONFIG_HOME/ableton-wine/channel"
-    mkdir -p "$XDG_CONFIG_HOME/ableton-wine" "$ABLETON_OPT_DIR/ableton-wine"
-    unset ABLETON_CHANNEL ABLETON_WINE_ROOT
+    export WORKS_HOME="$HOME/works"
+    export WORKS_CHANNEL_FILE="$XDG_CONFIG_HOME/works/channel"
+    mkdir -p "$XDG_CONFIG_HOME/works" "$WORKS_HOME/runtimes"
+    unset WORKS_CHANNEL WORKS_RUNTIME
     PUB="$BATS_TEST_TMPDIR/pub"; mkdir -p "$PUB"
-    export ABLETON_MANIFEST_URL="file://$PUB/manifest.txt"
-    STORE="$ABLETON_OPT_DIR/ableton-wine"
+    export WORKS_MANIFEST_URL="file://$PUB/manifest.txt"
+    STORE="$WORKS_HOME/runtimes"
 }
 
 # A build in the store: a directory with a BUILD-INFO the resolver can read.
@@ -46,10 +46,10 @@ a_manifest() {   # channel, commit, built-at, wine, installer, sha
     printf 'dist-version: 2026.08.04.1\nsource-commit: %s\nbuilt-at:     %s\nwine:         %s\n' \
         "$2" "$3" "$4" > "$info"
     ( . "$REPO/scripts/runtime-env.sh"
-      ableton_manifest_write "$1" "$info" "$5" "$6" ) > "$PUB/manifest.txt"
+      works_manifest_write "$1" "$info" "$5" "$6" ) > "$PUB/manifest.txt"
 }
 
-on_channel() { printf '%s\n' "$1" > "$ABLETON_CHANNEL_FILE"; }
+on_channel() { printf '%s\n' "$1" > "$WORKS_CHANNEL_FILE"; }
 point_at()   { ln -sfn "$2" "$STORE/$1"; }
 
 # --- nothing to do ------------------------------------------------------------
@@ -109,7 +109,7 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
     a_manifest nightly bbbbbbbb 2026-08-07T10:00:00Z wine-11.13 x.run deadbeef
 
     run "$UPD" --channel nightly
-    [ "$(cat "$ABLETON_CHANNEL_FILE")" = "nightly" ]
+    [ "$(cat "$WORKS_CHANNEL_FILE")" = "nightly" ]
 }
 
 # guards: a switch must move the channel it names, and only that one
@@ -133,7 +133,7 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
     run "$UPD" --channel nightly --check
     [ "$status" -eq 0 ]
     [ ! -e "$STORE/nightly" ]
-    [ "$(cat "$ABLETON_CHANNEL_FILE")" = "stable" ]
+    [ "$(cat "$WORKS_CHANNEL_FILE")" = "stable" ]
 }
 
 # --- what it refuses ----------------------------------------------------------
@@ -165,7 +165,7 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
 
 @test "a manifest that cannot be fetched is an error, not an update" {
     on_channel stable
-    ABLETON_MANIFEST_URL="file://$PUB/absent.txt" run "$UPD"
+    WORKS_MANIFEST_URL="file://$PUB/absent.txt" run "$UPD"
     [ "$status" -ne 0 ]
     [[ "$output" == *"could not fetch"* ]]
 }
@@ -277,7 +277,7 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
     a_manifest stable bbbbbbbb 2026-08-07T10:00:00Z wine-11.13 x.run "$sha"
     mv "$PUB/manifest.txt" "$PUB/moved/manifest.txt"
 
-    ABLETON_MANIFEST_URL="file://$PUB/moved/manifest.txt" run "$UPD" --yes
+    WORKS_MANIFEST_URL="file://$PUB/moved/manifest.txt" run "$UPD" --yes
     [ "$status" -eq 0 ]
     [[ "$output" == *"FROM MOVED"* ]]
 }

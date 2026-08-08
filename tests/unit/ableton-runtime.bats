@@ -18,12 +18,12 @@ RT() { bash "$REPO/scripts/ableton-runtime" "$@"; }
 
 setup() {
     HOME="$BATS_TEST_TMPDIR/home"
-    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
-    unset ABLETON_WINE_ROOT
-    mkdir -p "$HOME" "$ABLETON_OPT_DIR"
+    export WORKS_HOME="$BATS_TEST_TMPDIR/opt"
+    unset WORKS_RUNTIME
+    mkdir -p "$HOME" "$WORKS_HOME"
     . "$REPO/scripts/runtime-env.sh"
-    C="$(ableton_container_root)"
-    LEGACY="$(ableton_legacy_root)"
+    C="$(works_runtime_store)"
+    LEGACY="$(works_legacy_root)"
 }
 
 plant() {
@@ -61,7 +61,7 @@ store() {
 
 @test "path honours an explicit pin" {
     store
-    ABLETON_WINE_ROOT="$BATS_TEST_TMPDIR/pinned" run RT path
+    WORKS_RUNTIME="$BATS_TEST_TMPDIR/pinned" run RT path
     [ "$output" = "$BATS_TEST_TMPDIR/pinned" ]
 }
 

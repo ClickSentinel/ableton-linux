@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Remove what install.sh added. The Wine prefix (~/.wine-ableton) is kept unless you pass --prefix.
+# Remove what install.sh added. The Wine prefix (~/works/plugs/studio) is kept unless you pass --prefix.
 set -euo pipefail
-# Matches install.sh: ABLETON_WINE_ROOT picks a non-default runtime to remove.
+# Matches install.sh: WORKS_RUNTIME picks a non-default runtime to remove.
 # Resolved by the same function install.sh uses, rather than by a second copy
 # carrying its own literal of the runtime name — this is a script that runs
 # `rm -rf` on whatever it resolves, so the two disagreeing is not a cosmetic
@@ -11,16 +11,16 @@ for _l in "$(dirname "$0")/runtime-env.sh" \
     # shellcheck source=scripts/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
-command -v ableton_wine_root >/dev/null 2>&1 || {
+command -v works_runtime_path >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
 BIN="$HOME/.local/bin/ableton-live"
 APPS="$HOME/.local/share/applications"
 
 # Removing by sibling glob around one resolved path stopped working when the
-# runtime moved into the store: ableton_wine_root now names a build *inside* the
+# runtime moved into the store: works_runtime_path now names a build *inside* the
 # container, so `rm -rf` on it would take one entry and leave the rest orphaned
 # behind a dangling channel.
-ableton_remove_runtimes
+works_remove_runtimes
 rm -f  "$BIN"        && echo "removed $BIN"
 rm -f  "$HOME/.local/bin/ableton-runtime" "$HOME/.local/bin/ableton-update"
 rm -f  "$BIN".rollback-*
@@ -30,12 +30,12 @@ systemctl --user disable --now ableton-linkd.service 2>/dev/null || true
 rm -f  "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/ableton-linkd.service" \
     && echo "removed ~/.config/systemd/user/ableton-linkd.service"
 systemctl --user daemon-reload 2>/dev/null || true
-rm -rf "$HOME/.local/share/ableton-wine" && echo "removed ~/.local/share/ableton-wine"
+rm -rf "$HOME/works/apps/ableton-live" && echo "removed ~/works/apps/ableton-live"
 # The channel install.sh recorded. Not prompted for, unlike the prefix: this is
 # one word of preference, not data, and leaving it behind means a later install
 # is followed by an `ableton-update` pointed at a channel nothing here chose.
 # The directory goes only if it is empty, so anything else under it survives.
-rm -f  "${XDG_CONFIG_HOME:-$HOME/.config}/ableton-wine/channel"
+rm -f  "$(works_runtime_store)/.channel"
 rmdir  "${XDG_CONFIG_HOME:-$HOME/.config}/ableton-wine" 2>/dev/null \
     && echo "removed ~/.config/ableton-wine" || true
 rm -f  "$APPS/ableton-live.desktop" "$APPS/wine-protocol-ableton.desktop" "$APPS/wine-extension-auz.desktop"
@@ -59,7 +59,7 @@ sed -i -e '\#^x-scheme-handler/ableton=wine-protocol-ableton\.desktop;\?$#d' \
 echo "removed desktop entries, icons and MIME registrations"
 
 if [ "${1:-}" = "--prefix" ]; then
-    pfx="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}"
+    pfx="${WORKS_PLUG:-$HOME/works/plugs/studio}"
     # No terminal means no answer; keep the prefix rather than delete it blind.
     read -rp "Also delete $pfx? This removes your Live installation AND its authorisation. [y/N] " a || a=n
     case "$a" in

@@ -19,9 +19,9 @@ for _l in "$(dirname "$0")/runtime-env.sh" "$here/runtime-env.sh"; do
     # shellcheck source=scripts/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
-command -v ableton_pick_tarball >/dev/null 2>&1 || {
+command -v works_pick_tarball >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
-NAME="$(ableton_runtime_name)"
+NAME="$(works_runtime_name)"
 VERSION="$(cat VERSION)"
 # What the finished installer is called, as opposed to which runtime goes in it.
 # They are the same for a release and differ for a nightly, which must not bump
@@ -29,15 +29,15 @@ VERSION="$(cat VERSION)"
 # its format and its pairing with CHANGELOG and BUILD-INFO. Everything that
 # locates a build input keeps using VERSION; only the artifact's name, the
 # header stamp and the version recorded into the installed kit use LABEL.
-LABEL="${ABLETON_DIST_LABEL:-$VERSION}"
-# ABLETON_RUNTIME_TARBALL pins one outright; otherwise the exact-version
+LABEL="${WORKS_DIST_LABEL:-$VERSION}"
+# WORKS_RUNTIME_TARBALL pins one outright; otherwise the exact-version
 # runtime if present, else the newest properly-named one. Never a bare glob.
-if [ -n "${ABLETON_RUNTIME_TARBALL:-}" ]; then
-    tarball="$ABLETON_RUNTIME_TARBALL"
-    [ -f "$tarball" ] || { echo "!! ABLETON_RUNTIME_TARBALL is not a file: $tarball" >&2; exit 1; }
+if [ -n "${WORKS_RUNTIME_TARBALL:-}" ]; then
+    tarball="$WORKS_RUNTIME_TARBALL"
+    [ -f "$tarball" ] || { echo "!! WORKS_RUNTIME_TARBALL is not a file: $tarball" >&2; exit 1; }
 else
     tarball="dist/${NAME}-${VERSION}.tar.zst"
-    [ -f "$tarball" ] || tarball="$(ableton_pick_tarball dist)"
+    [ -f "$tarball" ] || tarball="$(works_pick_tarball dist)"
 fi
 
 [ -n "$tarball" ] && [ -f "$tarball" ] || { echo "!! no ${NAME}-*.tar.zst in dist/: run ./build.sh first" >&2; exit 1; }
@@ -51,7 +51,7 @@ fi
 # install.sh honours its own pin whatever the name, deliberately: there the
 # consequence lands on whoever set the variable. Here it lands on whoever is
 # handed the .run, so this refuses instead.
-ableton_is_runtime_tarball "$tarball" || {
+works_is_runtime_tarball "$tarball" || {
     echo "!! not a name the kit's install.sh will select: $(basename "$tarball")" >&2
     echo "   expected ${NAME}-<YYYY.MM.DD.N>.tar.zst — rename it, or drop it in dist/ under that name" >&2
     exit 1; }
@@ -152,7 +152,7 @@ printf '%s\n' "$LABEL" > "$kit/VERSION"
 # checksum and so cannot exist until after this is packed. They answer different
 # questions anyway - the manifest says what a channel currently points at, for
 # the updater; this says what this kit is, for the installer holding it.
-printf '%s\n' "${ABLETON_CHANNEL_PUBLISH:-stable}" > "$kit/channel"
+printf '%s\n' "${WORKS_CHANNEL_PUBLISH:-stable}" > "$kit/channel"
 install -m755 dist/cabextract-static "$kit/bin/cabextract"
 install -m755 dist/ableton-linkd "$kit/bin/ableton-linkd"
 # Ableton Link is GPLv2+ with no linking exception, so the built daemon's
@@ -197,18 +197,18 @@ chmod +x "$out"
 # Same bytes either way, so the checksum is the built file's.
 # Read from the runtime being packed, not from dist/BUILD-INFO-<version>.txt:
 # the tarball's copy is the one that lands on the user's machine and the one the
-# updater compares against. See ableton_tarball_buildinfo.
+# updater compares against. See works_tarball_buildinfo.
 info="$stage/runtime-BUILD-INFO.txt"
-if ableton_tarball_buildinfo "$tarball" > "$info" && [ -s "$info" ]; then
-    ableton_manifest_write "${ABLETON_CHANNEL_PUBLISH:-stable}" "$info" \
-        "${ABLETON_PUBLISH_AS:-$(basename "$out")}" \
+if works_tarball_buildinfo "$tarball" > "$info" && [ -s "$info" ]; then
+    works_manifest_write "${WORKS_CHANNEL_PUBLISH:-stable}" "$info" \
+        "${WORKS_PUBLISH_AS:-$(basename "$out")}" \
         "$(awk '{print $1}' "$out.sha256")" > dist/manifest.txt
-    ableton_manifest_valid dist/manifest.txt || {
+    works_manifest_valid dist/manifest.txt || {
         echo "!! the manifest this build would publish is incomplete:" >&2
         sed 's/^/   /' dist/manifest.txt >&2
         echo "   the runtime's BUILD-INFO is missing a field -- rebuild it" >&2
         exit 1; }
-    echo "   manifest: dist/manifest.txt -> ${ABLETON_PUBLISH_AS:-$(basename "$out")}"
+    echo "   manifest: dist/manifest.txt -> ${WORKS_PUBLISH_AS:-$(basename "$out")}"
 else
     echo "!! could not read BUILD-INFO out of $(basename "$tarball")" >&2
     exit 1

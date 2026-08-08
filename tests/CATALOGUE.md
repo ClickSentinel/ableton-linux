@@ -86,7 +86,7 @@ staging list and checks it against what the kit's own scripts reference.
 | 7 | the kit ships the GPL source and licence Ableton Link requires | licence GPLv2+ — Ableton Link has no linking exception, so the source must travel with the binary |
 | 8 | release.yml's asset list matches what make-installer.sh actually produces | — |
 | 9 | every shell function a script calls is actually defined | lifting runtime_pids into the lib renamed it, and a replace that only |
-| 10 | make-installer refuses a tarball the kit's installer cannot select | make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check, |
+| 10 | make-installer refuses a tarball the kit's installer cannot select | make-installer accepted WORKS_RUNTIME_TARBALL with only an -f check, |
 
 <a id="launcher-cli"></a>
 
@@ -97,7 +97,7 @@ scripts/ableton-live — the launch contract, end to end.
 
 The launcher runs for real here: discovery, the single-instance lock, registry
 sync, argument routing, right up to the exec. What it would have exec'd is
-captured instead of run, because ABLETON_WINE_ROOT points at a fake runtime
+captured instead of run, because WORKS_RUNTIME points at a fake runtime
 tree whose `wine` logs its argv and exits (see helpers/launcher.bash).
 
 This is the half that users actually experience — which Live starts, what
@@ -250,7 +250,7 @@ scripts/install.sh — does it run at all, and does it install what it claims?
 This file exists because nothing executed install.sh. The suite sourced
 runtime-env.sh directly and checked the resolvers, which is worth doing and
 says nothing about whether the script that uses them starts. On 2026-08-05 a
-merge reordered install.sh's head so it called ableton_runtime_name eight
+merge reordered install.sh's head so it called works_runtime_name eight
 lines before sourcing the file that defines it; under `set -euo pipefail` it
 aborted on that line. 172 tests passed for thirteen commits.
 
@@ -266,7 +266,7 @@ those checks or force them to be weakened, and weakening them is how a debug
 tree ships.
 
   ./tests/run.sh tests/unit/install-runs.bats
-  ABLETON_TEST_TARBALL=/path/to/runtime.tar.zst ./tests/run.sh tests/unit/install-runs.bats
+  WORKS_TEST_TARBALL=/path/to/runtime.tar.zst ./tests/run.sh tests/unit/install-runs.bats
 
 | # | Test | Guards |
 | --- | --- | --- |
@@ -340,7 +340,7 @@ from its own BUILD-INFO means the script cannot know what it is about to
 install over, and guessing wrong swaps a runtime out from under a running
 Live.
 
-Nothing here touches a real install: ABLETON_OPT_DIR points the resolvers at
+Nothing here touches a real install: WORKS_HOME points the resolvers at
 a throwaway tree.
 
   ./tests/run.sh tests/unit/migrate-layout.bats
@@ -370,7 +370,7 @@ a throwaway tree.
 | 21 | a nonsense retention value reverts to the default rather than pruning all | — |
 | 22 | removal takes the container and everything inside it | — |
 | 23 | removal handles a flat install that never migrated | — |
-| 24 | removal refuses a pinned root that is not a runtime | a stale exported ABLETON_WINE_ROOT from a test session would otherwise |
+| 24 | removal refuses a pinned root that is not a runtime | a stale exported WORKS_RUNTIME from a test session would otherwise |
 | 25 | removal refuses a pinned root of \$HOME | — |
 
 <a id="promote"></a>
@@ -453,7 +453,7 @@ unknown channel, incomplete manifest, a Wine base it cannot take a Wire back
 across, a runtime something is still running from. Those refusals are the
 feature — the download is the easy part — so this file is mostly about them.
 
-Nothing here reaches the network. ABLETON_MANIFEST_URL points curl at a
+Nothing here reaches the network. WORKS_MANIFEST_URL points curl at a
 file:// URL, which is the same code path a real channel takes.
 
   ./tests/run.sh tests/unit/ableton-update.bats
@@ -503,10 +503,10 @@ sandbox, which is the whole reason they echo instead of assigning.
 
 | # | Test | Guards |
 | --- | --- | --- |
-| 1 | runtime root: defaults under the user's own opt directory | — |
-| 2 | runtime root: ABLETON_WINE_ROOT wins, so a bisect or VM run can pin one | — |
-| 3 | prefix: defaults to ~/.wine-ableton | — |
-| 4 | prefix: ABLETON_WINEPREFIX wins, which the clone workflow depends on | — |
+| 1 | runtime root: an unmigrated install still resolves where it actually is | — |
+| 2 | runtime root: WORKS_RUNTIME wins, so a bisect or VM run can pin one | — |
+| 3 | prefix: defaults to ~/works/plugs/studio | — |
+| 4 | prefix: WORKS_PLUG wins, which the clone workflow depends on | — |
 | 5 | root and prefix are independent: overriding one leaves the other alone | — |
 | 6 | the resolvers are pure: calling them exports and unsets nothing | — |
 | 7 | binding exports the prefix, the server, and the runtime's bin on PATH | — |
@@ -623,7 +623,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `a label is a suffix on the release form, not a licence to accept any` | runtime-env: tarball predicate: a labelled debug tree is still refused |
 | `a release has no kind, and must not grow one` | ableton-update: a release is reported without a kind |
 | `a script calling `use` with no argument must fail, not block forever` | ableton-runtime: use with no argument refuses when there is no terminal |
-| `a stale exported ABLETON_WINE_ROOT from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
+| `a stale exported WORKS_RUNTIME from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
 | `a switch must move the channel it names, and only that one` | ableton-update: switching channel leaves the other channel where it was |
 | `an empty value must not silently mean "the channel you are on"` | ableton-update: --channel with nothing after it is refused, and says so |
 | `an existing flat install is what nearly every user has` | install-runs: a flat install is migrated by the installer, not just by the library |
@@ -648,7 +648,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `issue label 'installer'` | packaging: every script a kit script sources is itself staged into the kit |
 | `licence GPLv2+` | packaging: the kit ships the GPL source and licence Ableton Link requires |
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
-| `make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
+| `make-installer accepted WORKS_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
 | `moving a release must not strand the installer it names` | manifest: the installer URL is resolved beside the manifest |
 | `names tie across every nightly between two releases, so ordering on` | migrate-layout: retention orders by built-at, not by the name |
 | `names tie across nightlies, so ordering is by built-at` | ableton-runtime: list is newest first |

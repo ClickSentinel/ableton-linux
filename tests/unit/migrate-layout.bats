@@ -9,7 +9,7 @@
 # install over, and guessing wrong swaps a runtime out from under a running
 # Live.
 #
-# Nothing here touches a real install: ABLETON_OPT_DIR points the resolvers at
+# Nothing here touches a real install: WORKS_HOME points the resolvers at
 # a throwaway tree.
 #
 #   ./tests/run.sh tests/unit/migrate-layout.bats
@@ -20,15 +20,15 @@ load ../helpers/common
 
 setup() {
     HOME="$BATS_TEST_TMPDIR/home"
-    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
-    unset ABLETON_WINE_ROOT
-    mkdir -p "$HOME" "$ABLETON_OPT_DIR"
+    export WORKS_HOME="$BATS_TEST_TMPDIR/opt"
+    unset WORKS_RUNTIME
+    mkdir -p "$HOME" "$WORKS_HOME"
     . "$REPO/scripts/runtime-env.sh"
     # Derived, never spelled out: a literal here would be a second place the
     # runtime name lives, which repo-hygiene rightly refuses.
-    LEGACY="$(ableton_legacy_root)"
+    LEGACY="$(works_legacy_root)"
     NAME="${LEGACY##*/}"
-    CONTAINER="$(ableton_container_root)"
+    CONTAINER="$(works_runtime_store)"
 }
 
 # A runtime is recognisable by shape, so the tests plant one rather than an
@@ -47,7 +47,7 @@ plant() {
 
 @test "a flat install moves into the store under its own name" {
     plant "$LEGACY" 2026.08.01.1 b4d2f10aaaa
-    run ableton_migrate_layout
+    run works_migrate_layout
     [ "$status" -eq 0 ]
     [ -f "$CONTAINER/2026.08.01.1+b4d2f10/bin/wine" ]
     [ -L "$CONTAINER/stable" ]
@@ -58,7 +58,7 @@ plant() {
 # install ends in the same shape a fresh one does
 @test "nothing remains at the legacy path" {
     plant "$LEGACY"
-    ableton_migrate_layout
+    works_migrate_layout
     [ ! -e "$LEGACY" ] && [ ! -L "$LEGACY" ]
 }
 
@@ -66,8 +66,8 @@ plant() {
 # directory nothing is looking at
 @test "the resolver follows the runtime to its new name" {
     plant "$LEGACY" 2026.08.01.1 b4d2f10aaaa
-    ableton_migrate_layout
-    [ "$(ableton_wine_root)" = "$CONTAINER/2026.08.01.1+b4d2f10" ]
+    works_migrate_layout
+    [ "$(works_runtime_path)" = "$CONTAINER/2026.08.01.1+b4d2f10" ]
 }
 
 # guards: dated rollbacks are the reason the store exists — a timestamp records
@@ -76,10 +76,10 @@ plant() {
     plant "$LEGACY"                            2026.08.01.1 b4d2f10aaaa
     plant "$LEGACY-rollback-20260802T194734Z"  2026.07.29.1 9614003ccc
     plant "$LEGACY-rollback-20260804T113605Z"  2026.07.23.1 237e53cddd
-    ableton_migrate_layout
+    works_migrate_layout
     [ -f "$CONTAINER/2026.07.29.1+9614003/bin/wine" ]
     [ -f "$CONTAINER/2026.07.23.1+237e53c/bin/wine" ]
-    [ -z "$(find "$ABLETON_OPT_DIR" -maxdepth 1 -name "$NAME-rollback-*")" ]
+    [ -z "$(find "$WORKS_HOME" -maxdepth 1 -name "$NAME-rollback-*")" ]
 }
 
 # guards: two installs of one build collapse to one entry, and the loser is set
@@ -88,7 +88,7 @@ plant() {
     plant "$LEGACY"                            2026.08.01.1 b4d2f10aaaa
     plant "$LEGACY-rollback-20260802T194734Z"  2026.07.29.1 9614003ccc
     plant "$LEGACY-rollback-20260804T113605Z"  2026.07.29.1 9614003ccc
-    ableton_migrate_layout
+    works_migrate_layout
     [ -f "$CONTAINER/2026.07.29.1+9614003/bin/wine" ]
     [ -n "$(find "$CONTAINER" -maxdepth 1 -name 'superseded-*' -type d)" ]
     [ -n "$(find "$CONTAINER"/superseded-* -name 'bin' -type d)" ]
@@ -101,7 +101,7 @@ plant() {
     plant "$LEGACY"
     mkdir -p "$LEGACY-rollback-20260804T130806Z/bin"
     : > "$LEGACY-rollback-20260804T130806Z/bin/wine"
-    run ableton_migrate_layout
+    run works_migrate_layout
     [ "$status" -eq 0 ]
     [ -n "$(find "$CONTAINER" -maxdepth 1 -name 'failed-*' -type d)" ]
 }
@@ -109,32 +109,32 @@ plant() {
 @test "failed-install debris travels too, so uninstall still finds it" {
     plant "$LEGACY"
     mkdir -p "$LEGACY.failed-20260801T101010Z/bin"
-    ableton_migrate_layout
-    [ -z "$(find "$ABLETON_OPT_DIR" -maxdepth 1 -name "$NAME.failed-*")" ]
+    works_migrate_layout
+    [ -z "$(find "$WORKS_HOME" -maxdepth 1 -name "$NAME.failed-*")" ]
 }
 
 # guards: 11.11 and 11.14 trees coexist on the development machine and are not
 # this installer's to move
 @test "runtimes from other Wine bases are left alone" {
     plant "$LEGACY"
-    other="$ABLETON_OPT_DIR/${NAME%.*}.11"
+    other="$WORKS_HOME/${NAME%.*}.11"
     plant "$other"
-    ableton_migrate_layout
+    works_migrate_layout
     [ -f "$other/bin/wine" ]
 }
 
 # --- the no-op rows -----------------------------------------------------------
 
 @test "a fresh install migrates nothing and creates nothing" {
-    run ableton_migrate_layout
+    run works_migrate_layout
     [ "$status" -eq 0 ]
     [ ! -e "$CONTAINER" ]
 }
 
 @test "running it twice is a no-op, not a second move" {
     plant "$LEGACY" 2026.08.01.1 b4d2f10aaaa
-    ableton_migrate_layout
-    run ableton_migrate_layout
+    works_migrate_layout
+    run works_migrate_layout
     [ "$status" -eq 0 ]
     [ -f "$CONTAINER/2026.08.01.1+b4d2f10/bin/wine" ]
     [ ! -e "$CONTAINER/2026.08.01.1+b4d2f10/ableton-wine" ]
@@ -142,8 +142,8 @@ plant() {
 
 @test "an overridden runtime root is left exactly where the user pinned it" {
     plant "$LEGACY"
-    ABLETON_WINE_ROOT="$BATS_TEST_TMPDIR/pinned"
-    run ableton_migrate_layout
+    WORKS_RUNTIME="$BATS_TEST_TMPDIR/pinned"
+    run works_migrate_layout
     [ "$status" -eq 0 ]
     [ -d "$LEGACY" ]
     [ ! -e "$CONTAINER" ]
@@ -159,7 +159,7 @@ plant() {
     plant "$CONTAINER/2026.07.29.1+9614003" 2026.07.29.1 9614003ccc 2026-07-29T10:00:00Z
     ln -s "2026.07.29.1+9614003" "$CONTAINER/stable"
     plant "$LEGACY" 2026.08.04.1 b4d2f10aaaa 2026-08-04T10:00:00Z
-    run ableton_migrate_layout
+    run works_migrate_layout
     [ "$status" -eq 0 ]
     [ "$(readlink "$CONTAINER/stable")" = "2026.08.04.1+b4d2f10" ]
     [ -f "$CONTAINER/2026.07.29.1+9614003/bin/wine" ]   # the older one is kept
@@ -170,7 +170,7 @@ plant() {
     plant "$CONTAINER/2026.08.04.1+b4d2f10" 2026.08.04.1 b4d2f10aaaa 2026-08-04T10:00:00Z
     ln -s "2026.08.04.1+b4d2f10" "$CONTAINER/stable"
     plant "$LEGACY" 2026.07.29.1 9614003ccc 2026-07-29T10:00:00Z
-    ableton_migrate_layout
+    works_migrate_layout
     [ "$(readlink "$CONTAINER/stable")" = "2026.08.04.1+b4d2f10" ]
     [ -f "$CONTAINER/2026.07.29.1+9614003/bin/wine" ]
     [ ! -e "$LEGACY" ]
@@ -183,7 +183,7 @@ plant() {
 @test "a live tree that cannot be named refuses, and moves nothing" {
     mkdir -p "$LEGACY/bin"
     : > "$LEGACY/bin/wine"
-    run ableton_migrate_layout
+    run works_migrate_layout
     [ "$status" -eq 1 ]
     [[ "$stderr$output" == *"cannot be named"* ]]
     [ -f "$LEGACY/bin/wine" ]
@@ -194,15 +194,16 @@ plant() {
     mkdir -p "$CONTAINER/anon/bin"
     ln -s "anon" "$CONTAINER/stable"
     mkdir -p "$LEGACY/bin"
-    run ableton_migrate_layout
+    run works_migrate_layout
     [ "$status" -eq 1 ]
     [[ "$stderr$output" == *"neither"* ]]
     [ -d "$LEGACY" ]
 }
 
 @test "a symlink left by an earlier layout refuses instead of migrating" {
-    ln -s "ableton-wine/stable" "$LEGACY"
-    run ableton_migrate_layout
+    mkdir -p "$(dirname "$LEGACY")"
+    ln -s "runtimes/stable" "$LEGACY"
+    run works_migrate_layout
     [ "$status" -eq 1 ]
     [[ "$stderr$output" == *"symlink"* ]]
 }
@@ -217,7 +218,7 @@ plant_at() { plant "$1" "$2" "$3" "$4"; }
     plant_at "$CONTAINER/2026.02.01.1+bbbbbbb" 2026.02.01.1 bbbbbbbxxx 2026-02-01T00:00:00Z
     plant_at "$CONTAINER/2026.03.01.1+ccccccc" 2026.03.01.1 cccccccxxx 2026-03-01T00:00:00Z
     ln -s "2026.03.01.1+ccccccc" "$CONTAINER/stable"
-    ABLETON_RUNTIME_KEEP=2 ableton_prune_runtimes
+    WORKS_RUNTIME_KEEP=2 works_prune_runtimes
     [ ! -e "$CONTAINER/2026.01.01.1+aaaaaaa" ]      # oldest went
     [ -d "$CONTAINER/2026.02.01.1+bbbbbbb" ]
     [ -d "$CONTAINER/2026.03.01.1+ccccccc" ]
@@ -231,7 +232,7 @@ plant_at() { plant "$1" "$2" "$3" "$4"; }
     plant_at "$CONTAINER/2026.08.04.1+zzzzzzz" 2026.08.04.1 zzzzzzzxxx 2026-08-04T01:00:00Z
     plant_at "$CONTAINER/2026.08.04.1+aaaaaaa" 2026.08.04.1 aaaaaaaxxx 2026-08-04T09:00:00Z
     ln -s "2026.08.04.1+aaaaaaa" "$CONTAINER/stable"
-    ABLETON_RUNTIME_KEEP=1 ableton_prune_runtimes
+    WORKS_RUNTIME_KEEP=1 works_prune_runtimes
     [ ! -e "$CONTAINER/2026.08.04.1+zzzzzzz" ]      # older by built-at
     [ -d "$CONTAINER/2026.08.04.1+aaaaaaa" ]
 }
@@ -243,16 +244,16 @@ plant_at() { plant "$1" "$2" "$3" "$4"; }
     plant_at "$CONTAINER/2026.01.01.1+aaaaaaa" 2026.01.01.1 aaaaaaaxxx 2026-01-01T00:00:00Z
     plant_at "$CONTAINER/2026.02.01.1+bbbbbbb" 2026.02.01.1 bbbbbbbxxx 2026-02-01T00:00:00Z
     ln -s "2026.01.01.1+aaaaaaa" "$CONTAINER/stable"   # channel at the OLDEST
-    ABLETON_RUNTIME_KEEP=1 ableton_prune_runtimes
+    WORKS_RUNTIME_KEEP=1 works_prune_runtimes
     [ -d "$CONTAINER/2026.01.01.1+aaaaaaa" ]
-    [ -n "$(ableton_wine_root)" ]
+    [ -n "$(works_runtime_path)" ]
 }
 
 @test "retention leaves set-aside trees alone; they are not entries" {
     mkdir -p "$CONTAINER/superseded-20260805T000000Z/old" "$CONTAINER"
     plant_at "$CONTAINER/2026.01.01.1+aaaaaaa" 2026.01.01.1 aaaaaaaxxx 2026-01-01T00:00:00Z
     ln -s "2026.01.01.1+aaaaaaa" "$CONTAINER/stable"
-    ABLETON_RUNTIME_KEEP=1 ableton_prune_runtimes
+    WORKS_RUNTIME_KEEP=1 works_prune_runtimes
     [ -d "$CONTAINER/superseded-20260805T000000Z/old" ]
 }
 
@@ -260,7 +261,7 @@ plant_at() { plant "$1" "$2" "$3" "$4"; }
     mkdir -p "$CONTAINER"
     plant_at "$CONTAINER/2026.01.01.1+aaaaaaa" 2026.01.01.1 aaaaaaaxxx 2026-01-01T00:00:00Z
     ln -s "2026.01.01.1+aaaaaaa" "$CONTAINER/stable"
-    ABLETON_RUNTIME_KEEP="lots" ableton_prune_runtimes
+    WORKS_RUNTIME_KEEP="lots" works_prune_runtimes
     [ -d "$CONTAINER/2026.01.01.1+aaaaaaa" ]
 }
 
@@ -270,31 +271,31 @@ plant_at() { plant "$1" "$2" "$3" "$4"; }
     plant "$CONTAINER/2026.01.01.1+aaaaaaa"
     mkdir -p "$CONTAINER/superseded-20260805T000000Z"
     ln -s "2026.01.01.1+aaaaaaa" "$CONTAINER/stable"
-    ableton_remove_runtimes
+    works_remove_runtimes
     [ ! -e "$CONTAINER" ]
 }
 
 @test "removal handles a flat install that never migrated" {
     plant "$LEGACY"
     plant "$LEGACY-rollback-20260802T194734Z"
-    ableton_remove_runtimes
-    [ -z "$(find "$ABLETON_OPT_DIR" -maxdepth 1 -name "$NAME*")" ]
+    works_remove_runtimes
+    [ -z "$(find "$WORKS_HOME" -maxdepth 1 -name "$NAME*")" ]
 }
 
-# guards: a stale exported ABLETON_WINE_ROOT from a test session would otherwise
+# guards: a stale exported WORKS_RUNTIME from a test session would otherwise
 # have this run rm -rf on whatever it names
 @test "removal refuses a pinned root that is not a runtime" {
     target="$BATS_TEST_TMPDIR/not-a-runtime"
     mkdir -p "$target/documents"
-    run env ABLETON_WINE_ROOT="$target" bash -c \
-        ". '$REPO/scripts/runtime-env.sh'; ableton_remove_runtimes"
+    run env WORKS_RUNTIME="$target" bash -c \
+        ". '$REPO/scripts/runtime-env.sh'; works_remove_runtimes"
     [ "$status" -ne 0 ]
     [ -d "$target/documents" ]
 }
 
 @test "removal refuses a pinned root of \$HOME" {
-    run env ABLETON_WINE_ROOT="$HOME" bash -c \
-        ". '$REPO/scripts/runtime-env.sh'; ableton_remove_runtimes"
+    run env WORKS_RUNTIME="$HOME" bash -c \
+        ". '$REPO/scripts/runtime-env.sh'; works_remove_runtimes"
     [ "$status" -ne 0 ]
     [ -d "$HOME" ]
 }

@@ -18,16 +18,16 @@
 set -uo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-for _l in "$here/runtime-env.sh" "$HOME/.local/share/ableton-wine/runtime-env.sh" \
+for _l in "$here/runtime-env.sh" "$HOME/works/lib/runtime-env.sh" \
           "$here/../scripts/runtime-env.sh"; do
     # shellcheck source=scripts/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
-command -v ableton_wine_root >/dev/null 2>&1 || {
-    echo "!! runtime-env.sh not found next to $0 or in ~/.local/share/ableton-wine" >&2; exit 1; }
+command -v works_runtime_path >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/works/apps/ableton-live" >&2; exit 1; }
 
-container="$(ableton_container_root)"
-channel="$container/$(ableton_channel)"
+container="$(works_runtime_store)"
+channel="$container/$(works_channel)"
 
 # Entries only: a directory the id reader can name. Quarantined trees
 # (superseded-*, failed-*) and the channel link are not builds you can choose.
@@ -36,7 +36,7 @@ entries() {
     [ -d "$container" ] || return 0
     for d in "$container"/*; do
         [ -d "$d" ] && [ ! -L "$d" ] || continue
-        [ -n "$(ableton_runtime_id "$d")" ] || continue
+        [ -n "$(works_runtime_id "$d")" ] || continue
         printf '%s\n' "${d##*/}"
     done
 }
@@ -48,8 +48,8 @@ sorted() {
     local e at ver
     while read -r e; do
         [ -n "$e" ] || continue
-        at="$(ableton_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
-        ver="$(ableton_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
+        at="$(works_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+        ver="$(works_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
         if [ -n "$at" ]; then printf '1 %s\t%s\n' "$at" "$e"
         else                  printf '0 %s\t%s\n' "$ver" "$e"; fi
     done < <(entries) | sort -rV | cut -f2
@@ -69,7 +69,7 @@ ask_tty() {
 }
 
 cmd_path() {
-    local r; r="$(ableton_wine_root)"
+    local r; r="$(works_runtime_path)"
     [ -n "$r" ] || { echo "!! no runtime resolved" >&2; return 1; }
     printf '%s\n' "$r"
 }
@@ -78,21 +78,21 @@ cmd_path() {
 # and one runtime release is built on one base. But it is the fact that decides
 # whether switching is safe for a Wire, so it belongs in front of anyone
 # choosing.
-base_of() { ableton_buildinfo_field "$container/$1/ABLETON-WINE-BUILD-INFO.txt" wine; }
+base_of() { works_buildinfo_field "$container/$1/ABLETON-WINE-BUILD-INFO.txt" wine; }
 
 cmd_list() {
     local live e at base n=0
     live="$(readlink -f "$channel" 2>/dev/null || true)"
     if [ ! -d "$container" ]; then
         echo "No version store yet — this install predates it."
-        echo "  runtime: $(ableton_wine_root)"
+        echo "  runtime: $(works_runtime_path)"
         return 0
     fi
     printf '  %-32s %-12s %s\n' "BUILD" "WINE" "BUILT"
     while read -r e; do
         [ -n "$e" ] || continue
         n=$((n+1))
-        at="$(ableton_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+        at="$(works_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
         base="$(base_of "$e")"
         if [ "$container/$e" = "$live" ]; then printf '* %-32s %-12s %s\n' "$e" "${base:-?}" "${at:-—}"
         else                                   printf '  %-32s %-12s %s\n' "$e" "${base:-?}" "${at:-—}"; fi
@@ -120,7 +120,7 @@ cmd_pick() {
         i=$((i+1))
         cur=""; [ "$container/$e" = "$live" ] && cur="  (current)"
         printf '  %2d) %-32s %-12s %s%s\n' "$i" "$e" "$(base_of "$e")" \
-            "$(ableton_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)" "$cur"
+            "$(works_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)" "$cur"
     done
     local ans=""
     printf 'Which build? [1-%d, or q to cancel] ' "${#names[@]}" > /dev/tty
@@ -148,7 +148,7 @@ cmd_use() {
         echo "!! no such build: $want" >&2
         echo "   installed:" >&2; sorted | sed 's/^/     /' >&2
         return 1; }
-    [ -n "$(ableton_runtime_id "$container/$want")" ] || {
+    [ -n "$(works_runtime_id "$container/$want")" ] || {
         echo "!! $want has no readable BUILD-INFO and is not a runtime you can select" >&2
         return 1; }
     [ -x "$container/$want/bin/wine" ] || {
@@ -187,7 +187,7 @@ cmd_use() {
 
     ln -sfn "$want" "$channel"
     echo "channel -> $want"
-    if ableton_runtime_busy; then
+    if works_runtime_busy; then
         echo "note: something is still running from the previous build. It keeps"
         echo "      the build it started with; this takes effect on the next launch."
     fi

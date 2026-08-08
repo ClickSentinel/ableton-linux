@@ -13,7 +13,7 @@ From the root of this repository:
 ```
 
 The command collects a redacted system report, downloads and verifies the
-configured Wine installer, prepares `~/.wine-ableton`, runs the probes, and
+configured Wine installer, prepares `~/works/plugs/studio`, runs the probes, and
 writes:
 
 ```text
@@ -26,7 +26,7 @@ appears, keep the report local and report the collector failure. Do not share
 that report, even after removing the data. See
 [Environment profilers](scripts/README.md) for the full scope.
 
-After installing Live in `~/.wine-ableton`, start it and run the Live checks:
+After installing Live in `~/works/plugs/studio`, start it and run the Live checks:
 
 ```bash
 ./beta/tester-kit/run-session --live-only \

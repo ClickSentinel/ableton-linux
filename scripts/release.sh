@@ -38,7 +38,7 @@ done
 # against, and so the runtime name is not spelled out a second time.
 # shellcheck source=scripts/runtime-env.sh
 . "$here/runtime-env.sh"
-NAME="$(ableton_runtime_name)"
+NAME="$(works_runtime_name)"
 VERSION="$(cat VERSION)"
 TAG="v$VERSION"
 run="dist/ableton-wine-setup-${VERSION}.run"
@@ -99,12 +99,12 @@ cp "$run" "$stage/install-ableton-latest.run"
 manifest="$stage/manifest.txt"
 # From the runtime being shipped, not from $info: the committed BUILD-INFO is the
 # release's declared provenance and the tarball's is what the updater will compare
-# against on the user's machine. See ableton_tarball_buildinfo.
-ableton_tarball_buildinfo "$tarball" > "$stage/runtime-BUILD-INFO.txt" || {
+# against on the user's machine. See works_tarball_buildinfo.
+works_tarball_buildinfo "$tarball" > "$stage/runtime-BUILD-INFO.txt" || {
     echo "!! could not read BUILD-INFO out of $tarball" >&2; exit 1; }
-ableton_manifest_write stable "$stage/runtime-BUILD-INFO.txt" install-ableton-latest.run \
+works_manifest_write stable "$stage/runtime-BUILD-INFO.txt" install-ableton-latest.run \
     "$(awk '{print $1}' "$stage/install-ableton-latest.run.sha256")" > "$manifest"
-ableton_manifest_valid "$manifest" || {
+works_manifest_valid "$manifest" || {
     echo "!! the manifest this would publish is incomplete" >&2; sed 's/^/   /' "$manifest" >&2; exit 1; }
 echo "   manifest -> install-ableton-latest.run"
 

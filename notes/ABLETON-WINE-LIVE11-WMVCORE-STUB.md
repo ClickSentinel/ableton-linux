@@ -54,7 +54,7 @@ network access on its first run.
 Install Live with the packaged Wine:
 
 ```bash
-WINEPREFIX="$HOME/.wine-ableton" \
+WINEPREFIX="$HOME/works/plugs/studio" \
   "$(ableton-runtime path)/bin/wine" \
   "/path/to/Ableton Live 11 Suite Installer.exe"
 ```

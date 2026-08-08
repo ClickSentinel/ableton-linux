@@ -33,7 +33,7 @@ env -i PATH="$PATH" HOME="$sb/home" \
     sh "$run" --runtime-only
 
 # The store, as the kit's own resolver sees it under the sandbox HOME.
-container="$(env HOME="$sb/home" bash -c '. "'"$here"'/runtime-env.sh"; ableton_container_root')"
+container="$(env HOME="$sb/home" bash -c '. "'"$here"'/runtime-env.sh"; works_runtime_store')"
 entries=()
 for d in "$container"/*/; do
     [ -L "${d%/}" ] && continue
@@ -48,7 +48,7 @@ build="${entries[0]}"
 [ "$(readlink "$container/$channel")" = "$(basename "$build")" ] \
     || { echo "!! $channel points at $(readlink "$container/$channel"), not $(basename "$build")" >&2; exit 1; }
 
-recorded="$sb/home/.config/ableton-wine/channel"
+recorded="$sb/home/works/runtimes/.channel"
 [ "$(cat "$recorded" 2>/dev/null)" = "$channel" ] \
     || { echo "!! the recorded channel is '$(cat "$recorded" 2>/dev/null)', kit says '$channel'" >&2; exit 1; }
 
