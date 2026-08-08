@@ -7,14 +7,14 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-135 tests across 8 suites. See [README.md](README.md) for how to run
+136 tests across 8 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
 ## Contents
 
 - [tests/repo-hygiene.bats](#repo-hygiene) — 16 test(s)
-- [tests/packaging.bats](#packaging) — 7 test(s)
+- [tests/packaging.bats](#packaging) — 8 test(s)
 - [tests/launcher-cli.bats](#launcher-cli) — 19 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
@@ -78,6 +78,7 @@ staging list and checks it against what the kit's own scripts reference.
 | 5 | the kit ships the GPL source and licence Ableton Link requires | licence GPLv2+ — Ableton Link has no linking exception, so the source must travel with the binary |
 | 6 | release.yml's asset list matches what make-installer.sh actually produces | — |
 | 7 | every shell function a script calls is actually defined | lifting runtime_pids into the lib renamed it, and a replace that only |
+| 8 | make-installer refuses a tarball the kit's installer cannot select | make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check, |
 
 <a id="launcher-cli"></a>
 
@@ -320,6 +321,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `issue label 'installer'` | packaging: every script a kit script sources is itself staged into the kit |
 | `licence GPLv2+` | packaging: the kit ships the GPL source and licence Ableton Link requires |
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
+| `make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
 | `scripts/ableton-live` | launcher-cli: a stale wineserver is killed and the session booted before registry writes<br>launcher: windowmetrics: a value wrapped across continuation lines is rejoined |
 | `scripts/build-audit.sh` | patch-stack: audit: every wine patch is registered in FINGERPRINTS or STAMP_ONLY |
 | `scripts/container-build.sh` | patch-stack: no patch needs the 3-way fallback — context drift is worth acting on |
