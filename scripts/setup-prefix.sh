@@ -65,6 +65,28 @@ ableton_bind_runtime
 unset WINEESYNC WINEFSYNC
 export WINEDEBUG=-all
 
+# Nothing may touch this prefix while something is running out of it.
+#
+# Through the .run this never fires: setup-run-header.sh runs install.sh first,
+# and install.sh stops every process using the runtime before this is reached.
+# Standalone it is the whole guard -- and standalone is not a corner case,
+# because install.sh's own last line tells you to run this next. Follow that
+# with Live open and `wineboot -u` rewrites the registry underneath a live
+# wineserver, with --refresh no different.
+#
+# Refuses rather than prompting, which is where it parts company with
+# install.sh. That script's job is to replace the runtime, so force-closing
+# Live is an outcome a user can consent to. Here there is no such answer: the
+# only safe version of "yes" is "close it first", so that is what it says.
+# ABLETON_SKIP_BUSY_CHECK exists for the automation that has already stopped
+# things itself, and is not documented for users.
+if [ "${ABLETON_SKIP_BUSY_CHECK:-0}" != "1" ] && ableton_runtime_busy; then
+    echo "!! $(ableton_runtime_pids | wc -l) process(es) are running from this runtime." >&2
+    echo "   Close Live (and Max) before setting up the prefix -- this rewrites it." >&2
+    echo "   The installer stops them for you; running this script on its own does not." >&2
+    exit 1
+fi
+
 # --post-first-run: Max for Live 8 (ships with Live 11) crashes on its SECOND start
 # with a stale preferences file. Move it aside: never delete: so Max regenerates
 # it; idempotent, and a missing file only means Max has not run yet. Needs no wine,

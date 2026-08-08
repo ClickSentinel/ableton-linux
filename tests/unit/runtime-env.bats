@@ -145,6 +145,21 @@ proc_setup() {
     ! ableton_live_running
 }
 
+# --- container vs legacy resolution ------------------------------------------
+# The layout migration moves the runtime into a container directory. The
+# resolver has to answer correctly on both sides of that move, because an
+# install that has not migrated yet still has to launch.
+
+
+
+
+@test "runtime root: an explicit pin beats the container" {
+    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
+    mkdir -p "$ABLETON_OPT_DIR/ableton-wine/stable"
+    ABLETON_WINE_ROOT=/tmp/pinned
+    [ "$(ableton_wine_root)" = "/tmp/pinned" ]
+}
+
 # guards: observed during the first real migration — six "/proc/PID/cmdline:
 # No such file or directory" lines, because the processes exited between the
 # scan and the read. tr's 2>/dev/null cannot suppress that: the shell reports a
@@ -209,6 +224,7 @@ setup_dist() {
     [ "$status" -eq 0 ]
     [ -z "$output" ]
 }
+
 
 # --- naming an installed runtime ---------------------------------------------
 
@@ -276,6 +292,68 @@ make_tree() {
     make_tree 'dist-version: 2026.08.04.1' 'patch-stack:  9e48/edd6b39579d6'
     [ -z "$(ableton_runtime_id "$TREE")" ]
 }
+
+# --- resolution across the two layouts ---------------------------------------
+# The store moves the runtime into a container with a channel symlink at the
+# live build. The resolver has to answer on both sides of that move, because an
+# install that has not migrated yet still has to launch.
+
+# guards: an install that predates the migration must still resolve and launch
+@test "runtime root: falls back to the legacy path before migrating" {
+    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
+    mkdir -p "$ABLETON_OPT_DIR"
+    [ "$(ableton_wine_root)" = "$(ableton_legacy_root)" ]
+}
+
+# guards: /proc/PID/exe reports resolved paths, so a channel-path root matches no
+# process and the busy guard fails open while install.sh renames the directory
+@test "runtime root: resolves to the build, not to the channel link" {
+    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
+    entry="$ABLETON_OPT_DIR/ableton-wine/2026.08.05.1+abc1234"
+    mkdir -p "$entry"
+    ln -s "2026.08.05.1+abc1234" "$ABLETON_OPT_DIR/ableton-wine/stable"
+    [ "$(ableton_wine_root)" = "$entry" ] || {
+        echo "resolved to $(ableton_wine_root), wanted $entry" >&2; false; }
+}
+
+# guards: the same resolution a running process reports, so the two can be
+# compared at all
+@test "runtime root: matches what /proc would report for a process under it" {
+    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
+    entry="$ABLETON_OPT_DIR/ableton-wine/2026.08.05.1+abc1234"
+    mkdir -p "$entry/bin"
+    : > "$entry/bin/wine"
+    ln -s "2026.08.05.1+abc1234" "$ABLETON_OPT_DIR/ableton-wine/stable"
+    # what the kernel would show for a binary launched through the channel
+    resolved="$(readlink -f "$ABLETON_OPT_DIR/ableton-wine/stable/bin/wine")"
+    case "$resolved" in
+        "$(ableton_wine_root)"/*) ;;
+        *) echo "$resolved does not sit under $(ableton_wine_root)" >&2; false ;;
+    esac
+}
+
+# guards: the container winning over a stale legacy tree left beside it
+@test "runtime root: the container wins over a legacy tree still present" {
+    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
+    entry="$ABLETON_OPT_DIR/ableton-wine/2026.08.05.1+abc1234"
+    mkdir -p "$entry" "$(ableton_legacy_root)"
+    ln -s "2026.08.05.1+abc1234" "$ABLETON_OPT_DIR/ableton-wine/stable"
+    [ "$(ableton_wine_root)" = "$entry" ]
+}
+
+# guards: a dangling channel must not resolve to nothing and strand the launcher
+@test "runtime root: a dangling channel falls back rather than resolving empty" {
+    export ABLETON_OPT_DIR="$BATS_TEST_TMPDIR/opt"
+    mkdir -p "$ABLETON_OPT_DIR/ableton-wine"
+    ln -s "gone" "$ABLETON_OPT_DIR/ableton-wine/stable"
+    [ -n "$(ableton_wine_root)" ]
+    [ "$(ableton_wine_root)" = "$(ableton_legacy_root)" ]
+}
+
+# One test is still held back with the version store: the migration's own
+# behaviour, in migrate-layout.bats. ableton_wine_root resolves one
+# way today because there is only one layout; both tests return when there
+# are two.
 
 # New on the integration branch: the predicate the selector and make-installer
 # share. Its own tests, because make-installer is the caller that packaging
