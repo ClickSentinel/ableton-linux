@@ -253,7 +253,7 @@ ableton_buildinfo_field() {
 # times under two different patch stacks, and 2026.07.23.1 covers both the 11.11
 # and the 11.14 tree — keyed on version they would collide.
 ableton_runtime_id() {
-    local _dir="$1" _info _ver _disc
+    local _dir="$1" _info _ver _disc _kind
     _info="$_dir/ABLETON-WINE-BUILD-INFO.txt"
     [ -r "$_info" ] || return 0
 
@@ -263,11 +263,28 @@ ableton_runtime_id() {
     _disc="$(ableton_buildinfo_field "$_info" source-commit)"
     [ -n "$_disc" ] || _disc="$(ableton_buildinfo_field "$_info" patch-stack)"
     [ -n "$_disc" ] || return 0
-    _disc="${_disc:0:7}"
+    # A nightly says so here rather than in dist-version. That field is the date
+    # the build happened, for every build, which is the one question a directory
+    # name has to answer -- putting the kind there too would mean either a second
+    # date or a second separator, and the id is <version>+<discriminator> with
+    # exactly one. So: 2026.08.06.1+nightly.badafaf.
+    _kind="$(ableton_buildinfo_field "$_info" build-kind)"
+    ableton_compose_id "$_ver" "$_disc" "$_kind"
+}
 
+# version, discriminator, kind -> the id, or nothing.
+#
+# Split out because two things compose one: a store entry, from a tree's own
+# BUILD-INFO, and the updater's report of what a channel is offering, from a
+# manifest. Those disagreeing would mean the updater naming a directory other
+# than the one the install produces.
+ableton_compose_id() {
+    local _ver="$1" _disc="${2:0:7}" _kind="${3:-}"
+    [ -n "$_ver" ] && [ -n "$_disc" ] || return 0
+    [ -z "$_kind" ] || _disc="$_kind.$_disc"
     # The id becomes a directory name, so it is validated rather than trusted: a
-    # BUILD-INFO is plain text inside a tarball and nothing upstream of here
-    # constrains what it holds.
+    # BUILD-INFO is plain text inside a tarball, and a manifest arrives over the
+    # network. Nothing upstream of here constrains what either holds.
     case "$_ver$_disc" in
         *[!0-9A-Za-z._-]*|*..*) return 0 ;;
     esac
@@ -509,4 +526,104 @@ ableton_remove_runtimes() {
         [ -e "$_d" ] || continue    # unmatched glob stays literal; skip, don't abort
         rm -rf "$_d" && echo "removed $_d"
     done
+}
+
+# --- the manifest ------------------------------------------------------------
+# A channel publishes one small document saying what it currently points at.
+# Everything before this re-derived that by parsing artifact filenames, which is
+# the single decision behind the selector defect, the packing defect, the
+# retention tie and the update prompt having nothing to compare.
+#
+# Same `key: value` shape as BUILD-INFO, so ableton_buildinfo_field reads it and
+# nothing needs jq:
+#
+#   channel:       stable
+#   dist-version:  2026.08.04.1
+#   installer:     install-ableton-latest.run
+#   sha256:        …
+#   source-commit: …
+#   built-at:      2026-08-04T13:49:38Z
+#   wine:          wine-11.13
+
+# Where a channel's manifest lives. A table rather than string-building from the
+# channel name: the value is user configuration, and the one thing it must never
+# do is choose a host. ABLETON_MANIFEST_URL overrides it for testing.
+ableton_manifest_url() {
+    local _c="${1:-$(ableton_channel)}"
+    [ -z "${ABLETON_MANIFEST_URL:-}" ] || { printf '%s\n' "$ABLETON_MANIFEST_URL"; return; }
+    # Both point at the project, never at a fork. A fork is where nightlies are
+    # tested, and pointing the shipped default there would send every user's
+    # daily channel to whoever happened to build it. ABLETON_MANIFEST_URL is how
+    # a fork tests its own; that override is deliberately not a channel.
+    #
+    # stable resolves through /releases/latest/, which excludes prereleases, so
+    # the nightly prerelease cannot become what a stable machine follows.
+    case "$_c" in
+        stable)  printf '%s\n' "https://github.com/shibco/ableton-linux/releases/latest/download/manifest.txt" ;;
+        nightly) printf '%s\n' "https://github.com/shibco/ableton-linux/releases/download/nightly/manifest.txt" ;;
+        *)       return 1 ;;
+    esac
+}
+
+# The installer a manifest names, resolved against the manifest's own location.
+# Relative, so moving a release does not strand it.
+ableton_manifest_installer_url() {
+    local _manifest="$1" _name="$2"
+    printf '%s/%s\n' "${_manifest%/*}" "$_name"
+}
+
+# The runtime's own BUILD-INFO, read out of a tarball without unpacking it.
+#
+# This, and not dist/BUILD-INFO-<version>.txt, is what a manifest must be written
+# from. The two are different documents: the committed one is the release's
+# declared provenance, written for release notes, and the tarball's is the file
+# that lands on the user's machine as $root/ABLETON-WINE-BUILD-INFO.txt — which
+# is exactly what the updater compares the manifest against. Writing the manifest
+# from the other one compares two documents and hopes they agree.
+#
+# They do not currently agree: the committed BUILD-INFO for 2026.08.04.1 carries
+# neither source-commit nor built-at, because the release predates both fields.
+# A manifest written from it fails validation, which is the right outcome and the
+# wrong reason.
+#
+# Half a second on a 60 MB tarball, at package time only.
+ableton_tarball_buildinfo() {
+    local _t="$1"
+    [ -f "$_t" ] || return 1
+    zstd -dc --long=27 "$_t" 2>/dev/null \
+        | tar -xO --wildcards '*/ABLETON-WINE-BUILD-INFO.txt' 2>/dev/null
+}
+
+# Write one. Called by the publish step; kept here so the writer and the reader
+# cannot drift apart.
+ableton_manifest_write() {
+    local _channel="$1" _info="$2" _installer="$3" _sha="$4" _k
+    [ -r "$_info" ] || { echo "!! no BUILD-INFO at $_info" >&2; return 1; }
+    printf 'channel:       %s\n' "$_channel"
+    printf 'dist-version:  %s\n' "$(ableton_buildinfo_field "$_info" dist-version)"
+    printf 'installer:     %s\n' "$_installer"
+    printf 'sha256:        %s\n' "$_sha"
+    printf 'source-commit: %s\n' "$(ableton_buildinfo_field "$_info" source-commit)"
+    printf 'built-at:      %s\n' "$(ableton_buildinfo_field "$_info" built-at)"
+    # Optional, and absent for a release. Carried so the updater can report the
+    # id a build will land under rather than only its version.
+    _k="$(ableton_buildinfo_field "$_info" build-kind)"
+    [ -z "$_k" ] || printf 'build-kind:    %s\n' "$_k"
+    printf 'wine:          %s\n' "$(ableton_buildinfo_field "$_info" wine)"
+}
+
+# Is a manifest usable? Refuses rather than half-applying: a field missing here
+# means the updater cannot answer "is this newer" or "will this change the Wine
+# base", which are the two questions it exists to answer.
+ableton_manifest_valid() {
+    local _f="$1" _k
+    [ -r "$_f" ] || return 1
+    for _k in channel dist-version installer sha256 source-commit built-at; do
+        [ -n "$(ableton_buildinfo_field "$_f" "$_k")" ] || return 1
+    done
+    # The installer name reaches a URL and a filename. Nothing else in it.
+    case "$(ableton_buildinfo_field "$_f" installer)" in
+        */*|*..*|"") return 1 ;;
+    esac
+    return 0
 }

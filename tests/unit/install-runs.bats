@@ -211,6 +211,33 @@ setup() {
     [ -L "$(ableton_container_root)/stable" ]
 }
 
+# guards: install.sh writes the channel file, so "removed everything install.sh
+# added" has to include it — left behind, a later install is followed by an
+# `ableton-update` pointed at a channel nothing on the machine chose
+@test "uninstalling takes the recorded channel back" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set ABLETON_TEST_TARBALL to run this"
+    export XDG_CONFIG_HOME="$HOME/.config"
+    env ABLETON_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    [ -r "$HOME/.config/ableton-wine/channel" ]
+
+    run setsid --wait bash "$REPO/scripts/uninstall.sh" --yes
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [ ! -e "$HOME/.config/ableton-wine/channel" ]
+}
+
+# guards: the config directory is not ours to clear out — only the one file is
+@test "uninstalling leaves anything else under the config directory alone" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set ABLETON_TEST_TARBALL to run this"
+    export XDG_CONFIG_HOME="$HOME/.config"
+    env ABLETON_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    printf 'keep me\n' > "$HOME/.config/ableton-wine/notes.txt"
+
+    setsid --wait bash "$REPO/scripts/uninstall.sh" --yes >/dev/null 2>&1
+    [ -r "$HOME/.config/ableton-wine/notes.txt" ]
+}
+
 # --- setup-prefix.sh's own guard ----------------------------------------------
 # Through the .run this never fires, because install.sh stops everything first.
 # Standalone it is the only guard there is -- and install.sh's last line tells

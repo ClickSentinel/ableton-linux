@@ -50,6 +50,8 @@ $ENGINE run --rm \
     -e JOBS="$JOBS" \
     -e "INSTALL_PREFIX=$INSTALL_PREFIX" \
     -e "SOURCE_COMMIT=$SOURCE_COMMIT" \
+    -e "ABLETON_DIST_VERSION=${ABLETON_DIST_VERSION:-}" \
+    -e "ABLETON_BUILD_KIND=${ABLETON_BUILD_KIND:-}" \
     "$IMAGE" \
     /src/scripts/container-build.sh
 
