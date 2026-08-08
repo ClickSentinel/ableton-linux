@@ -319,7 +319,7 @@ fi
 "$WINE_ROOT/bin/wine" --version
 
 echo "== install launcher -> ~/works/apps/ableton-live =="
-mkdir -p "$BIN" "$HOME/works/apps/ableton-live" "$HOME/works/bin"
+mkdir -p "$BIN" "$HOME/works/apps/ableton-live" "$HOME/works/bin" "$HOME/works/lib"
 # The launcher belongs to the application, so it lives with it and ~/.local/bin
 # holds a link. Anything else means the app's directory does not contain the app:
 # backing up ~/works would miss its entry point, and removing the app directory
@@ -327,12 +327,15 @@ mkdir -p "$BIN" "$HOME/works/apps/ableton-live" "$HOME/works/bin"
 install -m755 "$here/ableton-live" "$HOME/works/apps/ableton-live/ableton-live"
 ln -sfn "$HOME/works/apps/ableton-live/ableton-live" "$BIN/ableton-live"
 
-# These two act on the runtime and the store, which no application owns, so they
-# sit in works/bin rather than in any app's directory.
-install -m755 "$here/ableton-runtime" "$HOME/works/bin/ableton-runtime"
-install -m755 "$here/ableton-update" "$HOME/works/bin/ableton-update"
-ln -sfn "$HOME/works/bin/ableton-runtime" "$BIN/ableton-runtime"
-ln -sfn "$HOME/works/bin/ableton-update" "$BIN/ableton-update"
+# `works` acts on the runtime and the store, which no application owns, so it
+# sits in works/bin rather than in any app's directory. Its verbs go beside the
+# shared library: they implement the command, they are not commands themselves.
+install -m755 "$here/works" "$HOME/works/bin/works"
+install -m755 "$here/works-runtime" "$HOME/works/lib/works-runtime"
+install -m755 "$here/works-update" "$HOME/works/lib/works-update"
+ln -sfn "$HOME/works/bin/works" "$BIN/works"
+# The two commands this replaced, from an installer that predates it.
+rm -f "$BIN/ableton-runtime" "$BIN/ableton-update" "$BIN/works-runtime" "$BIN/works-update" 2>/dev/null || true
 
 # Dated copies of the launcher accumulated here on every install, one per run,
 # with nothing to prune them - the same defect the version store exists to end,

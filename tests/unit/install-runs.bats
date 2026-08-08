@@ -213,7 +213,7 @@ setup() {
 
 # guards: install.sh writes the channel file, so "removed everything install.sh
 # added" has to include it — left behind, a later install is followed by an
-# `ableton-update` pointed at a channel nothing on the machine chose
+# `works-update` pointed at a channel nothing on the machine chose
 @test "uninstalling takes the recorded channel back" {
     tarball="$(sandbox_tarball)"
     [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
@@ -321,11 +321,15 @@ setup() {
     [ "$n" = 0 ] || { echo "$n dated launcher copies survived" >&2; false; }
 }
 
-@test "the runtime commands live outside any application" {
+@test "the works command lives outside any application, with its verbs beside the library" {
     tarball="$(sandbox_tarball)"
     [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
     env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
-    [ -x "$HOME/works/bin/ableton-runtime" ]
-    [ ! -e "$HOME/works/apps/ableton-live/ableton-runtime" ]
-    [ -L "$HOME/.local/bin/ableton-runtime" ]
+    [ -x "$HOME/works/bin/works" ]
+    [ -x "$HOME/works/lib/works-runtime" ]
+    [ ! -e "$HOME/works/apps/ableton-live/works" ]
+    [ -L "$HOME/.local/bin/works" ]
+    # the verbs implement the command; they are not commands
+    [ ! -e "$HOME/.local/bin/works-runtime" ]
+    "$HOME/works/bin/works" runtime path >/dev/null
 }

@@ -30,7 +30,7 @@ After installing Live in `~/works/plugs/studio`, start it and run the Live check
 
 ```bash
 ./beta/tester-kit/run-session --live-only \
-  --wine "$(ableton-runtime path)/bin/wine"
+  --wine "$(works runtime path)/bin/wine"
 ```
 
 The command asks you to open Learn View and one representative Direct2D or

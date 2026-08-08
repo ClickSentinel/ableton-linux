@@ -55,7 +55,7 @@ Install Live with the packaged Wine:
 
 ```bash
 WINEPREFIX="$HOME/works/plugs/studio" \
-  "$(ableton-runtime path)/bin/wine" \
+  "$(works runtime path)/bin/wine" \
   "/path/to/Ableton Live 11 Suite Installer.exe"
 ```
 

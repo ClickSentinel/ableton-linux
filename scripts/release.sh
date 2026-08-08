@@ -88,7 +88,7 @@ trap 'rm -rf "$stage"' EXIT
 cp "$run" "$stage/install-ableton-latest.run"
 ( cd "$stage" && sha256sum install-ableton-latest.run > install-ableton-latest.run.sha256 )
 
-# The manifest `ableton-update` reads to answer "is there a newer stable". It
+# The manifest `works-update` reads to answer "is there a newer stable". It
 # names install-ableton-latest.run, not the versioned artifact: the updater
 # resolves the installer against the manifest's own URL, and only the fixed name
 # survives the next release. Written here rather than trusted from

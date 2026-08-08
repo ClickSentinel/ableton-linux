@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# scripts/ableton-update — deciding whether to replace the runtime.
+# scripts/works-update — deciding whether to replace the runtime.
 #
 # Everything the updater does before it downloads is a refusal: same build,
 # unknown channel, incomplete manifest, a Wine base it cannot take a Wire back
@@ -10,13 +10,13 @@
 # Nothing here reaches the network. WORKS_MANIFEST_URL points curl at a
 # file:// URL, which is the same code path a real channel takes.
 #
-#   ./tests/run.sh tests/unit/ableton-update.bats
+#   ./tests/run.sh tests/unit/works-update.bats
 
 bats_require_minimum_version 1.5.0
 
 load ../helpers/common
 
-UPD="$REPO/scripts/ableton-update"
+UPD="$REPO/scripts/works-update"
 
 setup() {
     HOME="$BATS_TEST_TMPDIR/home"

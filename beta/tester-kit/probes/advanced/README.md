@@ -26,7 +26,7 @@ This is the only advanced workflow that `run-session` can start:
 ```bash
 ./beta/tester-kit/run-session --live-only \
   --advanced-input-trace \
-  --wine "$(ableton-runtime path)/bin/wine"
+  --wine "$(works runtime path)/bin/wine"
 ```
 
 The command asks you to type `TRACE`. It then watches Wine mouse input and JUCE

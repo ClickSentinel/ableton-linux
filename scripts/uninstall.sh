@@ -24,9 +24,10 @@ works_remove_runtimes
 rm -f  "$BIN"        && echo "removed $BIN"
 rm -f  "$BIN".rollback-*
 # The commands themselves live in works/bin; ~/.local/bin holds only links.
-rm -f  "$HOME/works/bin/ableton-runtime" "$HOME/works/bin/ableton-update"
+rm -f  "$HOME/works/bin/works" "$HOME/works/lib/works-runtime" "$HOME/works/lib/works-update"
 rmdir  "$HOME/works/bin" 2>/dev/null || true
-rm -f  "$HOME/.local/bin/ableton-runtime" "$HOME/.local/bin/ableton-update"
+rm -f  "$HOME/.local/bin/works" "$HOME/.local/bin/works-runtime" "$HOME/.local/bin/works-update" \
+       "$HOME/.local/bin/ableton-runtime" "$HOME/.local/bin/ableton-update"
 # Stop and drop the Ableton Link session anchor's user unit (setup-link.sh
 # installs it under ~/.config); the daemon binary goes with ~/works/apps/ableton-live.
 systemctl --user disable --now ableton-linkd.service 2>/dev/null || true
@@ -46,7 +47,7 @@ fi
 rmdir "$HOME/works" 2>/dev/null && echo "removed ~/works" || true
 # The channel install.sh recorded. Not prompted for, unlike the prefix: this is
 # one word of preference, not data, and leaving it behind means a later install
-# is followed by an `ableton-update` pointed at a channel nothing here chose.
+# is followed by an `works-update` pointed at a channel nothing here chose.
 # The directory goes only if it is empty, so anything else under it survives.
 rm -f  "$(works_runtime_store)/.channel"
 rmdir  "${XDG_CONFIG_HOME:-$HOME/.config}/ableton-wine" 2>/dev/null \

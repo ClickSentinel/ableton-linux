@@ -386,10 +386,10 @@ def _resolved_root():
     """Ask the installed resolver where the runtime is.
 
     The path stopped being a constant when the runtime moved into a store keyed
-    by build; ableton-runtime answers for both layouts.
+    by build; works-runtime answers for both layouts.
     """
     try:
-        return subprocess.run(["ableton-runtime", "path"], capture_output=True,
+        return subprocess.run(["works-runtime", "path"], capture_output=True,
                               text=True, check=True).stdout.strip()
     except Exception:
         return os.path.expanduser("~/works/runtimes/stable")

@@ -170,7 +170,7 @@ From a checkout, test Wine's local multicast socket behavior:
 
 ```bash
 env WINEPREFIX="$HOME/works/plugs/studio" \
-  "$(ableton-runtime path)/bin/wine" tools/linkprobe.exe
+  "$(works runtime path)/bin/wine" tools/linkprobe.exe
 ```
 
 Require `LINKPROBE TX OK` and `LINKPROBE RX-LOOPBACK OK`. To require

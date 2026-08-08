@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# scripts/ableton-runtime — choosing which build is live.
+# scripts/works-runtime — choosing which build is live.
 #
 # The store made rollback possible and nothing exposed it: switching meant
 # `ln -sfn` against a name you had to look up. These cover the two things that
@@ -8,13 +8,13 @@
 # launch, and that `path` answers on both layouts, because scripts and docs
 # resolve through it instead of naming a directory.
 #
-#   ./tests/run.sh tests/unit/ableton-runtime.bats
+#   ./tests/run.sh tests/unit/works-runtime.bats
 
 bats_require_minimum_version 1.5.0
 
 load ../helpers/common
 
-RT() { bash "$REPO/scripts/ableton-runtime" "$@"; }
+RT() { bash "$REPO/scripts/works-runtime" "$@"; }
 
 setup() {
     HOME="$BATS_TEST_TMPDIR/home"
@@ -185,7 +185,7 @@ store() {
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
     # setsid detaches the controlling terminal. Without it this inherits the
     # terminal of whoever ran the suite, takes the interactive branch, and blocks.
-    run setsid bash "$REPO/scripts/ableton-runtime" use 2026.07.01.1+ddddddd
+    run setsid bash "$REPO/scripts/works-runtime" use 2026.07.01.1+ddddddd
     [ "$status" -ne 0 ]
     [[ "$output" == *"different Wine base"* ]]
     [[ "$output" == *"--force"* ]]
@@ -205,7 +205,7 @@ store() {
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
     plant "$C/2026.01.01.1+aaaaaaa" 2026.01.01.1 aaaaaaaxxx 2026-01-01T00:00:00Z wine-11.13
     ln -s "2026.07.01.1+ddddddd" "$C/stable"
-    run setsid bash "$REPO/scripts/ableton-runtime" use 2026.01.01.1+aaaaaaa
+    run setsid bash "$REPO/scripts/works-runtime" use 2026.01.01.1+aaaaaaa
     [[ "$output" == *"DOWNGRADE"* ]]
     [[ "$output" == *"does not support"* ]]
 }
@@ -215,15 +215,15 @@ store() {
 # guards: a script calling `use` with no argument must fail, not block forever
 @test "use with no argument refuses when there is no terminal" {
     store
-    run setsid bash "$REPO/scripts/ableton-runtime" use
+    run setsid bash "$REPO/scripts/works-runtime" use
     [ "$status" -ne 0 ]
     [[ "$output" == *"no terminal"* ]]
-    [[ "$output" == *"ableton-runtime use 2026"* ]]
+    [[ "$output" == *"works runtime use 2026"* ]]
 }
 
 @test "use with no argument leaves the channel alone" {
     store
-    setsid bash "$REPO/scripts/ableton-runtime" use || true
+    setsid bash "$REPO/scripts/works-runtime" use || true
     [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]
 }
 

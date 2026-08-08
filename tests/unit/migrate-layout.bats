@@ -373,3 +373,38 @@ a_prefix() {   # a_prefix <dir>
     [ "$status" -eq 0 ]
     [ -d "$LEGACY_PLUG" ]
 }
+
+# guards: renaming a prefix out from under a live wineserver corrupts its
+# registry, and install.sh's stop is scoped to the runtime, which is a
+# different set of processes
+@test "plug: a prefix something is running from is not moved" {
+    plug_setup; a_prefix "$LEGACY_PLUG"
+    export WORKS_PROC_ROOT="$BATS_TEST_TMPDIR/proc"
+    mkdir -p "$WORKS_PROC_ROOT/4242"
+    printf 'PATH=/usr/bin\0WINEPREFIX=%s\0HOME=%s\0' "$LEGACY_PLUG" "$HOME" \
+        > "$WORKS_PROC_ROOT/4242/environ"
+    run works_migrate_plug
+    [ "$status" -eq 1 ]
+    [[ "$stderr$output" == *"still running"* ]]
+    [ -d "$LEGACY_PLUG" ]
+}
+
+@test "plug: a process holding a different prefix does not block the move" {
+    plug_setup; a_prefix "$LEGACY_PLUG"
+    export WORKS_PROC_ROOT="$BATS_TEST_TMPDIR/proc"
+    mkdir -p "$WORKS_PROC_ROOT/4242"
+    printf 'WINEPREFIX=%s\0' "$HOME/.wine-somethingelse" > "$WORKS_PROC_ROOT/4242/environ"
+    run works_migrate_plug
+    [ "$status" -eq 0 ]
+    [ -d "$DEST_PLUG" ]
+}
+
+@test "plug: an unreadable process entry is skipped, not fatal" {
+    plug_setup; a_prefix "$LEGACY_PLUG"
+    export WORKS_PROC_ROOT="$BATS_TEST_TMPDIR/proc"
+    mkdir -p "$WORKS_PROC_ROOT/4242" "$WORKS_PROC_ROOT/self"
+    : > "$WORKS_PROC_ROOT/4242/environ"; chmod 000 "$WORKS_PROC_ROOT/4242/environ"
+    run works_migrate_plug
+    chmod 644 "$WORKS_PROC_ROOT/4242/environ" 2>/dev/null || true
+    [ "$status" -eq 0 ]
+}

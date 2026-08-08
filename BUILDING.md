@@ -22,7 +22,7 @@ Run:
 ./scripts/install.sh
 ./scripts/setup-prefix.sh
 WINEPREFIX="$HOME/works/plugs/studio" \
-  "$(ableton-runtime path)/bin/wine" \
+  "$(works runtime path)/bin/wine" \
   "/path/to/Ableton Live 12 Suite Installer.exe"
 ableton-live
 ```
@@ -60,7 +60,7 @@ make verify
 ## Environment variables
 
 - `WORKS_RUNTIME` selects the Wine runtime. The default is
-  `$(ableton-runtime path)`.
+  `$(works runtime path)`.
 - `WORKS_PLUG` selects the Wine prefix. The default is
   `~/works/plugs/studio`.
 - `ABLETON_LIVE_VERSION=11|12` selects a Live major version.

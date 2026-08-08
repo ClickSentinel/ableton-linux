@@ -187,7 +187,7 @@ jobs:
           cp "$run" dist/install-ableton-nightly.run
           ( cd dist && sha256sum install-ableton-nightly.run > install-ableton-nightly.run.sha256 )
 
-          # The manifest is what `ableton-update` reads to answer "is there a
+          # The manifest is what `works-update` reads to answer "is there a
           # newer nightly". It has to be checked here rather than trusted:
           # published without it, or with a checksum that does not match the
           # asset beside it, the updater refuses every build on this channel and

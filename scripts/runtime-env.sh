@@ -362,6 +362,24 @@ works_store_absorb() {
 # no absolute host path in its registry (checked against a real Live 12 install,
 # plain and hex-encoded), dosdevices/c: is relative, and the absolute symlinks
 # under drive_c/users point outward at the real home, which is not moving.
+# Is anything running out of this Plug? The runtime scan cannot answer it: a
+# process can hold a prefix while running from another Wine entirely, and
+# renaming a prefix out from under a live wineserver corrupts its registry.
+# Wine puts WINEPREFIX in the environment of everything it starts, so the
+# environment is where the answer is.
+works_plug_busy() {
+    local _plug _p
+    _plug="${1:-$(works_plug_path)}"
+    _plug="${_plug%/}"
+    for _p in "$(works_proc_root)"/[0-9]*; do
+        [ -r "$_p/environ" ] || continue          # not ours to read: not ours to worry about
+        if tr '\0' '\n' < "$_p/environ" 2>/dev/null | grep -qxF "WINEPREFIX=$_plug"; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 works_migrate_plug() {
     local legacy dest
     legacy="$HOME/.wine-ableton"
@@ -380,6 +398,14 @@ works_migrate_plug() {
     fi
     [ -d "$legacy" ] || return 0        # nothing to move
 
+    # Before anything moves. install.sh stops what runs from the runtime, which
+    # is not the same set: this catches a Live started from another build, or a
+    # bare wine pointed at the prefix.
+    if works_plug_busy "$legacy"; then
+        echo "!! something is still running from $legacy; close it and rerun" >&2
+        return 1
+    fi
+
     # Both present is the one genuinely ambiguous state: two prefixes, each
     # possibly holding a different Live and different authorisation. Guessing
     # loses work, so name both and stop.
@@ -390,7 +416,30 @@ works_migrate_plug() {
     fi
 
     mkdir -p "$(dirname "$dest")"
-    mv "$legacy" "$dest"
+
+    # Within one filesystem this is a rename: atomic, instant, and no free space
+    # required whatever the prefix weighs. Across filesystems mv copies and then
+    # deletes, so a 16G prefix needs 16G free and minutes of I/O - and a failure
+    # halfway leaves a partial copy that would read as "a prefix at both paths"
+    # on the next run. Check first, and clean up after ourselves if it fails.
+    if [ "$(stat -c %d "$legacy" 2>/dev/null)" != "$(stat -c %d "$(dirname "$dest")" 2>/dev/null)" ]; then
+        local _need _free
+        _need="$(du -sk "$legacy" 2>/dev/null | cut -f1)"
+        _free="$(df -Pk "$(dirname "$dest")" 2>/dev/null | awk 'NR==2 {print $4}')"
+        if [ -n "$_need" ] && [ -n "$_free" ] && [ "$_free" -le "$_need" ]; then
+            echo "!! $dest is on another filesystem and moving the prefix there needs" \
+                 "$((_need / 1024)) MB, with $((_free / 1024)) MB free" >&2
+            return 1
+        fi
+        echo "   plug: $dest is on another filesystem, so this is a copy, not a rename"
+    fi
+
+    if ! mv "$legacy" "$dest"; then
+        # Only ever the destination: the source is what we failed to move.
+        [ -e "$dest" ] && [ -e "$legacy" ] && rm -rf "$dest"
+        echo "!! moving the prefix to $dest failed; it is still at $legacy" >&2
+        return 1
+    fi
     echo "   plug: moved the prefix to $dest"
 }
 

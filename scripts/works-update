@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Is there a newer runtime on this channel, and do you want it?
 #
-#   ableton-update                    check this machine's channel, and offer it
-#   ableton-update --check            say what is available; change nothing
-#   ableton-update --channel nightly  switch channel and update to it
-#   ableton-update --yes              do not ask (still refuses a Wine base change)
+#   works update                    check this machine's channel, and offer it
+#   works update --check            say what is available; change nothing
+#   works update --channel nightly  switch channel and update to it
+#   works update --yes              do not ask (still refuses a Wine base change)
 #
 # Nothing checked for updates before this. A user on a daily channel had no way
 # to know a build existed short of opening the releases page, and the install
@@ -80,7 +80,7 @@ have_wine="$(works_buildinfo_field "$have_info" wine)"
 # identifier and invited comparing them, when only one of them is a name.
 want_id="$(works_compose_id "$want_ver" "$want_commit" \
     "$(works_buildinfo_field "$tmp/manifest.txt" build-kind)")"
-# Same columns and same order as `ableton-runtime list`, so the two commands
+# Same columns and same order as `works runtime list`, so the two commands
 # describe a build the same way. Fixed widths because the ids differ in length
 # by design -- a nightly carries its kind -- and unpadded output left the dates
 # and Wine versions on the two rows unalignable against each other.

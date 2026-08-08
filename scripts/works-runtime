@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Which build of the runtime is in use, and switching between them.
 #
-#   ableton-runtime list          every installed build, newest first
-#   ableton-runtime path          the runtime root, for scripts and docs
-#   ableton-runtime use           choose from a numbered list
-#   ableton-runtime use <name>    point the channel at a different build
-#   ableton-runtime use --previous
-#   ableton-runtime use <name> --force   accept a Wine base change unattended
+#   works runtime list          every installed build, newest first
+#   works runtime path          the runtime root, for scripts and docs
+#   works runtime use           choose from a numbered list
+#   works runtime use <name>    point the channel at a different build
+#   works runtime use --previous
+#   works runtime use <name> --force   accept a Wine base change unattended
 #
 # The store makes rollback possible - one directory per build, a channel symlink
 # at the live one - and until this existed nothing exposed it. Rolling back was
@@ -113,7 +113,7 @@ cmd_pick() {
     [ "${#names[@]}" -gt 0 ] || { echo "!! no installed builds" >&2; return 1; }
     if ! { : >/dev/tty; } 2>/dev/null; then
         echo "!! no terminal to ask on; name a build instead:" >&2
-        for e in "${names[@]}"; do echo "     ableton-runtime use $e" >&2; done
+        for e in "${names[@]}"; do echo "     works runtime use $e" >&2; done
         return 1
     fi
     for e in "${names[@]}"; do
@@ -135,7 +135,7 @@ cmd_pick() {
 
 cmd_use() {
     local want="${1:-}" force="${2:-}" live cur from to
-    [ -n "$want" ] || { echo "!! usage: ableton-runtime use <name>|--previous" >&2; return 1; }
+    [ -n "$want" ] || { echo "!! usage: works runtime use <name>|--previous" >&2; return 1; }
     [ -d "$container" ] || { echo "!! no version store; nothing to switch between" >&2; return 1; }
 
     if [ "$want" = "--previous" ]; then

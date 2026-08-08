@@ -122,7 +122,7 @@ this project's Wine:
 
 ```bash
 WINEPREFIX="$HOME/works/plugs/studio" \
-  "$(ableton-runtime path)/bin/wine" reg delete \
+  "$(works runtime path)/bin/wine" reg delete \
   'HKCU\Software\Wine\AppDefaults\Push2DisplayProcess.exe\DllOverrides' \
   /v libusb-1.0 /f
 ```
