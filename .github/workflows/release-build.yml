@@ -210,6 +210,11 @@ jobs:
               echo "!! manifest checksum does not match the installer" >&2
               echo "   manifest $want" >&2; echo "   asset    $got" >&2; exit 1; }
 
+      # No kit publishes without installing: the kit's own installer, against a
+      # throwaway HOME, runtime-only, and the installed wine must execute.
+      - name: The kit installs on this runner before it becomes a draft
+        run: ./scripts/check-kit-installs.sh "dist/ableton-wine-setup-${{ steps.v.outputs.version }}.run" stable
+
       # The committed BUILD-INFO is what release.bats and release.yml's local
       # path expect at the tag. If main has moved since this run checked out,
       # the push fails and the whole run is re-dispatched — never force.
