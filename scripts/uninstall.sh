@@ -22,10 +22,13 @@ APPS="$HOME/.local/share/applications"
 # behind a dangling channel.
 works_remove_runtimes
 rm -f  "$BIN"        && echo "removed $BIN"
-rm -f  "$HOME/.local/bin/ableton-runtime" "$HOME/.local/bin/ableton-update"
 rm -f  "$BIN".rollback-*
+# The commands themselves live in works/bin; ~/.local/bin holds only links.
+rm -f  "$HOME/works/bin/ableton-runtime" "$HOME/works/bin/ableton-update"
+rmdir  "$HOME/works/bin" 2>/dev/null || true
+rm -f  "$HOME/.local/bin/ableton-runtime" "$HOME/.local/bin/ableton-update"
 # Stop and drop the Ableton Link session anchor's user unit (setup-link.sh
-# installs it under ~/.config); the daemon binary goes with share/ableton-wine.
+# installs it under ~/.config); the daemon binary goes with ~/works/apps/ableton-live.
 systemctl --user disable --now ableton-linkd.service 2>/dev/null || true
 rm -f  "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/ableton-linkd.service" \
     && echo "removed ~/.config/systemd/user/ableton-linkd.service"

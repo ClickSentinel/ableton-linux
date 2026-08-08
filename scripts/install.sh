@@ -318,17 +318,27 @@ else
 fi
 "$WINE_ROOT/bin/wine" --version
 
-echo "== install launcher -> $BIN/ableton-live =="
-mkdir -p "$BIN"
-if [ -e "$BIN/ableton-live" ]; then
-    launcher_backup="$BIN/ableton-live.rollback-$stamp"
-    cp -a "$BIN/ableton-live" "$launcher_backup"
-fi
-install -m755 "$here/ableton-live" "$BIN/ableton-live"
-# The store makes rollback possible; this is what exposes it. Installed beside
-# the launcher because it is a user-facing command, not a helper.
-install -m755 "$here/ableton-runtime" "$BIN/ableton-runtime"
-install -m755 "$here/ableton-update" "$BIN/ableton-update"
+echo "== install launcher -> ~/works/apps/ableton-live =="
+mkdir -p "$BIN" "$HOME/works/apps/ableton-live" "$HOME/works/bin"
+# The launcher belongs to the application, so it lives with it and ~/.local/bin
+# holds a link. Anything else means the app's directory does not contain the app:
+# backing up ~/works would miss its entry point, and removing the app directory
+# would leave a working command behind pointing at nothing.
+install -m755 "$here/ableton-live" "$HOME/works/apps/ableton-live/ableton-live"
+ln -sfn "$HOME/works/apps/ableton-live/ableton-live" "$BIN/ableton-live"
+
+# These two act on the runtime and the store, which no application owns, so they
+# sit in works/bin rather than in any app's directory.
+install -m755 "$here/ableton-runtime" "$HOME/works/bin/ableton-runtime"
+install -m755 "$here/ableton-update" "$HOME/works/bin/ableton-update"
+ln -sfn "$HOME/works/bin/ableton-runtime" "$BIN/ableton-runtime"
+ln -sfn "$HOME/works/bin/ableton-update" "$BIN/ableton-update"
+
+# Dated copies of the launcher accumulated here on every install, one per run,
+# with nothing to prune them - the same defect the version store exists to end,
+# on the PATH this time. The store rolls the runtime back and the launcher comes
+# from the kit, so the copies bought nothing. Clear out any left behind.
+rm -f "$BIN"/ableton-live.rollback-* 2>/dev/null || true
 
 echo "== install the shared toolkit -> ~/works/lib =="
 # The launcher sources these on every start (DPI auto-calibration, light/dark theme sync).

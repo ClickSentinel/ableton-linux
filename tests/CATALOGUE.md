@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-310 tests across 14 suites. See [README.md](README.md) for how to run
+313 tests across 14 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -19,7 +19,7 @@ for which run on a PR.
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/install-runs.bats](#install-runs) — 17 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 20 test(s)
 - [tests/unit/manifest.bats](#manifest) — 19 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 32 test(s)
 - [tests/unit/promote.bats](#promote) — 11 test(s)
@@ -287,6 +287,9 @@ tree ships.
 | 15 | setup-prefix refuses while something runs from the runtime | `wineboot -u` rewriting the registry under a live wineserver |
 | 16 | setup-prefix refuses with no terminal too | the refusal must not depend on a terminal -- an unattended run is |
 | 17 | setup-prefix gets past the guard when nothing is running | the guard must not block the .run, where install.sh has already |
+| 18 | the launcher lives with the application, and PATH holds a link to it | the app directory must contain the app — a launcher that lives only on |
+| 19 | installing leaves no dated launcher copies behind | one dated copy per install, on the PATH, pruned by nothing — the |
+| 20 | the runtime commands live outside any application | — |
 
 <a id="manifest"></a>
 
@@ -664,6 +667,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `no released runtime carries source-commit` | runtime-env: a runtime without source-commit is named from its patch stack |
 | `nothing is left behind for an older .run to overwrite, and a migrated` | migrate-layout: nothing remains at the legacy path |
 | `observed during the first real migration` | runtime-env: live pids: a process that exits mid-scan is skipped, not an error |
+| `one dated copy per install, on the PATH, pruned by nothing` | install-runs: installing leaves no dated launcher copies behind |
 | `pruning on behalf of one channel must not strand another` | runtime-env: retention never removes what a DIFFERENT channel points at |
 | `releases move, and the manifest must stay the thing that locates the` | ableton-update: the installer is fetched from beside the manifest |
 | `replacing the tree under a running Live is how a session is lost` | ableton-update: it refuses while something is running from the runtime |
@@ -680,6 +684,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | runtime-env: the runtime wins over a debug tree sitting beside it |
 | `the BUILD column was exactly as wide as a nightly id --` | ableton-runtime: list: a nightly id does not crowd the WINE column |
 | `the Plug holds Live, its authorisation and the user's sets` | install-runs: uninstalling keeps the Plug, and the work inside it |
+| `the app directory must contain the app` | install-runs: the launcher lives with the application, and PATH holds a link to it |
 | `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
 | `the channel is user configuration and must never choose a host` | manifest: an unknown channel resolves no URL at all |
 | `the channel is what the launcher resolves through` | ableton-runtime: use refuses a name that is not installed |

@@ -295,3 +295,37 @@ setup() {
     run bash "$REPO/scripts/setup-prefix.sh"
     [[ "$output" != *"Close Live"* ]]
 }
+
+# guards: the app directory must contain the app — a launcher that lives only on
+# PATH means backing up ~/works misses the entry point, and removing the app
+# leaves a working command pointing at nothing
+@test "the launcher lives with the application, and PATH holds a link to it" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    [ -x "$HOME/works/apps/ableton-live/ableton-live" ]
+    [ -L "$HOME/.local/bin/ableton-live" ]
+    [ "$(readlink "$HOME/.local/bin/ableton-live")" = "$HOME/works/apps/ableton-live/ableton-live" ]
+}
+
+# guards: one dated copy per install, on the PATH, pruned by nothing — the
+# defect the version store exists to end, in a second place
+@test "installing leaves no dated launcher copies behind" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    mkdir -p "$HOME/.local/bin"
+    : > "$HOME/.local/bin/ableton-live.rollback-20260101T000000Z"   # litter from an older installer
+    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    n=$(find "$HOME/.local/bin" -name 'ableton-live.rollback-*' | wc -l)
+    [ "$n" = 0 ] || { echo "$n dated launcher copies survived" >&2; false; }
+}
+
+@test "the runtime commands live outside any application" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    [ -x "$HOME/works/bin/ableton-runtime" ]
+    [ ! -e "$HOME/works/apps/ableton-live/ableton-runtime" ]
+    [ -L "$HOME/.local/bin/ableton-runtime" ]
+}
