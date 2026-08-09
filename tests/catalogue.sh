@@ -36,6 +36,7 @@ SUITES=(
     tests/unit/manifest.bats
     tests/unit/migrate-layout.bats
     tests/unit/promote.bats
+    tests/unit/works.bats
     tests/unit/works-runtime.bats
     tests/unit/works-update.bats
     tests/unit/runtime-env.bats

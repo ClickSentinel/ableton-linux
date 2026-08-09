@@ -139,21 +139,31 @@ if works_runtime_busy; then
         fi
     fi
     if [ -x "$WINE_ROOT/bin/wineserver" ]; then
-        WINEPREFIX="$(works_plug_path)" \
+        # The prefix as it is now, not where the migration below will put it:
+        # this runs before works_migrate_plug, so on an unmigrated machine the
+        # real prefix is still at the legacy path and the container path does
+        # not exist yet.
+        WINEPREFIX="$(works_plug_path_live)" \
             "$WINE_ROOT/bin/wineserver" -k 2>/dev/null || true
         for _ in $(seq 1 20); do
-            works_runtime_busy || break
+            works_anything_busy || break
             sleep 0.5
         done
     fi
-    if works_runtime_busy; then
-        works_runtime_pids | xargs -r kill 2>/dev/null || true
+    # works_all_pids, not works_runtime_pids. The runtime scan resolves
+    # /proc/PID/exe under the runtime tree; works_migrate_plug's guard matches
+    # WINEPREFIX= in /proc/PID/environ, and that set is strictly larger. A
+    # process that inherited the prefix without executing from the runtime -
+    # ableton-linkd is exactly that - is invisible to the narrower kill and
+    # visible to the guard, so the install stops cleanly and then refuses.
+    if works_anything_busy; then
+        works_all_pids | sort -un | xargs -r kill 2>/dev/null || true
         pkill -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
         for _ in $(seq 1 10); do
-            works_runtime_busy || break
+            works_anything_busy || break
             sleep 0.5
         done
-        works_runtime_pids | xargs -r kill -9 2>/dev/null || true
+        works_all_pids | sort -un | xargs -r kill -9 2>/dev/null || true
         pkill -9 -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
     fi
 fi

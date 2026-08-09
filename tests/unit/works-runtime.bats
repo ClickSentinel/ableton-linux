@@ -26,6 +26,19 @@ setup() {
     LEGACY="$(works_legacy_root)"
 }
 
+# fake_live backgrounds a process from the test shell, so a test that fails
+# before stopping it would leave it running for the length of its sleep.
+#
+# The wait matters as much as the kill: its argv is a Windows-style Live path,
+# which is exactly what works_runtime_busy's pgrep fallback matches. Left
+# unreaped it is visible to every later test file that does not stub pgrep, and
+# the failure lands over there rather than here.
+teardown() {
+    [ -z "${FAKE_LIVE:-}" ] && return 0
+    kill -9 "$FAKE_LIVE" 2>/dev/null || true
+    wait "$FAKE_LIVE" 2>/dev/null || true
+}
+
 plant() {
     local dir="$1" ver="$2" disc="$3" at="${4:-}" base="${5:-wine-11.13}"
     mkdir -p "$dir/bin"
@@ -174,7 +187,7 @@ store() {
 
 
 # --- the Wine base ------------------------------------------------------------
-# A Wire is bound to a base: Wine re-bootstraps the prefix when the runtime's
+# A Plug is bound to a base: Wine re-bootstraps the prefix when the runtime's
 # wine.inf and the prefix's .update-timestamp disagree, and it cannot go back.
 # Switching between bases is a one-way door and nothing said so.
 
@@ -269,4 +282,108 @@ store() {
     run RT use 2026.08.06.1+nightly.79d8960
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [ "$(readlink "$C/stable")" = "2026.08.06.1+nightly.79d8960" ]
+}
+
+# --- stop ---------------------------------------------------------------------
+
+# A process that reads as Live to both scans: /proc/PID/exe has to resolve inside
+# the runtime, which a copy of sleep in the store gives us, and argv has to carry
+# a Windows-style Live path, which `exec -a` sets. Neither can be faked with a
+# plain sleep - the exe link is what the runtime scan matches on, and the command
+# line is what separates Live from Wine's own services.
+fake_live() {
+    local bin="$C/2026.06.01.1+bbbbbbb/bin"
+    cp "$(command -v sleep)" "$bin/wine-preloader"
+    bash -c 'exec -a "C:\Ableton Live 12.exe" "$0" 60' "$bin/wine-preloader" &
+    FAKE_LIVE=$!
+    local i
+    for i in $(seq 1 40); do
+        [ -e "/proc/$FAKE_LIVE/exe" ] && return 0
+        sleep 0.05
+    done
+    echo "the fake Live never appeared in /proc" >&2; false
+}
+
+@test "stop says so when nothing is running" {
+    store
+    run RT stop
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Nothing is running"* ]]
+}
+
+# guards: stopping Live discards unsaved work, so it is the one process here
+# worth asking about, and nobody can answer without a terminal
+@test "stop refuses a running Live with no terminal to confirm on" {
+    store
+    fake_live
+    run setsid bash "$REPO/scripts/works-runtime" stop
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"pass -y"* ]]
+    kill -0 "$FAKE_LIVE"        # and it is still running
+}
+
+# guards: -y was parsed by cmd_stop but never reached it. The dispatch called
+# cmd_stop with no arguments at all, so the flag the refusal above tells you to
+# pass did nothing, and no script could stop a running Live by any means.
+@test "stop -y stops a running Live without asking" {
+    store
+    fake_live
+    run setsid bash "$REPO/scripts/works-runtime" stop -y
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [[ "$output" == *"Stopped."* ]]
+    # wait reaps it too: a killed child is a zombie until then, and kill -0
+    # succeeds on a zombie, so checking liveness that way would pass either way.
+    # The status has to be caught rather than tested afterwards - a signalled
+    # child makes wait return 143, and under set -e that ends the test first.
+    rc=0; wait "$FAKE_LIVE" 2>/dev/null || rc=$?
+    [ "$rc" -gt 128 ] || { echo "the fake Live exited on its own, not by signal" >&2; false; }
+}
+
+@test "stop --yes is the same flag spelled out" {
+    store
+    fake_live
+    run setsid bash "$REPO/scripts/works-runtime" stop --yes
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    rc=0; wait "$FAKE_LIVE" 2>/dev/null || rc=$?
+    [ "$rc" -gt 128 ]
+}
+
+# guards: `works stop` is the documented spelling, and it crosses two dispatchers
+# before the flag is read
+@test "works stop -y reaches the flag through the top-level dispatcher" {
+    store
+    fake_live
+    run setsid bash "$REPO/scripts/works" stop -y
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    rc=0; wait "$FAKE_LIVE" 2>/dev/null || rc=$?
+    [ "$rc" -gt 128 ]
+}
+
+# --- help ---------------------------------------------------------------------
+
+# guards: every help here is a fixed line range over the file's header comment,
+# so editing that comment silently drags the prose underneath into the output or
+# drops a command off the end. Both read as "the last line is not a command".
+@test "runtime help ends on a command, not on prose" {
+    run RT --help
+    [ "$status" -eq 0 ]
+    last="$(printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | tail -1)"
+    [[ "$last" == "  works runtime"* ]] \
+        || { echo "help trails into prose: $last" >&2; false; }
+}
+
+@test "runtime help names every verb it dispatches" {
+    run RT --help
+    for v in list path use stop; do
+        [[ "$output" == *"works runtime $v"* ]] || { echo "help omits $v" >&2; false; }
+    done
+}
+
+@test "runtime help answers to -h and help as well" {
+    run RT -h
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"works runtime list"* ]]
+    run RT help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"works runtime list"* ]]
 }

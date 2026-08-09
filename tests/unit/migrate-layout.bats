@@ -54,6 +54,36 @@ plant() {
     [ "$(readlink "$CONTAINER/stable")" = "2026.08.01.1+b4d2f10" ]
 }
 
+# guards: found in review. The primary path ended in a bare `mv` while both
+# sibling writers into the store guard first. With an entry already carrying this
+# id, mv landed the legacy tree *inside* it — invisible to retention and to the
+# container-scoped uninstall, the channel pointing at the incumbent, and the
+# command reporting success. Reachable whenever the channel symlink is genuinely
+# absent rather than dangling, which is what this sets up.
+@test "an id collision sets the old tree aside instead of nesting it in the entry" {
+    plant "$LEGACY" 2026.08.01.1 b4d2f10aaaa
+    plant "$CONTAINER/2026.08.01.1+b4d2f10" 2026.08.01.1 b4d2f10aaaa
+    [ ! -e "$CONTAINER/stable" ]          # absent, not dangling
+
+    run works_migrate_layout
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [ ! -e "$CONTAINER/2026.08.01.1+b4d2f10/$NAME" ] \
+        || { echo "the legacy tree was nested inside the entry" >&2; false; }
+    [ -n "$(find "$CONTAINER" -maxdepth 1 -name 'superseded-*' -type d)" ] \
+        || { echo "the legacy tree was not set aside anywhere" >&2; false; }
+    [ "$(readlink "$CONTAINER/stable")" = "2026.08.01.1+b4d2f10" ]
+}
+
+# guards: the report must not claim a move that did not happen — "moved the
+# runtime to" on a collision is how this stayed invisible
+@test "a collision says the tree was set aside, not that it was moved" {
+    plant "$LEGACY" 2026.08.01.1 b4d2f10aaaa
+    plant "$CONTAINER/2026.08.01.1+b4d2f10" 2026.08.01.1 b4d2f10aaaa
+    run works_migrate_layout
+    [[ "$output" == *"set aside"* ]] || { echo "$output" >&2; false; }
+    [[ "$output" != *"moved the runtime to"* ]]
+}
+
 # guards: nothing is left behind for an older .run to overwrite, and a migrated
 # install ends in the same shape a fresh one does
 @test "nothing remains at the legacy path" {

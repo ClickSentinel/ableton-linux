@@ -35,6 +35,49 @@ setup() {
     [ "$(works_plug_path)" = "$HOME/works/plugs/studio" ]
 }
 
+# guards: found in review. install.sh hands this to `wineserver -k` *before*
+# works_migrate_plug runs, so on an unmigrated machine works_plug_path names a
+# directory that does not exist yet while the real prefix is still at the legacy
+# path. Stopping the wrong prefix is a no-op that reports success, and the
+# SIGKILL that follows is the registry corruption the migration exists to avoid.
+@test "live prefix: names the legacy path while the destination is absent" {
+    mkdir -p "$HOME/.wine-ableton"
+    [ "$(works_plug_path_live)" = "$HOME/.wine-ableton" ]
+}
+
+@test "live prefix: names the container path once that exists" {
+    mkdir -p "$HOME/.wine-ableton" "$HOME/works/plugs/studio"
+    [ "$(works_plug_path_live)" = "$HOME/works/plugs/studio" ]
+}
+
+@test "live prefix: with neither present it still names where the prefix will go" {
+    [ "$(works_plug_path_live)" = "$HOME/works/plugs/studio" ]
+}
+
+# guards: the stop was gated on works_runtime_busy, which resolves /proc/PID/exe
+# under the runtime tree — strictly narrower than the environ match
+# works_migrate_plug guards with. A process that inherited WINEPREFIX without
+# executing from the runtime (ableton-linkd is exactly that) was invisible to the
+# kill and visible to the guard, so the install stopped cleanly and then refused,
+# and no number of reruns cleared it.
+@test "busy: a prefix holder that never executed from the runtime is still seen" {
+    local plug="$HOME/works/plugs/studio" pid i narrow wide
+    mkdir -p "$plug"
+    WINEPREFIX="$plug" sleep 30 &
+    pid=$!
+    for i in $(seq 1 40); do [ -e "/proc/$pid/environ" ] && break; sleep 0.05; done
+
+    run works_runtime_busy
+    narrow="$status"
+    run works_anything_busy
+    wide="$status"
+    kill -9 "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+
+    [ "$narrow" -ne 0 ] || { echo "the runtime scan should not have matched it" >&2; false; }
+    [ "$wide" -eq 0 ] || { echo "the union scan missed the prefix holder" >&2; false; }
+}
+
 @test "prefix: WORKS_PLUG wins, which the clone workflow depends on" {
     WORKS_PLUG=/tmp/altpfx
     [ "$(works_plug_path)" = "/tmp/altpfx" ]

@@ -34,6 +34,27 @@ setup() {
     works_manifest_valid "$M"
 }
 
+# guards: found in review. works-update guards its Wine-base refusal on the field
+# being non-empty, so a manifest published without `wine` switches that safety
+# off rather than tripping it — and this function is the hard publish gate
+# standing in front of users at make-installer.sh.
+@test "a manifest with no wine field is refused" {
+    works_manifest_write stable "$TREE" install-ableton-latest.run deadbeef > "$M"
+    works_manifest_valid "$M"                     # the control: valid to begin with
+    grep -v '^wine:' "$M" > "$M.x" && mv "$M.x" "$M"
+    run works_manifest_valid "$M"
+    [ "$status" -ne 0 ] || { echo "a manifest with no wine field passed the gate" >&2; false; }
+}
+
+# guards: works_manifest_write emits the key unconditionally but writes whatever
+# BUILD-INFO holds, so "present" was never the same as "filled in"
+@test "a manifest with an empty wine field is refused" {
+    works_manifest_write stable "$TREE" install-ableton-latest.run deadbeef > "$M"
+    sed 's/^wine:.*/wine:         /' "$M" > "$M.x" && mv "$M.x" "$M"
+    run works_manifest_valid "$M"
+    [ "$status" -ne 0 ]
+}
+
 @test "every field survives the round trip" {
     works_manifest_write stable "$TREE" install-ableton-latest.run deadbeef > "$M"
     [ "$(works_buildinfo_field "$M" channel)"       = "stable" ]

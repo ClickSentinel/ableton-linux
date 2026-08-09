@@ -77,7 +77,7 @@ cmd_path() {
 
 # The Wine base is not in the entry name and should not be - it is derivable,
 # and one runtime release is built on one base. But it is the fact that decides
-# whether switching is safe for a Wire, so it belongs in front of anyone
+# whether switching is safe for a Plug, so it belongs in front of anyone
 # choosing.
 base_of() { works_buildinfo_field "$container/$1/ABLETON-WINE-BUILD-INFO.txt" wine; }
 
@@ -115,7 +115,6 @@ cmd_list() {
 # replaces a runtime; this is the same thing a person can reach, because the
 # refusals that send them here say "close it" about processes with no window to
 # close - Wine's services.exe and rpcss.exe outlive Live and hold the prefix.
-# shellcheck disable=SC2120  # -y is optional and passed by the dispatcher
 cmd_stop() {
     local pids n ans
     pids="$(works_all_pids | sort -un)"
@@ -208,21 +207,21 @@ cmd_use() {
         echo "!! $want has no bin/wine; refusing to point the channel at it" >&2
         return 1; }
 
-    # A Wire is bound to a Wine base: Wine compares the prefix's
+    # A Plug is bound to a Wine base: Wine compares the prefix's
     # .update-timestamp against the runtime's share/wine/wine.inf and runs
     # wineboot --update when they differ. Forward it does; back it does not
     # support. Switching between bases is therefore a one-way door for every
-    # Wire using this channel, and nothing said so until now.
+    # Plug using this channel, and nothing said so until now.
     from="$(base_of "$(readlink "$channel" 2>/dev/null)")"
     to="$(base_of "$want")"
     if [ -n "$from" ] && [ -n "$to" ] && [ "$from" != "$to" ]; then
         echo "This build is on a different Wine base: $from -> $to"
         if [ "$(printf '%s\n%s\n' "$from" "$to" | sort -V | tail -1)" = "$from" ]; then
-            echo "  That is a DOWNGRADE. Wine does not support it: your Wire was"
+            echo "  That is a DOWNGRADE. Wine does not support it: your Plug was"
             echo "  bootstrapped against $from and cannot be taken back to $to."
-            echo "  Expect breakage, and keep a copy of the prefix first."
+            echo "  Expect breakage, and keep a copy of the Plug first."
         else
-            echo "  Your Wire will be re-bootstrapped against $to on next launch,"
+            echo "  Your Plug will be re-bootstrapped against $to on next launch,"
             echo "  and cannot be taken back to $from afterwards."
         fi
         if [ "$force" = "--force" ]; then
@@ -238,9 +237,14 @@ cmd_use() {
         fi
     fi
 
+    # Before the retarget. works_runtime_busy resolves through the channel, so
+    # asking afterwards asks whether anything is running from the build being
+    # switched *to* — while the note is about the one being switched from.
+    local was_busy=""
+    works_runtime_busy && was_busy=1
     ln -sfn "$want" "$channel"
     echo "channel -> $want"
-    if works_runtime_busy; then
+    if [ -n "$was_busy" ]; then
         echo "note: something is still running from the previous build. It keeps"
         echo "      the build it started with; this takes effect on the next launch."
     fi
@@ -248,12 +252,12 @@ cmd_use() {
 
 case "${1:-list}" in
     list|ls)        cmd_list ;;
-    stop)           cmd_stop ;;
+    stop)           shift; cmd_stop "$@" ;;
     path|root)      cmd_path ;;
     use|switch)     shift
                     if [ -z "${1:-}" ]; then cmd_pick
                     else cmd_use "$1" "${2:-}"; fi ;;
     -h|--help|help)
-        sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' ;;
+        sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) echo "!! unknown command: $1 (try --help)" >&2; exit 1 ;;
 esac

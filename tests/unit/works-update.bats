@@ -3,7 +3,7 @@
 # scripts/works-update — deciding whether to replace the runtime.
 #
 # Everything the updater does before it downloads is a refusal: same build,
-# unknown channel, incomplete manifest, a Wine base it cannot take a Wire back
+# unknown channel, incomplete manifest, a Wine base it cannot take a Plug back
 # across, a runtime something is still running from. Those refusals are the
 # feature — the download is the easy part — so this file is mostly about them.
 #
@@ -19,6 +19,12 @@ load ../helpers/common
 UPD="$REPO/scripts/works-update"
 
 setup() {
+    # works_runtime_busy falls back to pgrep when the /proc scan finds nothing,
+    # and that fallback reads the whole host. Unstubbed, this file's verdict
+    # depends on what else happens to be running — including the fake Live that
+    # works-runtime.bats spawns, which is precisely what the pattern matches.
+    setup_stubs
+    stub pgrep 1
     HOME="$BATS_TEST_TMPDIR/home"
     export HOME XDG_CONFIG_HOME="$HOME/.config"
     export WORKS_HOME="$HOME/works"
@@ -124,6 +130,33 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
     [ "$(readlink "$STORE/stable")" = "2026.08.04.1+aaaa" ]
 }
 
+# guards: a retarget under a running Live is safe and must not refuse — the
+# resolver hands back the build rather than the channel, so a started session
+# keeps what it started with. `works runtime use` allows exactly this, and the
+# two commands disagreeing about it would be the surprise.
+@test "a channel switch is allowed while something is running, with a note" {
+    a_build 2026.08.04.1+aaaa aaaaaaaa 2026-08-06T10:00:00Z wine-11.13
+    a_build 2026.08.04.1+bbbb bbbbbbbb 2026-08-07T10:00:00Z wine-11.13
+    point_at stable 2026.08.04.1+aaaa
+    on_channel stable
+    a_manifest nightly bbbbbbbb 2026-08-07T10:00:00Z wine-11.13 x.run deadbeef
+
+    cp "$(command -v sleep)" "$STORE/2026.08.04.1+aaaa/bin/wineserver"
+    "$STORE/2026.08.04.1+aaaa/bin/wineserver" 30 &
+    local pid=$! i
+    # The exe link is what the scan matches on, and it does not exist until
+    # execve has finished. Starting the process and running the command in the
+    # same breath races it.
+    for i in $(seq 1 40); do [ -e "/proc/$pid/exe" ] && break; sleep 0.05; done
+
+    run "$UPD" --channel nightly
+    kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true
+
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [ "$(readlink "$STORE/nightly")" = "2026.08.04.1+bbbb" ]
+    [[ "$output" == *"takes effect on the next launch"* ]]
+}
+
 # guards: --check is a question, and asking it must not answer it
 @test "--check does not move a channel even when the build is present" {
     a_build 2026.08.04.1+bbbb bbbbbbbb 2026-08-07T10:00:00Z wine-11.13
@@ -184,7 +217,7 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
     [[ "$output" == *"incomplete"* ]]
 }
 
-# guards: a Wire is bound to its base by .update-timestamp and cannot be taken
+# guards: a Plug is bound to its base by .update-timestamp and cannot be taken
 # back across one — this refusal is the only thing standing between a user and
 # a one-way prefix rebuild they did not ask for
 @test "a Wine base change is refused" {
@@ -207,6 +240,40 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
 
     run "$UPD" --yes
     [ "$status" -ne 0 ]
+}
+
+# guards: found in review. The "already in the store, just retarget" branch ran
+# *above* both refusals, so the one path that costs no download was also the one
+# path that crossed a Wine base unchecked — and with Live running. Both existing
+# base tests use a commit that is not in the store, so they only ever reached the
+# download path.
+@test "a Wine base change is refused even when the build is already in the store" {
+    a_build 2026.08.04.1+aaaa aaaaaaaa 2026-08-06T10:00:00Z wine-11.13
+    a_build 2026.08.04.1+bbbb bbbbbbbb 2026-08-07T10:00:00Z wine-11.14
+    point_at stable 2026.08.04.1+aaaa
+    on_channel stable
+    a_manifest stable bbbbbbbb 2026-08-07T10:00:00Z wine-11.14 x.run deadbeef
+
+    run "$UPD" --yes
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"changes the Wine base"* ]]
+    [ "$(readlink "$STORE/stable")" = "2026.08.04.1+aaaa" ] \
+        || { echo "the channel was retargeted across a base change" >&2; false; }
+}
+
+# guards: --check is a question, not an action, so it reports the base change
+# rather than failing on it — and still changes nothing
+@test "--check reports a base change instead of refusing" {
+    a_build 2026.08.04.1+aaaa aaaaaaaa 2026-08-06T10:00:00Z wine-11.13
+    a_build 2026.08.04.1+bbbb bbbbbbbb 2026-08-07T10:00:00Z wine-11.14
+    point_at stable 2026.08.04.1+aaaa
+    on_channel stable
+    a_manifest stable bbbbbbbb 2026-08-07T10:00:00Z wine-11.14 x.run deadbeef
+
+    run "$UPD" --check
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [[ "$output" == *"changes the Wine base"* ]]
+    [ "$(readlink "$STORE/stable")" = "2026.08.04.1+aaaa" ]
 }
 
 # guards: replacing the tree under a running Live is how a session is lost
@@ -377,4 +444,23 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
     [ "$(awk -v s="$a" 'BEGIN{print index(s, "wine-11.13")}')" \
       = "$(awk -v s="$i" 'BEGIN{print index(s, "wine-11.13")}')" ] \
         || { printf '%s\n%s\n' "$a" "$i" >&2; false; }
+}
+
+# --- help ---------------------------------------------------------------------
+
+# guards: the help is a fixed line range over the header comment, so editing that
+# comment drags the prose beneath it into the output or drops a flag off the end
+@test "update help ends on a command, not on prose" {
+    run "$UPD" --help
+    [ "$status" -eq 0 ]
+    last="$(printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | tail -1)"
+    [[ "$last" == "  works update"* ]] \
+        || { echo "help trails into prose: $last" >&2; false; }
+}
+
+@test "update help names every flag it accepts" {
+    run "$UPD" --help
+    for f in --check --channel --yes; do
+        [[ "$output" == *"$f"* ]] || { echo "help omits $f" >&2; false; }
+    done
 }

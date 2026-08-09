@@ -137,6 +137,36 @@ works_plug_path() {
     printf '%s\n' "${WORKS_PLUG:-$(works_home)/plugs/studio}"
 }
 
+# The pre-container prefix path, named once rather than spelled out at each use.
+works_legacy_plug() {
+    printf '%s\n' "$HOME/.wine-ableton"
+}
+
+# The prefix as it stands *right now*, for anything acting on it before
+# works_migrate_plug has moved it. works_plug_path names where the prefix will
+# live; on an unmigrated machine that directory does not exist yet and the real
+# one is still at the legacy path. Handing the wrong path to `wineserver -k` is
+# a no-op that reports success, which is how a running Live survives the stop
+# and then gets SIGKILLed - the registry corruption the migration exists to
+# avoid.
+works_plug_path_live() {
+    local _p
+    _p="$(works_plug_path)"
+    if [ ! -d "$_p" ] && [ -d "$(works_legacy_plug)" ]; then
+        works_legacy_plug
+        return
+    fi
+    printf '%s\n' "$_p"
+}
+
+# Anything running at all, from either scan. works_runtime_busy answers only for
+# the runtime scan, which is strictly narrower than the guard works_migrate_plug
+# applies - so a stop gated on it finishes "successfully" while leaving exactly
+# the process that then refuses the migration, and no number of reruns clears it.
+works_anything_busy() {
+    [ -n "$(works_all_pids 2>/dev/null | sort -un | head -1)" ]
+}
+
 # Bind this shell to the runtime: drop inherited Wine settings that would reach
 # the wrong build, then export what wine and its helpers read.
 #
@@ -443,7 +473,7 @@ works_plug_holders() {
 
 works_migrate_plug() {
     local legacy dest
-    legacy="$HOME/.wine-ableton"
+    legacy="$(works_legacy_plug)"
     dest="$(works_plug_path)"
 
     if [ -n "${WORKS_PLUG:-}" ]; then
@@ -507,7 +537,7 @@ works_migrate_plug() {
 }
 
 works_migrate_layout() {
-    local legacy container chan stamp id other d
+    local legacy container chan stamp id other d absorbed
     legacy="$(works_legacy_root)"
     container="$(works_runtime_store)"
     chan="$container/$(works_channel)"
@@ -561,7 +591,13 @@ works_migrate_layout() {
         return 1; }
 
     mkdir -p "$container"
-    mv "$legacy" "$container/$id"
+    # Never a bare mv. When an entry of this id is already in the store - which
+    # happens whenever the channel symlink is genuinely absent rather than
+    # dangling - mv lands the legacy tree *inside* it, where retention and the
+    # container-scoped uninstall both stop seeing it while the channel quietly
+    # points at the incumbent. works_store_absorb is the guard the already-
+    # migrated branch above and install.sh both already use.
+    absorbed="$(works_store_absorb "$legacy" "$stamp")"
     ln -sfn "$id" "$chan"
 
     # The dated rollbacks travel too, and become readable in the process: each
@@ -573,7 +609,13 @@ works_migrate_layout() {
         [ -e "$d" ] || continue
         works_store_absorb "$d" "$stamp" >/dev/null
     done
-    echo "   layout: moved the runtime to $container/$id"
+    if [ -n "$absorbed" ]; then
+        echo "   layout: moved the runtime to $container/$id"
+    else
+        echo "   layout: the store already held an entry named $id, so the tree at" \
+             "$legacy was set aside under superseded-$stamp; the channel points at" \
+             "the entry that was already there"
+    fi
 }
 
 # --- retention ---------------------------------------------------------------
@@ -779,7 +821,11 @@ works_manifest_write() {
 works_manifest_valid() {
     local _f="$1" _k
     [ -r "$_f" ] || return 1
-    for _k in channel dist-version installer sha256 source-commit built-at; do
+    # `wine` is required because a safety refusal reads it: works-update compares
+    # bases and declines a one-way re-bootstrap, but guards that on the field
+    # being non-empty. A manifest published without it turns that refusal off
+    # rather than tripping it, and this is the gate standing in front of users.
+    for _k in channel dist-version installer sha256 source-commit built-at wine; do
         [ -n "$(works_buildinfo_field "$_f" "$_k")" ] || return 1
     done
     # The installer name reaches a URL and a filename. Nothing else in it.
