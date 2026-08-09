@@ -402,12 +402,28 @@ works_plug_busy() {
     _plug="${1:-$(works_plug_path)}"
     _plug="${_plug%/}"
     for _p in "$(works_proc_root)"/[0-9]*; do
-        [ -r "$_p/environ" ] || continue          # not ours to read: not ours to worry about
-        if tr '\0' '\n' < "$_p/environ" 2>/dev/null | grep -qxF "WINEPREFIX=$_plug"; then
-            return 0
-        fi
+        # Unlike cmdline, environ is mode 400 *and* gated by ptrace_may_access,
+        # so `[ -r ]` passes on our own processes where the read still fails -
+        # systemd --user is one. The shell reports a failed redirection itself,
+        # before tr runs, so tr's own 2>/dev/null cannot suppress it and the
+        # group is what silences it. Same trap as ableton_live_pids, one file
+        # further along.
+        { tr '\0' '\n' < "$_p/environ" | grep -qxF "WINEPREFIX=$_plug"; } 2>/dev/null \
+            && return 0
     done
     return 1
+}
+
+# What is holding it, for a refusal that can be acted on rather than puzzled at.
+works_plug_holders() {
+    local _plug _p _cmd
+    _plug="${1:-$(works_plug_path)}"
+    _plug="${_plug%/}"
+    for _p in "$(works_proc_root)"/[0-9]*; do
+        { tr '\0' '\n' < "$_p/environ" | grep -qxF "WINEPREFIX=$_plug"; } 2>/dev/null || continue
+        _cmd="$( { tr -s '\0' ' ' < "$_p/cmdline"; } 2>/dev/null )" || continue
+        printf '%s  %s\n' "${_p##*/}" "${_cmd:0:70}"
+    done
 }
 
 works_migrate_plug() {
@@ -432,7 +448,9 @@ works_migrate_plug() {
     # is not the same set: this catches a Live started from another build, or a
     # bare wine pointed at the prefix.
     if works_plug_busy "$legacy"; then
-        echo "!! something is still running from $legacy; close it and rerun" >&2
+        echo "!! something is still running from $legacy, so moving it now would" \
+             "corrupt its registry. Close it and rerun:" >&2
+        works_plug_holders "$legacy" | sed 's/^/     /' >&2
         return 1
     fi
 

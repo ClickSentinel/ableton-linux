@@ -408,3 +408,27 @@ a_prefix() {   # a_prefix <dir>
     chmod 644 "$WORKS_PROC_ROOT/4242/environ" 2>/dev/null || true
     [ "$status" -eq 0 ]
 }
+
+# guards: environ is mode 400 and gated by ptrace_may_access, so `[ -r ]` passes
+# where the read still fails — and the shell prints its own redirection error
+# before tr can suppress it. A scan that noisy is a scan nobody reads.
+@test "plug: an unreadable process entry says nothing on stderr" {
+    plug_setup; a_prefix "$LEGACY_PLUG"
+    export WORKS_PROC_ROOT="$BATS_TEST_TMPDIR/proc"
+    mkdir -p "$WORKS_PROC_ROOT/4242"
+    : > "$WORKS_PROC_ROOT/4242/environ"; chmod 000 "$WORKS_PROC_ROOT/4242/environ"
+    run works_migrate_plug
+    chmod 644 "$WORKS_PROC_ROOT/4242/environ" 2>/dev/null || true
+    [[ "$stderr" != *"Permission denied"* ]] || { echo "leaked: $stderr" >&2; false; }
+}
+
+@test "plug: the refusal names what is holding the prefix" {
+    plug_setup; a_prefix "$LEGACY_PLUG"
+    export WORKS_PROC_ROOT="$BATS_TEST_TMPDIR/proc"
+    mkdir -p "$WORKS_PROC_ROOT/4242"
+    printf 'WINEPREFIX=%s\0' "$LEGACY_PLUG" > "$WORKS_PROC_ROOT/4242/environ"
+    printf 'wineserver\0' > "$WORKS_PROC_ROOT/4242/cmdline"
+    run works_migrate_plug
+    [ "$status" -eq 1 ]
+    [[ "$stderr$output" == *"4242"* ]] && [[ "$stderr$output" == *"wineserver"* ]]
+}

@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-320 tests across 14 suites. See [README.md](README.md) for how to run
+322 tests across 14 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -21,7 +21,7 @@ for which run on a PR.
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/install-runs.bats](#install-runs) — 20 test(s)
 - [tests/unit/manifest.bats](#manifest) — 19 test(s)
-- [tests/unit/migrate-layout.bats](#migrate-layout) — 35 test(s)
+- [tests/unit/migrate-layout.bats](#migrate-layout) — 37 test(s)
 - [tests/unit/promote.bats](#promote) — 11 test(s)
 - [tests/unit/works-runtime.bats](#works-runtime) — 23 test(s)
 - [tests/unit/works-update.bats](#works-update) — 27 test(s)
@@ -386,6 +386,8 @@ a throwaway tree.
 | 33 | plug: a prefix something is running from is not moved | renaming a prefix out from under a live wineserver corrupts its |
 | 34 | plug: a process holding a different prefix does not block the move | — |
 | 35 | plug: an unreadable process entry is skipped, not fatal | — |
+| 36 | plug: an unreadable process entry says nothing on stderr | environ is mode 400 and gated by ptrace_may_access, so `[ -r ]` passes |
+| 37 | plug: the refusal names what is holding the prefix | — |
 
 <a id="promote"></a>
 
@@ -657,6 +659,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `commit f84eaa4` | repo-hygiene: runtime name: every live file agrees on one wine-d2d1-nspa version |
 | `dated rollbacks are the reason the store exists` | migrate-layout: dated rollbacks are renamed by the build they hold |
 | `docs and scripts resolve through this instead of naming a directory,` | works-runtime: path answers on the flat layout |
+| `environ is mode 400 and gated by ptrace_may_access, so `[ -r ]` passes` | migrate-layout: plug: an unreadable process entry says nothing on stderr |
 | `every runtime installed anywhere today predates source-commit` | runtime-env: runtime id: the patch-stack fallback still works with a kind |
 | `forward Wine supports, backward it does not - the wording has to differ` | works-runtime: a downgrade is named as a downgrade |
 | `install.sh aborting on its own first lines, which no resolver test can` | install-runs: install.sh gets past its own initialisation |
