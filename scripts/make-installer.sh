@@ -9,6 +9,9 @@ set -euo pipefail
 export LC_ALL=C.UTF-8
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
+# The runtime tarball is selected in one place; see scripts/runtime-env.sh.
+# shellcheck source=scripts/runtime-env.sh
+. "$here/runtime-env.sh"
 cd "$root"
 
 ENGINE="${ENGINE:-podman}"
@@ -17,9 +20,16 @@ NAME="wine-d2d1-nspa-11.13"
 VERSION="$(cat VERSION)"
 # exact-version runtime if present, else the newest built one
 tarball="dist/${NAME}-${VERSION}.tar.zst"
-[ -f "$tarball" ] || tarball="$(ls dist/${NAME}-*.tar.zst 2>/dev/null | sort -V | tail -1 || true)"
+[ -f "$tarball" ] || tarball="$(ableton_pick_tarball dist)"
 
 [ -n "$tarball" ] && [ -f "$tarball" ] || { echo "!! no ${NAME}-*.tar.zst in dist/: run ./build.sh first" >&2; exit 1; }
+# The kit's own install.sh selects by the same predicate. A name this rejects
+# packs perfectly well and then fails on the user's machine, where the kit finds
+# nothing to install - so check it here, where the mistake is cheap.
+ableton_is_runtime_tarball "$tarball" || {
+    echo "!! $(basename "$tarball") is not a name the kit's installer will select" >&2
+    echo "   pack a dated release build, or set ABLETON_RUNTIME_TARBALL deliberately" >&2
+    exit 1; }
 [ -f "$tarball.sha256" ] || { echo "!! $tarball.sha256 missing" >&2; exit 1; }
 echo "   runtime: $(basename "$tarball")"
 
@@ -66,7 +76,7 @@ mkdir -p "$kit/bin" "$kit/dist" "$kit/vendor"
 cp -a "$tarball" "$tarball.sha256" "$kit/dist/"
 cp -a "dist/BUILD-INFO-${VERSION}.txt" "$kit/" 2>/dev/null || true
 mkdir -p "$kit/scripts"
-cp -a scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
+cp -a scripts/runtime-env.sh scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
       scripts/ableton-live scripts/max9 scripts/detect-scale.sh \
       scripts/detect-theme.sh scripts/shortcut-hold.sh \
       scripts/check-live-audio.sh scripts/setup-link.sh \
