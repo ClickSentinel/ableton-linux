@@ -30,14 +30,14 @@
 works_env_compat() {
     local _pair _old _new
     for _pair in \
-        WORKS_RUNTIME:WORKS_RUNTIME \
-        WORKS_PLUG:WORKS_PLUG \
-        WORKS_HOME:WORKS_HOME \
-        WORKS_RUNTIME_KEEP:WORKS_RUNTIME_KEEP \
-        WORKS_RUNTIME_TARBALL:WORKS_RUNTIME_TARBALL \
-        WORKS_CHANNEL:WORKS_CHANNEL \
-        WORKS_CHANNEL_FILE:WORKS_CHANNEL_FILE \
-        WORKS_MANIFEST_URL:WORKS_MANIFEST_URL
+        ABLETON_WINE_ROOT:WORKS_RUNTIME \
+        ABLETON_WINEPREFIX:WORKS_PLUG \
+        ABLETON_OPT_DIR:WORKS_HOME \
+        ABLETON_RUNTIME_KEEP:WORKS_RUNTIME_KEEP \
+        ABLETON_RUNTIME_TARBALL:WORKS_RUNTIME_TARBALL \
+        ABLETON_CHANNEL:WORKS_CHANNEL \
+        ABLETON_CHANNEL_FILE:WORKS_CHANNEL_FILE \
+        ABLETON_MANIFEST_URL:WORKS_MANIFEST_URL
     do
         _old="${_pair%%:*}"; _new="${_pair##*:}"
         # The new name always wins: someone setting both has migrated and left
@@ -71,15 +71,26 @@ works_channel_file() {
     printf '%s\n' "${WORKS_CHANNEL_FILE:-$(works_runtime_store)/.channel}"
 }
 
+works_channel() {
+    local _f _c
+    _f="$(works_channel_file)"
+    _c="${WORKS_CHANNEL:-}"
+    [ -n "$_c" ] || { [ -r "$_f" ] && _c="$(head -1 "$_f" 2>/dev/null | tr -d '[:space:]')"; }
+    case "$_c" in
+        stable|nightly) printf '%s\n' "$_c" ;;
+        "")             printf 'stable\n' ;;
+        *)              echo "!! unknown channel '$_c' in $_f; using stable" >&2
+                        printf 'stable\n' ;;
+    esac
+}
+
 # The directory holding every installed runtime, one per build.
 works_runtime_store() {
     printf '%s\n' "$(works_home)/runtimes"
 }
 
-# Where installs used to live. This is a fact about the past, not a path
-# derived from where things live now: derive it from works_home() and the
-# migration looks inside ~/works, finds nothing, and silently orphans every
-# existing install instead of moving it. It stays frozen when the store moves.
+# The pre-container install path. Carries the Wine version, which is exactly why
+# it is being retired: a base bump moved every user's directory.
 works_legacy_root() {
     printf '%s\n' "$HOME/.local/opt/$(works_runtime_name)"
 }
@@ -101,30 +112,6 @@ works_legacy_root() {
 # And a caller that resolved once keeps the build it resolved. A channel switch
 # part-way through a session cannot move the runtime under a process already
 # executing from it.
-# Which channel this machine follows. One word, validated against an allowlist
-# rather than trusted: it selects a symlink name and, for the updater, part of a
-# URL - and configuration the build does not control must not shape a request.
-# That is the same constraint that ended the source-repo experiment.
-# Where the followed channel is recorded. One function, because a reader and a
-# writer that spell this differently disagree silently until an update goes to
-# the wrong channel.
-works_channel_file() {
-    printf '%s\n' "${WORKS_CHANNEL_FILE:-$(works_runtime_store)/.channel}"
-}
-
-works_channel() {
-    local _f _c
-    _f="$(works_channel_file)"
-    _c="${WORKS_CHANNEL:-}"
-    [ -n "$_c" ] || { [ -r "$_f" ] && _c="$(head -1 "$_f" 2>/dev/null | tr -d '[:space:]')"; }
-    case "$_c" in
-        stable|nightly) printf '%s\n' "$_c" ;;
-        "")             printf 'stable\n' ;;
-        *)              echo "!! unknown channel '$_c' in $_f; using stable" >&2
-                        printf 'stable\n' ;;
-    esac
-}
-
 works_runtime_path() {
     local _chan _target
     if [ -n "${WORKS_RUNTIME:-}" ]; then
@@ -436,104 +423,12 @@ works_plug_busy() {
 works_all_pids() {
     local _p _d
     works_runtime_pids 2>/dev/null || true
-    for _d in "$(works_home)"/plugs/*/ "$HOME/works/plugs/studio"; do
-        [ -d "$_d" ] || continue
-        works_plug_holders "${_d%/}" 2>/dev/null | awk '{print $1}'
-    done
-}
-
-# What is holding it, for a refusal that can be acted on rather than puzzled at.
-# Every pid Works is running, from either direction. The two scans genuinely
-# differ: the runtime scan resolves /proc/PID/exe, so it cannot see a process
-# whose runtime directory has since been removed, and the Plug scan reads
-# WINEPREFIX out of the environment, so it finds exactly those orphans. Wine
-# leaves services.exe, rpcss.exe and friends behind under names no `pkill
-# wineserver` will ever match, and they hold the prefix until something asks.
-works_all_pids() {
-    local _p _d
-    works_runtime_pids 2>/dev/null || true
     for _d in "$(works_home)"/plugs/*/ "$HOME/.wine-ableton"; do
         [ -d "$_d" ] || continue
         works_plug_holders "${_d%/}" 2>/dev/null | awk '{print $1}'
     done
 }
 
-works_plug_holders() {
-    local _plug _p _cmd
-    _plug="${1:-$(works_plug_path)}"
-    _plug="${_plug%/}"
-    for _p in "$(works_proc_root)"/[0-9]*; do
-        { tr '\0' '\n' < "$_p/environ" | grep -qxF "WINEPREFIX=$_plug"; } 2>/dev/null || continue
-        _cmd="$( { tr -s '\0' ' ' < "$_p/cmdline"; } 2>/dev/null )" || continue
-        printf '%s  %s\n' "${_p##*/}" "${_cmd:0:70}"
-    done
-}
-
-works_migrate_plug() {
-    local legacy dest
-    legacy="$HOME/works/plugs/studio"
-    dest="$(works_plug_path)"
-
-    if [ -n "${WORKS_PLUG:-}" ]; then
-        echo "   plug: WORKS_PLUG is set; leaving the prefix where it is"
-        return 0
-    fi
-    [ "$legacy" != "$dest" ] || return 0
-
-    # A symlink at the legacy path is someone else's arrangement, not ours.
-    if [ -L "$legacy" ]; then
-        echo "!! $legacy is a symlink, not a prefix; remove it and rerun" >&2
-        return 1
-    fi
-    [ -d "$legacy" ] || return 0        # nothing to move
-
-    # Before anything moves. install.sh stops what runs from the runtime, which
-    # is not the same set: this catches a Live started from another build, or a
-    # bare wine pointed at the prefix.
-    if works_plug_busy "$legacy"; then
-        echo "!! something is still running from $legacy, so moving it now would" \
-             "corrupt its registry. Close it, or run \`works stop\`, then rerun:" >&2
-        works_plug_holders "$legacy" | sed 's/^/     /' >&2
-        return 1
-    fi
-
-    # Both present is the one genuinely ambiguous state: two prefixes, each
-    # possibly holding a different Live and different authorisation. Guessing
-    # loses work, so name both and stop.
-    if [ -e "$dest" ]; then
-        echo "!! a prefix already exists at $dest and another at $legacy;" \
-             "keep the one you want and remove the other, then rerun" >&2
-        return 1
-    fi
-
-    mkdir -p "$(dirname "$dest")"
-
-    # Within one filesystem this is a rename: atomic, instant, and no free space
-    # required whatever the prefix weighs. Across filesystems mv copies and then
-    # deletes, so a 16G prefix needs 16G free and minutes of I/O - and a failure
-    # halfway leaves a partial copy that would read as "a prefix at both paths"
-    # on the next run. Check first, and clean up after ourselves if it fails.
-    if [ "$(stat -c %d "$legacy" 2>/dev/null)" != "$(stat -c %d "$(dirname "$dest")" 2>/dev/null)" ]; then
-        local _need _free
-        _need="$(du -sk "$legacy" 2>/dev/null | cut -f1)"
-        _free="$(df -Pk "$(dirname "$dest")" 2>/dev/null | awk 'NR==2 {print $4}')"
-        if [ -n "$_need" ] && [ -n "$_free" ] && [ "$_free" -le "$_need" ]; then
-            echo "!! $dest is on another filesystem and moving the prefix there needs" \
-                 "$((_need / 1024)) MB, with $((_free / 1024)) MB free" >&2
-            return 1
-        fi
-        echo "   plug: $dest is on another filesystem, so this is a copy, not a rename"
-    fi
-
-    if ! mv "$legacy" "$dest"; then
-        # Only ever the destination: the source is what we failed to move.
-        [ -e "$dest" ] && [ -e "$legacy" ] && rm -rf "$dest"
-        echo "!! moving the prefix to $dest failed; it is still at $legacy" >&2
-        return 1
-    fi
-    echo "   plug: moved the prefix to $dest"
-}
-
 # What is holding it, for a refusal that can be acted on rather than puzzled at.
 works_plug_holders() {
     local _plug _p _cmd
@@ -544,48 +439,6 @@ works_plug_holders() {
         _cmd="$( { tr -s '\0' ' ' < "$_p/cmdline"; } 2>/dev/null )" || continue
         printf '%s  %s\n' "${_p##*/}" "${_cmd:0:70}"
     done
-}
-
-# Migrate, or explain why not. Idempotent, and refuses rather than guessing when
-# the live tree cannot be identified — installing over an unidentifiable runtime
-# is the ambiguous case the store exists to prevent.
-#
-# Nothing is left at the legacy path. An earlier design kept a compatibility
-# symlink there and it did not survive examination: the case it was chiefly
-# justified by, an older .run, does not read that path, it overwrites it.
-#
-# The caller must already have established that nothing is running from the
-# runtime: this renames the directory a running Wine executes from.
-# Move a flat prefix into the Plug store. Separate from the runtime migration
-# because it is a different object with different failure modes: a runtime can
-# be re-downloaded and a prefix cannot, so every branch here that is not certain
-# refuses rather than guesses.
-#
-# The move is a plain rename and needs no repair. Wine resolves everything
-# relative to $WINEPREFIX, which is supplied per launch; a used prefix carries
-# no absolute host path in its registry (checked against a real Live 12 install,
-# plain and hex-encoded), dosdevices/c: is relative, and the absolute symlinks
-# under drive_c/users point outward at the real home, which is not moving.
-# Is anything running out of this Plug? The runtime scan cannot answer it: a
-# process can hold a prefix while running from another Wine entirely, and
-# renaming a prefix out from under a live wineserver corrupts its registry.
-# Wine puts WINEPREFIX in the environment of everything it starts, so the
-# environment is where the answer is.
-works_plug_busy() {
-    local _plug _p
-    _plug="${1:-$(works_plug_path)}"
-    _plug="${_plug%/}"
-    for _p in "$(works_proc_root)"/[0-9]*; do
-        # Unlike cmdline, environ is mode 400 *and* gated by ptrace_may_access,
-        # so `[ -r ]` passes on our own processes where the read still fails -
-        # systemd --user is one. The shell reports a failed redirection itself,
-        # before tr runs, so tr's own 2>/dev/null cannot suppress it and the
-        # group is what silences it. Same trap as ableton_live_pids, one file
-        # further along.
-        { tr '\0' '\n' < "$_p/environ" | grep -qxF "WINEPREFIX=$_plug"; } 2>/dev/null \
-            && return 0
-    done
-    return 1
 }
 
 works_migrate_plug() {
@@ -657,7 +510,7 @@ works_migrate_layout() {
     local legacy container chan stamp id other d
     legacy="$(works_legacy_root)"
     container="$(works_runtime_store)"
-    chan="$container/stable"
+    chan="$container/$(works_channel)"
     stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 
     if [ -n "${WORKS_RUNTIME:-}" ]; then
@@ -935,4 +788,3 @@ works_manifest_valid() {
     esac
     return 0
 }
-
