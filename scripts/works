@@ -29,8 +29,8 @@ usage() { sed -n '2,8p' "$self" | sed 's/^# \{0,1\}//'; }
 cmd="${1:-}"; [ $# -gt 0 ] && shift
 case "$cmd" in
     runtime)      exec "$verbs/works-runtime" "$@" ;;
-    update)       exec "$verbs/works-update" "$@" ;;
     stop)         exec "$verbs/works-runtime" stop "$@" ;;
+    update)       exec "$verbs/works-update" "$@" ;;
     ""|-h|--help) usage ;;
     -*)           echo "!! works takes a command first: try 'works --help'" >&2; exit 1 ;;
     *)            echo "!! no such command: $cmd" >&2; usage >&2; exit 1 ;;
