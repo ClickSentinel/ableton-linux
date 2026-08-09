@@ -20,15 +20,15 @@ NAME="wine-d2d1-nspa-11.13"
 VERSION="$(cat VERSION)"
 # exact-version runtime if present, else the newest built one
 tarball="dist/${NAME}-${VERSION}.tar.zst"
-[ -f "$tarball" ] || tarball="$(ableton_pick_tarball dist)"
+[ -f "$tarball" ] || tarball="$(works_pick_tarball dist)"
 
 [ -n "$tarball" ] && [ -f "$tarball" ] || { echo "!! no ${NAME}-*.tar.zst in dist/: run ./build.sh first" >&2; exit 1; }
 # The kit's own install.sh selects by the same predicate. A name this rejects
 # packs perfectly well and then fails on the user's machine, where the kit finds
 # nothing to install - so check it here, where the mistake is cheap.
-ableton_is_runtime_tarball "$tarball" || {
+works_is_runtime_tarball "$tarball" || {
     echo "!! $(basename "$tarball") is not a name the kit's installer will select" >&2
-    echo "   pack a dated release build, or set ABLETON_RUNTIME_TARBALL deliberately" >&2
+    echo "   pack a dated release build, or set WORKS_RUNTIME_TARBALL deliberately" >&2
     exit 1; }
 [ -f "$tarball.sha256" ] || { echo "!! $tarball.sha256 missing" >&2; exit 1; }
 echo "   runtime: $(basename "$tarball")"

@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-205 tests across 10 suites. See [README.md](README.md) for how to run
+217 tests across 10 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -20,7 +20,7 @@ for which run on a PR.
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/install-runs.bats](#install-runs) — 10 test(s)
-- [tests/unit/migrate-layout.bats](#migrate-layout) — 24 test(s)
+- [tests/unit/migrate-layout.bats](#migrate-layout) — 36 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 52 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 
@@ -82,7 +82,7 @@ staging list and checks it against what the kit's own scripts reference.
 | 6 | the kit ships the GPL source and licence Ableton Link requires | licence GPLv2+ — Ableton Link has no linking exception, so the source must travel with the binary |
 | 7 | release.yml's asset list matches what make-installer.sh actually produces | — |
 | 8 | every shell function a script calls is actually defined | lifting runtime_pids into the lib renamed it, and a replace that only |
-| 9 | make-installer refuses a tarball the kit's installer cannot select | make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check, |
+| 9 | make-installer refuses a tarball the kit's installer cannot select | make-installer accepted WORKS_RUNTIME_TARBALL with only an -f check, |
 
 <a id="launcher-cli"></a>
 
@@ -93,7 +93,7 @@ scripts/ableton-live — the launch contract, end to end.
 
 The launcher runs for real here: discovery, the single-instance lock, registry
 sync, argument routing, right up to the exec. What it would have exec'd is
-captured instead of run, because ABLETON_WINE_ROOT points at a fake runtime
+captured instead of run, because WORKS_RUNTIME points at a fake runtime
 tree whose `wine` logs its argv and exits (see helpers/launcher.bash).
 
 This is the half that users actually experience — which Live starts, what
@@ -246,7 +246,7 @@ scripts/install.sh — does it run at all, and does it install what it claims?
 This file exists because nothing executed install.sh. The suite sourced
 runtime-env.sh directly and checked the resolvers, which is worth doing and
 says nothing about whether the script that uses them starts. On 2026-08-05 a
-merge reordered install.sh's head so it called ableton_runtime_name eight
+merge reordered install.sh's head so it called works_runtime_name eight
 lines before sourcing the file that defines it; under `set -euo pipefail` it
 aborted on that line. 172 tests passed for thirteen commits.
 
@@ -262,7 +262,7 @@ those checks or force them to be weakened, and weakening them is how a debug
 tree ships.
 
   ./tests/run.sh tests/unit/install-runs.bats
-  ABLETON_TEST_TARBALL=/path/to/runtime.tar.zst ./tests/run.sh tests/unit/install-runs.bats
+  WORKS_TEST_TARBALL=/path/to/runtime.tar.zst ./tests/run.sh tests/unit/install-runs.bats
 
 | # | Test | Guards |
 | --- | --- | --- |
@@ -291,7 +291,7 @@ from its own BUILD-INFO means the script cannot know what it is about to
 install over, and guessing wrong swaps a runtime out from under a running
 Live.
 
-Nothing here touches a real install: ABLETON_OPT_DIR points the resolvers at
+Nothing here touches a real install: WORKS_HOME points the resolvers at
 a throwaway tree.
 
   ./tests/run.sh tests/unit/migrate-layout.bats
@@ -320,8 +320,20 @@ a throwaway tree.
 | 20 | a nonsense retention value reverts to the default rather than pruning all | — |
 | 21 | removal takes the container and everything inside it | — |
 | 22 | removal handles a flat install that never migrated | — |
-| 23 | removal refuses a pinned root that is not a runtime | a stale exported ABLETON_WINE_ROOT from a test session would otherwise |
+| 23 | removal refuses a pinned root that is not a runtime | a stale exported WORKS_RUNTIME from a test session would otherwise |
 | 24 | removal refuses a pinned root of \$HOME | — |
+| 25 | plug: a flat prefix moves into the store | — |
+| 26 | plug: the contents survive the move intact | the prefix is the one thing here that cannot be re-downloaded |
+| 27 | plug: re-running after a successful move is a no-op | — |
+| 28 | plug: nothing installed is not an error | — |
+| 29 | plug: a prefix at both paths refuses, naming both | two prefixes can hold different Lives and different authorisations — |
+| 30 | plug: a symlink where the prefix belongs refuses | — |
+| 31 | plug: an explicit WORKS_PLUG is left alone | a pinned prefix is a deliberate choice — the VM harness runs two |
+| 32 | plug: a prefix something is running from is not moved | renaming a prefix out from under a live wineserver corrupts its |
+| 33 | plug: a process holding a different prefix does not block the move | — |
+| 34 | plug: an unreadable process entry is skipped, not fatal | — |
+| 35 | plug: an unreadable process entry says nothing on stderr | environ is mode 400 and gated by ptrace_may_access, so `[ -r ]` passes |
+| 36 | plug: the refusal names what is holding the prefix | — |
 
 <a id="runtime-env"></a>
 
@@ -339,9 +351,9 @@ sandbox, which is the whole reason they echo instead of assigning.
 | # | Test | Guards |
 | --- | --- | --- |
 | 1 | runtime root: an unmigrated install still resolves where it actually is | — |
-| 2 | runtime root: ABLETON_WINE_ROOT wins, so a bisect or VM run can pin one | — |
-| 3 | prefix: defaults to ~/.wine-ableton | — |
-| 4 | prefix: ABLETON_WINEPREFIX wins, which the clone workflow depends on | — |
+| 2 | runtime root: WORKS_RUNTIME wins, so a bisect or VM run can pin one | — |
+| 3 | prefix: defaults to ~/works/plugs/studio | — |
+| 4 | prefix: WORKS_PLUG wins, which the clone workflow depends on | — |
 | 5 | root and prefix are independent: overriding one leaves the other alone | — |
 | 6 | the resolvers are pure: calling them exports and unsets nothing | — |
 | 7 | binding exports the prefix, the server, and the runtime's bin on PATH | — |
@@ -438,7 +450,8 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `a debug tree rolled back by the selector bug has no dist-version at` | migrate-layout: a rollback that cannot be named moves aside instead of blocking |
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
 | `a label is a suffix on the release form, not a licence to accept any` | runtime-env: tarball predicate: a labelled debug tree is still refused |
-| `a stale exported ABLETON_WINE_ROOT from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
+| `a pinned prefix is a deliberate choice` | migrate-layout: plug: an explicit WORKS_PLUG is left alone |
+| `a stale exported WORKS_RUNTIME from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
 | `an existing flat install is what nearly every user has` | install-runs: a flat install is migrated by the installer, not just by the library |
 | `an install that predates the migration must still resolve and launch` | runtime-env: runtime root: falls back to the legacy path before migrating |
 | `an older .run over a migrated install writes a flat tree at the legacy` | migrate-layout: an older installer's tree beside a migrated one is adopted when newer |
@@ -449,6 +462,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `commit f0fc05e` | detect-scale: cosmic probe: a disabled lid never wins when it is marked non-primary<br>detect-scale: cosmic probe: a disabled lid never wins, even with no primary line |
 | `commit f84eaa4` | repo-hygiene: runtime name: every live file agrees on one wine-d2d1-nspa version |
 | `dated rollbacks are the reason the store exists` | migrate-layout: dated rollbacks are renamed by the build they hold |
+| `environ is mode 400 and gated by ptrace_may_access, so `[ -r ]` passes` | migrate-layout: plug: an unreadable process entry says nothing on stderr |
 | `every runtime installed anywhere today predates source-commit` | runtime-env: runtime id: the patch-stack fallback still works with a kind |
 | `install.sh aborting on its own first lines, which no resolver test can` | install-runs: install.sh gets past its own initialisation |
 | `issue #106` | repo-hygiene: desktop entries validate after substitution |
@@ -457,11 +471,12 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `issue label 'installer'` | packaging: every script a kit script sources is itself staged into the kit |
 | `licence GPLv2+` | packaging: the kit ships the GPL source and licence Ableton Link requires |
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
-| `make-installer accepted ABLETON_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
+| `make-installer accepted WORKS_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
 | `names tie across every nightly between two releases, so ordering on` | migrate-layout: retention orders by built-at, not by the name |
 | `no released runtime carries source-commit` | runtime-env: a runtime without source-commit is named from its patch stack |
 | `nothing is left behind for an older .run to overwrite, and a migrated` | migrate-layout: nothing remains at the legacy path |
 | `observed during the first real migration` | runtime-env: live pids: a process that exits mid-scan is skipped, not an error |
+| `renaming a prefix out from under a live wineserver corrupts its` | migrate-layout: plug: a prefix something is running from is not moved |
 | `scoping` | runtime-env: runtime pids: a process from another Wine install is ignored |
 | `scripts/ableton-live` | launcher-cli: a stale wineserver is killed and the session booted before registry writes<br>launcher: windowmetrics: a value wrapped across continuation lines is rejoined |
 | `scripts/build-audit.sh` | patch-stack: audit: every wine patch is registered in FINGERPRINTS or STAMP_ONLY |
@@ -479,6 +494,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the guard must not block the .run, where install.sh has already` | install-runs: setup-prefix gets past the guard when nothing is running |
 | `the id becomes a directory name, and a BUILD-INFO is just text in a tarball` | runtime-env: a BUILD-INFO carrying path traversal is refused, not turned into a path |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
+| `the prefix is the one thing here that cannot be re-downloaded` | migrate-layout: plug: the contents survive the move intact |
 | `the promote step and its dated rollback, which is where the store's` | install-runs: a second install promotes and leaves the previous runtime behind |
 | `the refusal must not depend on a terminal -- an unattended run is` | install-runs: setup-prefix refuses with no terminal too |
 | `the resolver and the migration must agree, or the install replaces a` | migrate-layout: the resolver follows the runtime to its new name |
@@ -489,3 +505,4 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
 | `this is the only runtime artifact the nightly channel publishes, so` | runtime-env: tarball predicate: a nightly label is accepted |
 | `two installs of one build collapse to one entry, and the loser is set` | migrate-layout: two rollbacks holding one build keep one and set the rest aside |
+| `two prefixes can hold different Lives and different authorisations` | migrate-layout: plug: a prefix at both paths refuses, naming both |
