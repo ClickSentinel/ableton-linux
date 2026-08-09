@@ -10,7 +10,11 @@
 # their own files beside the shared library rather than on PATH: `works` is the
 # interface, and what implements it is not something to be called directly.
 set -euo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"
+# Resolved, not just dirname'd: PATH holds a link to this file, and $0 is then
+# the link's own path - ~/.local/bin - whose ../lib is somewhere else entirely.
+# The verbs sit beside the real file, so the real file is what has to be found.
+self="$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")"
+here="$(cd "$(dirname "$self")" && pwd)"
 
 # Installed, works lives in ~/works/bin and the verbs in ~/works/lib; from a
 # checkout both sit in scripts/. Neither layout is special-cased beyond this.
@@ -19,7 +23,7 @@ for _d in "$here/../lib" "$here"; do
 done
 [ -n "${verbs:-}" ] || { echo "!! works cannot find its verbs (looked beside $here and in ../lib)" >&2; exit 1; }
 
-usage() { sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,7p' "$self" | sed 's/^# \{0,1\}//'; }
 
 cmd="${1:-}"; [ $# -gt 0 ] && shift
 case "$cmd" in

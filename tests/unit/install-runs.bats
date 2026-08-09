@@ -331,5 +331,8 @@ setup() {
     [ -L "$HOME/.local/bin/works" ]
     # the verbs implement the command; they are not commands
     [ ! -e "$HOME/.local/bin/works-runtime" ]
+    # Through the link, which is the only way a person invokes it: $0 is then
+    # the link's path, and ../lib from there is not where the verbs live.
+    "$HOME/.local/bin/works" runtime path >/dev/null
     "$HOME/works/bin/works" runtime path >/dev/null
 }
