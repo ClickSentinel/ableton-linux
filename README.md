@@ -181,7 +181,7 @@ There are two common ways to install Windows plugins:
 
    ```bash
    WINEPREFIX="$HOME/works/plugs/studio" \
-     "$HOME/works/wine-d2d1-nspa-11.13/bin/wine" \
+     "$(works runtime path)/bin/wine" \
      "/path/to/PluginInstaller.exe"
    ```
 

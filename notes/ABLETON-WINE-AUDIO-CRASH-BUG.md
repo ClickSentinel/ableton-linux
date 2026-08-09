@@ -41,7 +41,7 @@ prefix:
 
 ```bash
 WINEPREFIX="$HOME/works/plugs/studio" \
-  "$HOME/works/wine-d2d1-nspa-11.13/bin/wine" reg delete \
+  "$(works runtime path)/bin/wine" reg delete \
   'HKLM\Software\Microsoft\Windows\CurrentVersion\MMDevices\Audio' /f
 ```
 

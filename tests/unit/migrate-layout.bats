@@ -450,3 +450,14 @@ a_prefix() {   # a_prefix <dir>
     [ "$status" -eq 1 ]
     [[ "$stderr$output" == *"4242"* ]] && [[ "$stderr$output" == *"wineserver"* ]]
 }
+
+# guards: the migration's source is a fact about the past. Derived from
+# works_home() it points inside ~/works, finds nothing, and every existing
+# install is orphaned rather than moved - silently, because "nothing to
+# migrate" and "migrated" look identical from the outside.
+@test "the legacy root names where installs actually are, not where they are going" {
+    [ "$(works_legacy_root)" = "$HOME/.local/opt/$(works_runtime_name)" ]
+    case "$(works_legacy_root)" in
+        "$(works_home)"/*) echo "legacy root moved with the store: $(works_legacy_root)" >&2; false ;;
+    esac
+}

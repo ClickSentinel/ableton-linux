@@ -23,6 +23,10 @@ APPS="$HOME/.local/share/applications"
 works_remove_runtimes
 rm -f  "$BIN"        && echo "removed $BIN"
 rm -f  "$BIN".rollback-*
+# The command lives in works/bin; ~/.local/bin holds only a link.
+rm -f  "$HOME/works/bin/works" "$HOME/works/lib/works-runtime"
+rmdir  "$HOME/works/bin" 2>/dev/null || true
+rm -f  "$HOME/.local/bin/works"
 # The commands themselves live in works/bin; ~/.local/bin holds only links.
 rmdir  "$HOME/works/bin" 2>/dev/null || true
        "$HOME/.local/bin/ableton-runtime" "$HOME/.local/bin/ableton-update"

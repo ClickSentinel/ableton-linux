@@ -316,6 +316,14 @@ ln -sfn "$HOME/works/apps/ableton-live/ableton-live" "$BIN/ableton-live"
 # from the kit, so the copies bought nothing. Clear out any left behind.
 rm -f "$BIN"/ableton-live.rollback-* 2>/dev/null || true
 
+# `works` acts on the runtime and the store, which no application owns, so it
+# sits in works/bin rather than in any app's directory. Its verbs go beside the
+# shared library: they implement the command, they are not commands themselves.
+mkdir -p "$HOME/works/bin"
+install -m755 "$here/works" "$HOME/works/bin/works"
+install -m755 "$here/works-runtime" "$HOME/works/lib/works-runtime"
+ln -sfn "$HOME/works/bin/works" "$BIN/works"
+
 echo "== install the shared toolkit -> ~/works/apps/ableton-live =="
 # The launcher sources these on every start (DPI auto-calibration, light/dark
 # theme sync, and crash-safe GNOME shortcut holding).

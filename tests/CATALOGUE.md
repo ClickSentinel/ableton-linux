@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-217 tests across 10 suites. See [README.md](README.md) for how to run
+239 tests across 11 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -20,7 +20,8 @@ for which run on a PR.
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/install-runs.bats](#install-runs) — 10 test(s)
-- [tests/unit/migrate-layout.bats](#migrate-layout) — 36 test(s)
+- [tests/unit/migrate-layout.bats](#migrate-layout) — 37 test(s)
+- [tests/unit/works-runtime.bats](#works-runtime) — 21 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 52 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 
@@ -334,6 +335,46 @@ a throwaway tree.
 | 34 | plug: an unreadable process entry is skipped, not fatal | — |
 | 35 | plug: an unreadable process entry says nothing on stderr | environ is mode 400 and gated by ptrace_may_access, so `[ -r ]` passes |
 | 36 | plug: the refusal names what is holding the prefix | — |
+| 37 | the legacy root names where installs actually are, not where they are going | the migration's source is a fact about the past. Derived from |
+
+<a id="works-runtime"></a>
+
+## tests/unit/works-runtime.bats
+
+
+scripts/works-runtime — choosing which build is live.
+
+The store made rollback possible and nothing exposed it: switching meant
+`ln -sfn` against a name you had to look up. These cover the two things that
+matter — that `use` refuses anything that is not a runtime you could actually
+launch, and that `path` answers on both layouts, because scripts and docs
+resolve through it instead of naming a directory.
+
+  ./tests/run.sh tests/unit/works-runtime.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | path answers on the flat layout | docs and scripts resolve through this instead of naming a directory, |
+| 2 | path honours an explicit pin | — |
+| 3 | list marks the live build | — |
+| 4 | list shows each build's path, abbreviated under home | the path is what people copy into a script, a bug report or a `cd`, |
+| 5 | list is newest first | names tie across nightlies, so ordering is by built-at |
+| 6 | list says so when there is no store yet | — |
+| 7 | list does not offer quarantined trees, but mentions them | set-aside trees are not builds you can choose, but their existence is |
+| 8 | use --previous picks the other build | — |
+| 9 | use --previous refuses when only one build is installed | — |
+| 10 | use refuses a name that is not installed | the channel is what the launcher resolves through — pointing it at |
+| 11 | use refuses a directory with no readable BUILD-INFO | — |
+| 12 | use refuses an entry with no wine binary | — |
+| 13 | use refuses when there is no store | — |
+| 14 | list shows the Wine base each build carries | — |
+| 15 | use is silent when the base is unchanged | — |
+| 16 | use refuses a base change with no terminal to ask on | the prefix cannot be taken back, so this must not happen quietly |
+| 17 | use --force accepts a base change deliberately | — |
+| 18 | a downgrade is named as a downgrade | forward Wine supports, backward it does not - the wording has to differ |
+| 19 | use with no argument refuses when there is no terminal | a script calling `use` with no argument must fail, not block forever |
+| 20 | list: a nightly id does not crowd the WINE column | the BUILD column was exactly as wide as a nightly id -- |
+| 21 | use accepts a nightly build by its full name | the id contains dots and a plus, so anything treating it as a pattern |
 
 <a id="runtime-env"></a>
 
@@ -451,6 +492,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
 | `a label is a suffix on the release form, not a licence to accept any` | runtime-env: tarball predicate: a labelled debug tree is still refused |
 | `a pinned prefix is a deliberate choice` | migrate-layout: plug: an explicit WORKS_PLUG is left alone |
+| `a script calling `use` with no argument must fail, not block forever` | works-runtime: use with no argument refuses when there is no terminal |
 | `a stale exported WORKS_RUNTIME from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
 | `an existing flat install is what nearly every user has` | install-runs: a flat install is migrated by the installer, not just by the library |
 | `an install that predates the migration must still resolve and launch` | runtime-env: runtime root: falls back to the legacy path before migrating |
@@ -462,8 +504,10 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `commit f0fc05e` | detect-scale: cosmic probe: a disabled lid never wins when it is marked non-primary<br>detect-scale: cosmic probe: a disabled lid never wins, even with no primary line |
 | `commit f84eaa4` | repo-hygiene: runtime name: every live file agrees on one wine-d2d1-nspa version |
 | `dated rollbacks are the reason the store exists` | migrate-layout: dated rollbacks are renamed by the build they hold |
+| `docs and scripts resolve through this instead of naming a directory,` | works-runtime: path answers on the flat layout |
 | `environ is mode 400 and gated by ptrace_may_access, so `[ -r ]` passes` | migrate-layout: plug: an unreadable process entry says nothing on stderr |
 | `every runtime installed anywhere today predates source-commit` | runtime-env: runtime id: the patch-stack fallback still works with a kind |
+| `forward Wine supports, backward it does not - the wording has to differ` | works-runtime: a downgrade is named as a downgrade |
 | `install.sh aborting on its own first lines, which no resolver test can` | install-runs: install.sh gets past its own initialisation |
 | `issue #106` | repo-hygiene: desktop entries validate after substitution |
 | `issue #32` | launcher: gray text: the blend is 45% towards MenuText, per channel, not symmetric |
@@ -473,6 +517,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
 | `make-installer accepted WORKS_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
 | `names tie across every nightly between two releases, so ordering on` | migrate-layout: retention orders by built-at, not by the name |
+| `names tie across nightlies, so ordering is by built-at` | works-runtime: list is newest first |
 | `no released runtime carries source-commit` | runtime-env: a runtime without source-commit is named from its patch stack |
 | `nothing is left behind for an older .run to overwrite, and a migrated` | migrate-layout: nothing remains at the legacy path |
 | `observed during the first real migration` | runtime-env: live pids: a process that exits mid-scan is skipped, not an error |
@@ -484,16 +529,23 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `scripts/detect-scale.sh DPI policy` | detect-scale: block map: gnome scales collapse onto the ceil-based matched set<br>detect-scale: block map: non-gnome scales round to plain LogPixels with no IFEO |
 | `scripts/detect-theme.sh` | detect-theme: newest prefs dir: mtime wins, not a version sort<br>detect-theme: newest prefs dir: the sort -V trap case, stated explicitly |
 | `scripts/setup-run-header.sh line 19` | repo-hygiene: the installer header survives being run by a real POSIX sh |
+| `set-aside trees are not builds you can choose, but their existence is` | works-runtime: list does not offer quarantined trees, but mentions them |
 | `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | runtime-env: the runtime wins over a debug tree sitting beside it |
+| `the BUILD column was exactly as wide as a nightly id --` | works-runtime: list: a nightly id does not crowd the WINE column |
 | `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
+| `the channel is what the launcher resolves through` | works-runtime: use refuses a name that is not installed |
 | `the container sees only what build.sh passes with -e, and an unset` | repo-hygiene: build.sh forwards every variable container-build.sh reads from its environment |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
 | `the guard must not block the .run, where install.sh has already` | install-runs: setup-prefix gets past the guard when nothing is running |
 | `the id becomes a directory name, and a BUILD-INFO is just text in a tarball` | runtime-env: a BUILD-INFO carrying path traversal is refused, not turned into a path |
+| `the id contains dots and a plus, so anything treating it as a pattern` | works-runtime: use accepts a nightly build by its full name |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
+| `the migration's source is a fact about the past. Derived from` | migrate-layout: the legacy root names where installs actually are, not where they are going |
+| `the path is what people copy into a script, a bug report or a `cd`,` | works-runtime: list shows each build's path, abbreviated under home |
+| `the prefix cannot be taken back, so this must not happen quietly` | works-runtime: use refuses a base change with no terminal to ask on |
 | `the prefix is the one thing here that cannot be re-downloaded` | migrate-layout: plug: the contents survive the move intact |
 | `the promote step and its dated rollback, which is where the store's` | install-runs: a second install promotes and leaves the previous runtime behind |
 | `the refusal must not depend on a terminal -- an unattended run is` | install-runs: setup-prefix refuses with no terminal too |
