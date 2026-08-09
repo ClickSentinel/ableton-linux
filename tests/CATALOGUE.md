@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-257 tests across 11 suites. See [README.md](README.md) for how to run
+303 tests across 13 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -22,6 +22,8 @@ for which run on a PR.
 - [tests/unit/install-runs.bats](#install-runs) — 15 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 37 test(s)
 - [tests/unit/works-runtime.bats](#works-runtime) — 24 test(s)
+- [tests/unit/works-update.bats](#works-update) — 27 test(s)
+- [tests/unit/manifest.bats](#manifest) — 19 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 62 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 
@@ -384,6 +386,92 @@ resolve through it instead of naming a directory.
 | 23 | use retargets the channel | — |
 | 24 | use with no argument leaves the channel alone | — |
 
+<a id="works-update"></a>
+
+## tests/unit/works-update.bats
+
+
+scripts/works-update — deciding whether to replace the runtime.
+
+Everything the updater does before it downloads is a refusal: same build,
+unknown channel, incomplete manifest, a Wine base it cannot take a Wire back
+across, a runtime something is still running from. Those refusals are the
+feature — the download is the easy part — so this file is mostly about them.
+
+Nothing here reaches the network. WORKS_MANIFEST_URL points curl at a
+file:// URL, which is the same code path a real channel takes.
+
+  ./tests/run.sh tests/unit/works-update.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | the same build is recognised, and nothing happens | — |
+| 2 | a new build with the same version is still an update | the version string is identical across every nightly between releases, |
+| 3 | --check installs nothing | — |
+| 4 | a channel switch to a build already in the store downloads nothing | — |
+| 5 | switching channel records the choice | — |
+| 6 | switching channel leaves the other channel where it was | a switch must move the channel it names, and only that one |
+| 7 | --check does not move a channel even when the build is present | --check is a question, and asking it must not answer it |
+| 8 | an unknown channel is refused before any fetch | a channel names a symlink and selects a URL; it is user configuration |
+| 9 | --channel with nothing after it is refused, and says so | an empty value must not silently mean "the channel you are on" — a |
+| 10 | an unknown option is refused | — |
+| 11 | a manifest that cannot be fetched is an error, not an update | — |
+| 12 | an incomplete manifest is refused | a half-read manifest cannot answer "is this newer" or "does this |
+| 13 | a Wine base change is refused | a Wire is bound to its base by .update-timestamp and cannot be taken |
+| 14 | --yes does not override a Wine base change | — |
+| 15 | it refuses while something is running from the runtime | replacing the tree under a running Live is how a session is lost |
+| 16 | with no terminal to ask on it stops rather than assuming yes | an unattended run must not hang waiting on a prompt nobody can answer |
+| 17 | a checksum mismatch stops the install | the checksum is the only thing making the manifest's URL trustworthy |
+| 18 | a matching checksum reaches the installer | — |
+| 19 | the installer is fetched from beside the manifest | releases move, and the manifest must stay the thing that locates the |
+| 20 | a downgrade is named as one | — |
+| 21 | a machine with nothing installed is offered the build | — |
+| 22 | --help says what it does without touching anything | — |
+| 23 | a build with the same timestamp is not called older | two builds can share a timestamp -- the same build published on two |
+| 24 | a genuinely older build is still called older | — |
+| 25 | both sides of the report are ids, not one id and one version | reporting the channel's bare version against the installed id put a |
+| 26 | a release is reported without a kind | a release has no kind, and must not grow one |
+| 27 | the report's columns line up between available and installed | the two ids differ in length by design -- a nightly carries its kind -- |
+
+<a id="manifest"></a>
+
+## tests/unit/manifest.bats
+
+
+scripts/runtime-env.sh — the channel manifest.
+
+A channel publishes one document saying what it points at. Everything before
+this re-derived that by parsing artifact filenames, which is the single
+decision behind the selector defect, the packing defect and the update prompt
+having nothing to compare.
+
+The writer and the reader live in the same file on purpose, and these tests
+round-trip them: a manifest this repo writes must be one this repo accepts.
+
+  ./tests/run.sh tests/unit/manifest.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | a manifest this repo writes is one it accepts | — |
+| 2 | every field survives the round trip | — |
+| 3 | the source commit is carried, not truncated | the updater compares source-commit to decide "do I already have this" |
+| 4 | writing refuses a tree with no BUILD-INFO | — |
+| 5 | a manifest missing built-at is refused | — |
+| 6 | a manifest missing the checksum is refused | — |
+| 7 | a missing manifest is refused, not treated as empty | — |
+| 8 | an installer name containing a path is refused | the installer name becomes both a URL component and a filename |
+| 9 | an installer name that is a URL is refused | — |
+| 10 | each channel has a manifest URL | — |
+| 11 | an unknown channel resolves no URL at all | the channel is user configuration and must never choose a host |
+| 12 | the manifest URL follows the configured channel | — |
+| 13 | an override wins, for testing against a local file | — |
+| 14 | the installer URL is resolved beside the manifest | moving a release must not strand the installer it names |
+| 15 | the runtime's BUILD-INFO is read straight out of a tarball | the updater compares the manifest's source-commit against |
+| 16 | a tarball that is not there is an error, not an empty BUILD-INFO | — |
+| 17 | a BUILD-INFO with no source-commit produces a manifest that is refused | this is the exact shape that made the first stable manifest invalid |
+| 18 | no channel resolves to a fork | a fork is where nightlies are tested, and the shipped default pointing |
+| 19 | stable resolves through latest, nightly through its own tag | /releases/latest/ excludes prereleases, which is what keeps the nightly |
+
 <a id="runtime-env"></a>
 
 ## tests/unit/runtime-env.bats
@@ -500,22 +588,32 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 
 | Reference | Tests |
 | --- | --- |
+| `--check is a question, and asking it must not answer it` | works-update: --check does not move a channel even when the build is present |
 | `.bats-core is a full clone of another project; run.sh's comment said it` | repo-hygiene: the vendored bats clone is ignored |
+| `/releases/latest/ excludes prereleases, which is what keeps the nightly` | manifest: stable resolves through latest, nightly through its own tag |
 | `11.11 and 11.14 trees coexist on the development machine and are not` | migrate-layout: runtimes from other Wine bases are left alone |
 | `2026.07.29.1 appears four times on the dev machine under two patch stacks` | runtime-env: two builds of one version under different patch stacks get different ids |
 | ``wineboot -u` rewriting the registry under a live wineserver` | install-runs: setup-prefix refuses while something runs from the runtime |
+| `a Wire is bound to its base by .update-timestamp and cannot be taken` | works-update: a Wine base change is refused |
 | `a bats on PATH used to beat the pin, so a checkout ran whatever the` | repo-hygiene: CI runs the bats tests/run.sh pins, not one of its own |
+| `a channel names a symlink and selects a URL; it is user configuration` | works-update: an unknown channel is refused before any fetch |
 | `a channel pointing at a pruned entry is a broken install produced by` | migrate-layout: retention leaves set-aside trees alone; they are not entries |
 | `a dangling channel must not resolve to nothing and strand the launcher` | runtime-env: runtime root: a dangling channel falls back rather than resolving empty |
 | `a debug tree rolled back by the selector bug has no dist-version at` | migrate-layout: a rollback that cannot be named moves aside instead of blocking |
+| `a fork is where nightlies are tested, and the shipped default pointing` | manifest: no channel resolves to a fork |
+| `a half-read manifest cannot answer "is this newer" or "does this` | works-update: an incomplete manifest is refused |
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
 | `a label is a suffix on the release form, not a licence to accept any` | runtime-env: tarball predicate: a labelled debug tree is still refused |
 | `a pinned prefix is a deliberate choice` | migrate-layout: plug: an explicit WORKS_PLUG is left alone |
+| `a release has no kind, and must not grow one` | works-update: a release is reported without a kind |
 | `a script calling `use` with no argument must fail, not block forever` | works-runtime: use with no argument refuses when there is no terminal |
 | `a stale exported WORKS_RUNTIME from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
+| `a switch must move the channel it names, and only that one` | works-update: switching channel leaves the other channel where it was |
+| `an empty value must not silently mean "the channel you are on"` | works-update: --channel with nothing after it is refused, and says so |
 | `an existing flat install is what nearly every user has` | install-runs: a flat install is migrated by the installer, not just by the library |
 | `an install that predates the migration must still resolve and launch` | runtime-env: runtime root: falls back to the legacy path before migrating |
 | `an older .run over a migrated install writes a flat tree at the legacy` | migrate-layout: an older installer's tree beside a migrated one is adopted when newer |
+| `an unattended run must not hang waiting on a prompt nobody can answer` | works-update: with no terminal to ask on it stops rather than assuming yes |
 | `bin/ and lib/ with no share/` | runtime-env: tarball predicate: a debug tree is refused |
 | `both in one directory is the nightly builder's own dist/, and the` | runtime-env: tarball selector: the plain release wins over a labelled one beside it |
 | `build-kind becomes a directory name like everything else in the id` | runtime-env: runtime id: a kind with a path separator is refused, not sanitised |
@@ -535,6 +633,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `licence GPLv2+` | packaging: the kit ships the GPL source and licence Ableton Link requires |
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
 | `make-installer accepted WORKS_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
+| `moving a release must not strand the installer it names` | manifest: the installer URL is resolved beside the manifest |
 | `names tie across every nightly between two releases, so ordering on` | migrate-layout: retention orders by built-at, not by the name |
 | `names tie across nightlies, so ordering is by built-at` | works-runtime: list is newest first |
 | `no released runtime carries source-commit` | runtime-env: a runtime without source-commit is named from its patch stack |
@@ -542,7 +641,10 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `observed during the first real migration` | runtime-env: live pids: a process that exits mid-scan is skipped, not an error |
 | `one dated copy per install, on the PATH, pruned by nothing` | install-runs: the channel stays a symlink across a second install |
 | `pruning on behalf of one channel must not strand another` | runtime-env: retention never removes what a DIFFERENT channel points at |
+| `releases move, and the manifest must stay the thing that locates the` | works-update: the installer is fetched from beside the manifest |
 | `renaming a prefix out from under a live wineserver corrupts its` | migrate-layout: plug: a prefix something is running from is not moved |
+| `replacing the tree under a running Live is how a session is lost` | works-update: it refuses while something is running from the runtime |
+| `reporting the channel's bare version against the installed id put a` | works-update: both sides of the report are ids, not one id and one version |
 | `scoping` | runtime-env: runtime pids: a process from another Wine install is ignored |
 | `scripts/ableton-live` | launcher-cli: a stale wineserver is killed and the session booted before registry writes<br>launcher: windowmetrics: a value wrapped across continuation lines is rejoined |
 | `scripts/build-audit.sh` | patch-stack: audit: every wine patch is registered in FINGERPRINTS or STAMP_ONLY |
@@ -556,7 +658,9 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | runtime-env: the runtime wins over a debug tree sitting beside it |
 | `the BUILD column was exactly as wide as a nightly id --` | works-runtime: list: a nightly id does not crowd the WINE column |
 | `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
+| `the channel is user configuration and must never choose a host` | manifest: an unknown channel resolves no URL at all |
 | `the channel is what the launcher resolves through` | works-runtime: use refuses a name that is not installed |
+| `the checksum is the only thing making the manifest's URL trustworthy` | works-update: a checksum mismatch stops the install |
 | `the container sees only what build.sh passes with -e, and an unset` | repo-hygiene: build.sh forwards every variable container-build.sh reads from its environment |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
@@ -564,6 +668,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the guard must not block the .run, where install.sh has already` | install-runs: setup-prefix gets past the guard when nothing is running |
 | `the id becomes a directory name, and a BUILD-INFO is just text in a tarball` | runtime-env: a BUILD-INFO carrying path traversal is refused, not turned into a path |
 | `the id contains dots and a plus, so anything treating it as a pattern` | works-runtime: use accepts a nightly build by its full name |
+| `the installer name becomes both a URL component and a filename` | manifest: an installer name containing a path is refused |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
 | `the migration's source is a fact about the past. Derived from` | migrate-layout: the legacy root names where installs actually are, not where they are going |
 | `the path is what people copy into a script, a bug report or a `cd`,` | works-runtime: list shows each build's path, abbreviated under home |
@@ -576,8 +681,14 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the same resolution a running process reports, so the two can be` | runtime-env: runtime root: matches what /proc would report for a process under it |
 | `the same-day counter must not be read as a date component` | runtime-env: tarball predicate: a partial download is refused |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
+| `the two ids differ in length by design -- a nightly carries its kind --` | works-update: the report's columns line up between available and installed |
+| `the updater compares source-commit to decide "do I already have this"` | manifest: the source commit is carried, not truncated |
+| `the updater compares the manifest's source-commit against` | manifest: the runtime's BUILD-INFO is read straight out of a tarball |
+| `the version string is identical across every nightly between releases,` | works-update: a new build with the same version is still an update |
 | `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
+| `this is the exact shape that made the first stable manifest invalid` | manifest: a BUILD-INFO with no source-commit produces a manifest that is refused |
 | `this is the only runtime artifact the nightly channel publishes, so` | runtime-env: tarball predicate: a nightly label is accepted |
 | `this is the whole point -- the directory name answers "when"` | runtime-env: runtime id: dates order correctly across both channels |
+| `two builds can share a timestamp -- the same build published on two` | works-update: a build with the same timestamp is not called older |
 | `two installs of one build collapse to one entry, and the loser is set` | migrate-layout: two rollbacks holding one build keep one and set the rest aside |
 | `two prefixes can hold different Lives and different authorisations` | migrate-layout: plug: a prefix at both paths refuses, naming both |

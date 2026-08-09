@@ -340,6 +340,7 @@ rm -f "$BIN"/ableton-live.rollback-* 2>/dev/null || true
 mkdir -p "$HOME/works/bin"
 install -m755 "$here/works" "$HOME/works/bin/works"
 install -m755 "$here/works-runtime" "$HOME/works/lib/works-runtime"
+install -m755 "$here/works-update" "$HOME/works/lib/works-update"
 ln -sfn "$HOME/works/bin/works" "$BIN/works"
 
 echo "== install the shared toolkit -> ~/works/apps/ableton-live =="

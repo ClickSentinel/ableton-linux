@@ -25,7 +25,7 @@ rm -f "$(works_channel_file)" 2>/dev/null || true
 rm -f  "$BIN"        && echo "removed $BIN"
 rm -f  "$BIN".rollback-*
 # The command lives in works/bin; ~/.local/bin holds only a link.
-rm -f  "$HOME/works/bin/works" "$HOME/works/lib/works-runtime"
+rm -f  "$HOME/works/bin/works" "$HOME/works/lib/works-runtime" "$HOME/works/lib/works-update"
 rmdir  "$HOME/works/bin" 2>/dev/null || true
 # The command lives in works/bin; ~/.local/bin holds only a link. The two
 # commands this replaced are removed too, from an installer that predates it.
