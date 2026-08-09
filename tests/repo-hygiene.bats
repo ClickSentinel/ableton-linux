@@ -251,3 +251,18 @@ all_shell_files() {
     run git -C "$REPO" check-ignore -q .bats-core
     [ "$status" -eq 0 ] || { echo ".bats-core is not gitignored" >&2; false; }
 }
+
+# guards: the container sees only what build.sh passes with -e, and an unset
+# variable there is not an error - container-build.sh falls back to VERSION and
+# stamps every nightly with the release's number instead of its own date. The
+# rename broke this and a clean merge restored the broken form; nothing failed,
+# which is the whole problem.
+@test "build.sh forwards every variable container-build.sh reads from its environment" {
+    cd "$REPO"
+    missing=""
+    while read -r var; do
+        [ -n "$var" ] || continue
+        grep -q -- "-e \"$var=" build.sh || missing="$missing $var"
+    done < <(grep -oE '\$\{WORKS_[A-Z_]+:-' scripts/container-build.sh | sed 's/^\${//; s/:-$//' | sort -u)
+    [ -z "$missing" ] || { echo "container-build.sh reads these; build.sh passes none of them:$missing" >&2; false; }
+}

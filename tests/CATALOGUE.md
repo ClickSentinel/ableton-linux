@@ -7,13 +7,13 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-323 tests across 14 suites. See [README.md](README.md) for how to run
+324 tests across 14 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
 ## Contents
 
-- [tests/repo-hygiene.bats](#repo-hygiene) — 16 test(s)
+- [tests/repo-hygiene.bats](#repo-hygiene) — 17 test(s)
 - [tests/packaging.bats](#packaging) — 10 test(s)
 - [tests/launcher-cli.bats](#launcher-cli) — 19 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
@@ -56,6 +56,7 @@ that should run on *every* push, unfiltered by paths.
 | 14 | every icon an installed desktop entry names is actually shipped | — |
 | 15 | CI runs the bats tests/run.sh pins, not one of its own | a bats on PATH used to beat the pin, so a checkout ran whatever the |
 | 16 | the vendored bats clone is ignored | .bats-core is a full clone of another project; run.sh's comment said it |
+| 17 | build.sh forwards every variable container-build.sh reads from its environment | the container sees only what build.sh passes with -e, and an unset |
 
 <a id="packaging"></a>
 
@@ -702,6 +703,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the channel is user configuration and must never choose a host` | manifest: an unknown channel resolves no URL at all |
 | `the channel is what the launcher resolves through` | works-runtime: use refuses a name that is not installed |
 | `the checksum is the only thing making the manifest's URL trustworthy` | works-update: a checksum mismatch stops the install |
+| `the container sees only what build.sh passes with -e, and an unset` | repo-hygiene: build.sh forwards every variable container-build.sh reads from its environment |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
