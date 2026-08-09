@@ -4,6 +4,7 @@
 #   works runtime list          every installed build, newest first
 #   works runtime path          the runtime root, for scripts and docs
 #   works runtime use           choose from a numbered list
+#   works runtime stop [-y]     stop everything running from the runtime or a Plug
 #   works runtime use <name>    point the channel at a different build
 #   works runtime use --previous
 #   works runtime use <name> --force   accept a Wine base change unattended
@@ -110,6 +111,51 @@ cmd_list() {
     [ "$aside" -eq 0 ] || echo "  ($aside set-aside director$([ "$aside" = 1 ] && echo y || echo ies) not shown; nothing was deleted)"
 }
 
+# Stop everything Works is running. install.sh does this internally before it
+# replaces a runtime; this is the same thing a person can reach, because the
+# refusals that send them here say "close it" about processes with no window to
+# close - Wine's services.exe and rpcss.exe outlive Live and hold the prefix.
+# shellcheck disable=SC2120  # -y is optional and passed by the dispatcher
+cmd_stop() {
+    local pids n ans
+    pids="$(works_all_pids | sort -un)"
+    [ -n "$pids" ] || { echo "Nothing is running from the runtime or any Plug."; return 0; }
+    n="$(printf '%s\n' "$pids" | grep -c .)"
+
+    # Live is the one thing here with unsaved work to lose, so it is the one
+    # thing worth asking about - the same consent install.sh takes before it
+    # force-closes, for the same reason. Everything else is Wine's own services,
+    # which have nothing to save. No terminal means nobody can answer, so stop
+    # rather than assume; -y is how a script says it meant it.
+    if [ -n "$(ableton_live_pids 2>/dev/null)" ] && [ "${1:-}" != "-y" ] && [ "${1:-}" != "--yes" ]; then
+        if { : >/dev/tty; } 2>/dev/null; then
+            echo "!! Ableton Live is running. Stopping it discards unsaved work." >&2
+            printf "Stop it anyway? [y/N] " > /dev/tty
+            ans=""
+            read -r ans < /dev/tty || true
+            case "$ans" in [yY]|[yY][eE][sS]) ;; *) echo "Nothing was stopped."; return 1 ;; esac
+        else
+            echo "!! Live is running and there is no terminal to confirm on; pass -y if you mean it" >&2
+            return 1
+        fi
+    fi
+    echo "Stopping $n process(es)."
+    printf '%s\n' "$pids" | xargs -r kill 2>/dev/null || true
+    for _ in $(seq 1 10); do
+        [ -n "$(works_all_pids | sort -un)" ] || { echo "Stopped."; return 0; }
+        sleep 0.5
+    done
+    # Wine's own services do not answer TERM once their server is gone.
+    works_all_pids | sort -un | xargs -r kill -9 2>/dev/null || true
+    sleep 1
+    if [ -n "$(works_all_pids | sort -un)" ]; then
+        echo "!! still running after SIGKILL:" >&2
+        works_all_pids | sort -un | sed 's/^/     /' >&2
+        return 1
+    fi
+    echo "Stopped."
+}
+
 # Pick from a numbered list. Only when there is a terminal to ask on - a script
 # that runs `use` with no argument should fail loudly, not block forever.
 cmd_pick() {
@@ -202,6 +248,7 @@ cmd_use() {
 
 case "${1:-list}" in
     list|ls)        cmd_list ;;
+    stop)           cmd_stop ;;
     path|root)      cmd_path ;;
     use|switch)     shift
                     if [ -z "${1:-}" ]; then cmd_pick

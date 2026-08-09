@@ -414,6 +414,21 @@ works_plug_busy() {
     return 1
 }
 
+# Every pid Works is running, from either direction. The two scans genuinely
+# differ: the runtime scan resolves /proc/PID/exe, so it cannot see a process
+# whose runtime directory has since been removed, and the Plug scan reads
+# WINEPREFIX out of the environment, so it finds exactly those orphans. Wine
+# leaves services.exe, rpcss.exe and friends behind under names no `pkill
+# wineserver` will ever match, and they hold the prefix until something asks.
+works_all_pids() {
+    local _p _d
+    works_runtime_pids 2>/dev/null || true
+    for _d in "$(works_home)"/plugs/*/ "$HOME/.wine-ableton"; do
+        [ -d "$_d" ] || continue
+        works_plug_holders "${_d%/}" 2>/dev/null | awk '{print $1}'
+    done
+}
+
 # What is holding it, for a refusal that can be acted on rather than puzzled at.
 works_plug_holders() {
     local _plug _p _cmd
@@ -449,7 +464,7 @@ works_migrate_plug() {
     # bare wine pointed at the prefix.
     if works_plug_busy "$legacy"; then
         echo "!! something is still running from $legacy, so moving it now would" \
-             "corrupt its registry. Close it and rerun:" >&2
+             "corrupt its registry. Close it, or run \`works stop\`, then rerun:" >&2
         works_plug_holders "$legacy" | sed 's/^/     /' >&2
         return 1
     fi
