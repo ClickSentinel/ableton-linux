@@ -47,7 +47,7 @@ Wine runtime and prefix:
 
 ```bash
 WINEPREFIX="$HOME/works/plugs/studio" \
-  "$HOME/works/wine-d2d1-nspa-11.13/bin/wine" \
+  "$(works runtime path)/bin/wine" \
   ./tools/webviewclose.exe e \
   'C:\ProgramData\Ableton\Live 12 Suite\Program\WebView2Loader.dll'
 ```
