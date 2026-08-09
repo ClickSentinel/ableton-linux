@@ -16,8 +16,8 @@
 # shell to the runtime is opt-in, because only the launchers want it.
 #
 #   . "$here/runtime-env.sh"
-#   WINE_ROOT="$(ableton_wine_root)"           # just the path
-#   ableton_bind_runtime                       # the full launcher binding
+#   WINE_ROOT="$(works_runtime_path)"           # just the path
+#   works_bind_runtime                       # the full launcher binding
 
 # Names this library answered to before the runtime was its own thing. They are
 # honoured for one release and say so once, because the rename lands in the same
@@ -30,14 +30,14 @@
 works_env_compat() {
     local _pair _old _new
     for _pair in \
-        ABLETON_WINE_ROOT:ABLETON_WINE_ROOT \
-        ABLETON_WINEPREFIX:ABLETON_WINEPREFIX \
-        ABLETON_OPT_DIR:ABLETON_OPT_DIR \
-        ABLETON_RUNTIME_KEEP:ABLETON_RUNTIME_KEEP \
-        ABLETON_RUNTIME_TARBALL:ABLETON_RUNTIME_TARBALL \
-        ABLETON_CHANNEL:ABLETON_CHANNEL \
-        ABLETON_CHANNEL_FILE:ABLETON_CHANNEL_FILE \
-        ABLETON_MANIFEST_URL:ABLETON_MANIFEST_URL
+        WORKS_RUNTIME:WORKS_RUNTIME \
+        WORKS_PLUG:WORKS_PLUG \
+        WORKS_HOME:WORKS_HOME \
+        WORKS_RUNTIME_KEEP:WORKS_RUNTIME_KEEP \
+        WORKS_RUNTIME_TARBALL:WORKS_RUNTIME_TARBALL \
+        WORKS_CHANNEL:WORKS_CHANNEL \
+        WORKS_CHANNEL_FILE:WORKS_CHANNEL_FILE \
+        WORKS_MANIFEST_URL:WORKS_MANIFEST_URL
     do
         _old="${_pair%%:*}"; _new="${_pair##*:}"
         # The new name always wins: someone setting both has migrated and left
@@ -50,13 +50,13 @@ works_env_compat() {
 works_env_compat
 
 # The directory installs live under. A seam for the tests; nothing else sets it.
-ableton_opt_dir() {
-    printf '%s\n' "${ABLETON_OPT_DIR:-$HOME/.local/opt}"
+works_home() {
+    printf '%s\n' "${WORKS_HOME:-$HOME/works}"
 }
 
 # The runtime's build name. It carries the Wine version because the artifact
 # does: a tarball identifies which build it is.
-ableton_runtime_name() {
+works_runtime_name() {
     printf '%s\n' "wine-d2d1-nspa-11.13"
 }
 
@@ -68,21 +68,21 @@ ableton_runtime_name() {
 # writer that spell this differently disagree silently until an update goes to
 # the wrong channel.
 works_channel_file() {
-    printf '%s\n' "${ABLETON_CHANNEL_FILE:-$(ableton_container_root)/.channel}"
+    printf '%s\n' "${WORKS_CHANNEL_FILE:-$(works_runtime_store)/.channel}"
 }
 
 # The directory holding every installed runtime, one per build.
-ableton_container_root() {
-    printf '%s\n' "$(ableton_opt_dir)/ableton-wine"
+works_runtime_store() {
+    printf '%s\n' "$(works_home)/runtimes"
 }
 
 # The pre-container install path. Carries the Wine version, which is exactly why
 # it is being retired: a base bump moved every user's directory.
 works_legacy_root() {
-    printf '%s\n' "$HOME/.local/opt/$(ableton_runtime_name)"
+    printf '%s\n' "$HOME/works/$(works_runtime_name)"
 }
 
-# The installed runtime. ABLETON_WINE_ROOT overrides it — the tests, the
+# The installed runtime. WORKS_RUNTIME overrides it — the tests, the
 # regression VMs and anyone bisecting a build rely on that, so it stays the
 # outermost say.
 #
@@ -91,7 +91,7 @@ works_legacy_root() {
 #
 # /proc/PID/exe reports a path with symlinks already resolved, so a process
 # launched through <container>/stable/bin/wine appears under the build's own
-# name. Compare against the channel and ableton_runtime_pids matches nothing:
+# name. Compare against the channel and works_runtime_pids matches nothing:
 # the confirmation before force-closing Live never fires, the targeted kills
 # reach nothing, and only the pgrep fallback PR #120 added the scan to replace
 # still works — while install.sh goes on to rename the directory.
@@ -99,13 +99,13 @@ works_legacy_root() {
 # And a caller that resolved once keeps the build it resolved. A channel switch
 # part-way through a session cannot move the runtime under a process already
 # executing from it.
-ableton_wine_root() {
+works_runtime_path() {
     local _chan _target
-    if [ -n "${ABLETON_WINE_ROOT:-}" ]; then
-        printf '%s\n' "$ABLETON_WINE_ROOT"
+    if [ -n "${WORKS_RUNTIME:-}" ]; then
+        printf '%s\n' "$WORKS_RUNTIME"
         return
     fi
-    _chan="$(ableton_container_root)/stable"
+    _chan="$(works_runtime_store)/stable"
     if [ -e "$_chan" ]; then
         _target="$(readlink -f "$_chan" 2>/dev/null || true)"
         if [ -n "$_target" ]; then
@@ -120,8 +120,8 @@ ableton_wine_root() {
 
 # The Ableton prefix. Separate from the runtime on purpose: a channel switch
 # would change both, but a test or a clone changes only this one.
-ableton_wine_prefix() {
-    printf '%s\n' "${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}"
+works_plug_path() {
+    printf '%s\n' "${WORKS_PLUG:-$(works_home)/plugs/studio}"
 }
 
 # Bind this shell to the runtime: drop inherited Wine settings that would reach
@@ -132,10 +132,10 @@ ableton_wine_prefix() {
 # at its own call site: folding them in here would silently start dropping a
 # user's WINEESYNC on every launch, which is a behaviour change wearing a
 # refactor's clothes.
-ableton_bind_runtime() {
+works_bind_runtime() {
     unset WINELOADER WINEDLLPATH WINEDLLOVERRIDES WINEARCH
-    WINE_ROOT="$(ableton_wine_root)"
-    WINEPREFIX="$(ableton_wine_prefix)"
+    WINE_ROOT="$(works_runtime_path)"
+    WINEPREFIX="$(works_plug_path)"
     WINESERVER="$WINE_ROOT/bin/wineserver"
     PATH="$WINE_ROOT/bin:$PATH"
     export WINEPREFIX WINESERVER PATH
@@ -160,9 +160,9 @@ ableton_bind_runtime() {
 # nightly channel publishes <name>-<version>+nightly.<sha>.tar.zst, and refusing
 # that meant the one artifact a nightly actually ships could not be packed or
 # installed. `-debug` stays refused — that is a different tree, not a label.
-ableton_is_runtime_tarball() {
+works_is_runtime_tarball() {
     local _b="${1##*/}" _nm _re
-    _nm="$(ableton_runtime_name)"
+    _nm="$(works_runtime_name)"
     _re="^${_nm//./\\.}-[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]+(\\+[A-Za-z0-9][A-Za-z0-9.]*)?\\.tar\\.zst\$"
     [[ "$_b" =~ $_re ]]
 }
@@ -176,14 +176,14 @@ ableton_is_runtime_tarball() {
 # release, because `sort -V` orders `2026.08.04.1+nightly.bf76bb2` *after*
 # `2026.08.04.1` — so a directory holding a release and a nightly would hand
 # back the nightly, which is the same way round the `-debug` defect went. A
-# labelled build is opt-in, and ABLETON_RUNTIME_TARBALL is how you opt in.
-ableton_pick_tarball() {
+# labelled build is opt-in, and WORKS_RUNTIME_TARBALL is how you opt in.
+works_pick_tarball() {
     local _dir="$1" _nm _f
-    _nm="$(ableton_runtime_name)"
+    _nm="$(works_runtime_name)"
     local -a _found=() _labelled=()
     for _f in "$_dir"/"$_nm"-*.tar.zst; do
         [ -e "$_f" ] || continue          # no match: the glob came back literal
-        ableton_is_runtime_tarball "$_f" || continue
+        works_is_runtime_tarball "$_f" || continue
         case "${_f##*/}" in
             *+*) _labelled+=("$_f") ;;
             *)   _found+=("$_f") ;;
@@ -199,8 +199,8 @@ ableton_pick_tarball() {
 # The process table to read. Only the tests set this, pointing it at a fixture
 # tree of fake exe symlinks; /proc cannot be stubbed through PATH the way pgrep
 # can, so without a seam the accurate implementation is the untestable one.
-ableton_proc_root() {
-    printf '%s\n' "${ABLETON_PROC_ROOT:-/proc}"
+works_proc_root() {
+    printf '%s\n' "${WORKS_PROC_ROOT:-/proc}"
 }
 
 # Every pid whose binary lives under the runtime. From PR #120, which found the
@@ -210,10 +210,10 @@ ableton_proc_root() {
 # The exe link is the real binary — bin/wineserver, or the wine-preloader every
 # in-prefix process runs from — so the match is exact and scoped to this
 # runtime rather than any Wine on the machine.
-ableton_runtime_pids() {
+works_runtime_pids() {
     local proc root d
-    root="$(ableton_wine_root)"
-    proc="$(ableton_proc_root)"
+    root="$(works_runtime_path)"
+    proc="$(works_proc_root)"
     for d in "$proc"/[0-9]*; do
         case "$(readlink "$d/exe" 2>/dev/null)" in
             "$root"/*) printf '%s\n' "${d##*/}" ;;
@@ -224,8 +224,8 @@ ableton_runtime_pids() {
 # Anything at all using the runtime: the predicate to ask before replacing its
 # files. The name match stays as a second opinion because failing open here
 # means installing over a running runtime.
-ableton_runtime_busy() {
-    [ -n "$(ableton_runtime_pids)" ] || \
+works_runtime_busy() {
+    [ -n "$(works_runtime_pids)" ] || \
         pgrep -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1
 }
 
@@ -233,8 +233,8 @@ ableton_runtime_busy() {
 # prompt is about unsaved work, and only Live has any.
 ableton_live_pids() {
     local proc p cmd
-    proc="$(ableton_proc_root)"
-    for p in $(ableton_runtime_pids); do
+    proc="$(works_proc_root)"
+    for p in $(works_runtime_pids); do
         # A process can exit between the scan above and this read — during an
         # install that is common, because the stop is what made them exit. The
         # shell reports a failed redirection itself, before tr ever runs, so
@@ -256,7 +256,7 @@ ableton_live_running() {
 # One field out of a tree's ABLETON-WINE-BUILD-INFO.txt. The file pads its
 # values to a column, so the separator is a colon followed by any amount of
 # space, not ": ".
-ableton_buildinfo_field() {
+works_buildinfo_field() {
     local _file="$1" _key="$2" _v
     [ -r "$_file" ] || return 0
     _v="$(sed -n "s/^${_key}:[[:space:]]*//p" "$_file" | head -1)"
@@ -276,24 +276,24 @@ ableton_buildinfo_field() {
 # dist-version alone cannot serve. On that machine 2026.07.29.1 appears four
 # times under two different patch stacks, and 2026.07.23.1 covers both the 11.11
 # and the 11.14 tree — keyed on version they would collide.
-ableton_runtime_id() {
+works_runtime_id() {
     local _dir="$1" _info _ver _disc _kind
     _info="$_dir/ABLETON-WINE-BUILD-INFO.txt"
     [ -r "$_info" ] || return 0
 
-    _ver="$(ableton_buildinfo_field "$_info" dist-version)"
+    _ver="$(works_buildinfo_field "$_info" dist-version)"
     [ -n "$_ver" ] || return 0
 
-    _disc="$(ableton_buildinfo_field "$_info" source-commit)"
-    [ -n "$_disc" ] || _disc="$(ableton_buildinfo_field "$_info" patch-stack)"
+    _disc="$(works_buildinfo_field "$_info" source-commit)"
+    [ -n "$_disc" ] || _disc="$(works_buildinfo_field "$_info" patch-stack)"
     [ -n "$_disc" ] || return 0
     # A nightly says so here rather than in dist-version. That field is the date
     # the build happened, for every build, which is the one question a directory
     # name has to answer -- putting the kind there too would mean either a second
     # date or a second separator, and the id is <version>+<discriminator> with
     # exactly one. So: 2026.08.06.1+nightly.badafaf.
-    _kind="$(ableton_buildinfo_field "$_info" build-kind)"
-    ableton_compose_id "$_ver" "$_disc" "$_kind"
+    _kind="$(works_buildinfo_field "$_info" build-kind)"
+    works_compose_id "$_ver" "$_disc" "$_kind"
 }
 
 # version, discriminator, kind -> the id, or nothing.
@@ -302,7 +302,7 @@ ableton_runtime_id() {
 # BUILD-INFO, and the updater's report of what a channel is offering, from a
 # manifest. Those disagreeing would mean the updater naming a directory other
 # than the one the install produces.
-ableton_compose_id() {
+works_compose_id() {
     local _ver="$1" _disc="${2:0:7}" _kind="${3:-}"
     [ -n "$_ver" ] && [ -n "$_disc" ] || return 0
     [ -z "$_kind" ] || _disc="$_kind.$_disc"
@@ -326,13 +326,13 @@ ableton_compose_id() {
 # otherwise. Runtimes built before built-at existed have only the version, which
 # ties across every nightly between two releases — that is why the field was
 # added, and why this answers "no" rather than guessing when it cannot tell.
-ableton_build_is_newer() {
+works_build_is_newer() {
     local _a="$1" _b="$2" _av _bv
-    _av="$(ableton_buildinfo_field "$_a/ABLETON-WINE-BUILD-INFO.txt" built-at)"
-    _bv="$(ableton_buildinfo_field "$_b/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+    _av="$(works_buildinfo_field "$_a/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+    _bv="$(works_buildinfo_field "$_b/ABLETON-WINE-BUILD-INFO.txt" built-at)"
     if [ -z "$_av" ] || [ -z "$_bv" ]; then
-        _av="$(ableton_buildinfo_field "$_a/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
-        _bv="$(ableton_buildinfo_field "$_b/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
+        _av="$(works_buildinfo_field "$_a/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
+        _bv="$(works_buildinfo_field "$_b/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
     fi
     [ -n "$_av" ] && [ -n "$_bv" ] || return 1
     [ "$_av" != "$_bv" ] || return 1
@@ -343,10 +343,10 @@ ableton_build_is_newer() {
 # whose name is already taken, is set aside under <container>/<kind>-<stamp>/
 # rather than deleted — these are multi-gigabyte runtimes and nothing here
 # removes one behind the user's back.
-ableton_store_absorb() {
+works_store_absorb() {
     local _dir="$1" _stamp="$2" _container _id _aside
-    _container="$(ableton_container_root)"
-    _id="$(ableton_runtime_id "$_dir")"
+    _container="$(works_runtime_store)"
+    _id="$(works_runtime_id "$_dir")"
     if [ -n "$_id" ] && [ ! -e "$_container/$_id" ]; then
         mv "$_dir" "$_container/$_id"
         printf '%s\n' "$_id"
@@ -386,9 +386,9 @@ ableton_store_absorb() {
 # environment is where the answer is.
 works_plug_busy() {
     local _plug _p
-    _plug="${1:-$(ableton_wine_prefix)}"
+    _plug="${1:-$(works_plug_path)}"
     _plug="${_plug%/}"
-    for _p in "$(ableton_proc_root)"/[0-9]*; do
+    for _p in "$(works_proc_root)"/[0-9]*; do
         # Unlike cmdline, environ is mode 400 *and* gated by ptrace_may_access,
         # so `[ -r ]` passes on our own processes where the read still fails -
         # systemd --user is one. The shell reports a failed redirection itself,
@@ -409,8 +409,8 @@ works_plug_busy() {
 # wineserver` will ever match, and they hold the prefix until something asks.
 works_all_pids() {
     local _p _d
-    ableton_runtime_pids 2>/dev/null || true
-    for _d in "$(ableton_opt_dir)"/plugs/*/ "$HOME/.wine-ableton"; do
+    works_runtime_pids 2>/dev/null || true
+    for _d in "$(works_home)"/plugs/*/ "$HOME/works/plugs/studio"; do
         [ -d "$_d" ] || continue
         works_plug_holders "${_d%/}" 2>/dev/null | awk '{print $1}'
     done
@@ -419,9 +419,9 @@ works_all_pids() {
 # What is holding it, for a refusal that can be acted on rather than puzzled at.
 works_plug_holders() {
     local _plug _p _cmd
-    _plug="${1:-$(ableton_wine_prefix)}"
+    _plug="${1:-$(works_plug_path)}"
     _plug="${_plug%/}"
-    for _p in "$(ableton_proc_root)"/[0-9]*; do
+    for _p in "$(works_proc_root)"/[0-9]*; do
         { tr '\0' '\n' < "$_p/environ" | grep -qxF "WINEPREFIX=$_plug"; } 2>/dev/null || continue
         _cmd="$( { tr -s '\0' ' ' < "$_p/cmdline"; } 2>/dev/null )" || continue
         printf '%s  %s\n' "${_p##*/}" "${_cmd:0:70}"
@@ -430,11 +430,11 @@ works_plug_holders() {
 
 works_migrate_plug() {
     local legacy dest
-    legacy="$HOME/.wine-ableton"
-    dest="$(ableton_wine_prefix)"
+    legacy="$HOME/works/plugs/studio"
+    dest="$(works_plug_path)"
 
-    if [ -n "${ABLETON_WINEPREFIX:-}" ]; then
-        echo "   plug: ABLETON_WINEPREFIX is set; leaving the prefix where it is"
+    if [ -n "${WORKS_PLUG:-}" ]; then
+        echo "   plug: WORKS_PLUG is set; leaving the prefix where it is"
         return 0
     fi
     [ "$legacy" != "$dest" ] || return 0
@@ -493,15 +493,134 @@ works_migrate_plug() {
     echo "   plug: moved the prefix to $dest"
 }
 
-ableton_migrate_layout() {
+# What is holding it, for a refusal that can be acted on rather than puzzled at.
+works_plug_holders() {
+    local _plug _p _cmd
+    _plug="${1:-$(works_plug_path)}"
+    _plug="${_plug%/}"
+    for _p in "$(works_proc_root)"/[0-9]*; do
+        { tr '\0' '\n' < "$_p/environ" | grep -qxF "WINEPREFIX=$_plug"; } 2>/dev/null || continue
+        _cmd="$( { tr -s '\0' ' ' < "$_p/cmdline"; } 2>/dev/null )" || continue
+        printf '%s  %s\n' "${_p##*/}" "${_cmd:0:70}"
+    done
+}
+
+# Migrate, or explain why not. Idempotent, and refuses rather than guessing when
+# the live tree cannot be identified — installing over an unidentifiable runtime
+# is the ambiguous case the store exists to prevent.
+#
+# Nothing is left at the legacy path. An earlier design kept a compatibility
+# symlink there and it did not survive examination: the case it was chiefly
+# justified by, an older .run, does not read that path, it overwrites it.
+#
+# The caller must already have established that nothing is running from the
+# runtime: this renames the directory a running Wine executes from.
+# Move a flat prefix into the Plug store. Separate from the runtime migration
+# because it is a different object with different failure modes: a runtime can
+# be re-downloaded and a prefix cannot, so every branch here that is not certain
+# refuses rather than guesses.
+#
+# The move is a plain rename and needs no repair. Wine resolves everything
+# relative to $WINEPREFIX, which is supplied per launch; a used prefix carries
+# no absolute host path in its registry (checked against a real Live 12 install,
+# plain and hex-encoded), dosdevices/c: is relative, and the absolute symlinks
+# under drive_c/users point outward at the real home, which is not moving.
+# Is anything running out of this Plug? The runtime scan cannot answer it: a
+# process can hold a prefix while running from another Wine entirely, and
+# renaming a prefix out from under a live wineserver corrupts its registry.
+# Wine puts WINEPREFIX in the environment of everything it starts, so the
+# environment is where the answer is.
+works_plug_busy() {
+    local _plug _p
+    _plug="${1:-$(works_plug_path)}"
+    _plug="${_plug%/}"
+    for _p in "$(works_proc_root)"/[0-9]*; do
+        # Unlike cmdline, environ is mode 400 *and* gated by ptrace_may_access,
+        # so `[ -r ]` passes on our own processes where the read still fails -
+        # systemd --user is one. The shell reports a failed redirection itself,
+        # before tr runs, so tr's own 2>/dev/null cannot suppress it and the
+        # group is what silences it. Same trap as ableton_live_pids, one file
+        # further along.
+        { tr '\0' '\n' < "$_p/environ" | grep -qxF "WINEPREFIX=$_plug"; } 2>/dev/null \
+            && return 0
+    done
+    return 1
+}
+
+works_migrate_plug() {
+    local legacy dest
+    legacy="$HOME/.wine-ableton"
+    dest="$(works_plug_path)"
+
+    if [ -n "${WORKS_PLUG:-}" ]; then
+        echo "   plug: WORKS_PLUG is set; leaving the prefix where it is"
+        return 0
+    fi
+    [ "$legacy" != "$dest" ] || return 0
+
+    # A symlink at the legacy path is someone else's arrangement, not ours.
+    if [ -L "$legacy" ]; then
+        echo "!! $legacy is a symlink, not a prefix; remove it and rerun" >&2
+        return 1
+    fi
+    [ -d "$legacy" ] || return 0        # nothing to move
+
+    # Before anything moves. install.sh stops what runs from the runtime, which
+    # is not the same set: this catches a Live started from another build, or a
+    # bare wine pointed at the prefix.
+    if works_plug_busy "$legacy"; then
+        echo "!! something is still running from $legacy, so moving it now would" \
+             "corrupt its registry. Close it, or run \`works stop\`, then rerun:" >&2
+        works_plug_holders "$legacy" | sed 's/^/     /' >&2
+        return 1
+    fi
+
+    # Both present is the one genuinely ambiguous state: two prefixes, each
+    # possibly holding a different Live and different authorisation. Guessing
+    # loses work, so name both and stop.
+    if [ -e "$dest" ]; then
+        echo "!! a prefix already exists at $dest and another at $legacy;" \
+             "keep the one you want and remove the other, then rerun" >&2
+        return 1
+    fi
+
+    mkdir -p "$(dirname "$dest")"
+
+    # Within one filesystem this is a rename: atomic, instant, and no free space
+    # required whatever the prefix weighs. Across filesystems mv copies and then
+    # deletes, so a 16G prefix needs 16G free and minutes of I/O - and a failure
+    # halfway leaves a partial copy that would read as "a prefix at both paths"
+    # on the next run. Check first, and clean up after ourselves if it fails.
+    if [ "$(stat -c %d "$legacy" 2>/dev/null)" != "$(stat -c %d "$(dirname "$dest")" 2>/dev/null)" ]; then
+        local _need _free
+        _need="$(du -sk "$legacy" 2>/dev/null | cut -f1)"
+        _free="$(df -Pk "$(dirname "$dest")" 2>/dev/null | awk 'NR==2 {print $4}')"
+        if [ -n "$_need" ] && [ -n "$_free" ] && [ "$_free" -le "$_need" ]; then
+            echo "!! $dest is on another filesystem and moving the prefix there needs" \
+                 "$((_need / 1024)) MB, with $((_free / 1024)) MB free" >&2
+            return 1
+        fi
+        echo "   plug: $dest is on another filesystem, so this is a copy, not a rename"
+    fi
+
+    if ! mv "$legacy" "$dest"; then
+        # Only ever the destination: the source is what we failed to move.
+        [ -e "$dest" ] && [ -e "$legacy" ] && rm -rf "$dest"
+        echo "!! moving the prefix to $dest failed; it is still at $legacy" >&2
+        return 1
+    fi
+    echo "   plug: moved the prefix to $dest"
+}
+
+works_migrate_layout() {
     local legacy container chan stamp id other d
     legacy="$(works_legacy_root)"
-    container="$(ableton_container_root)"
+    container="$(works_runtime_store)"
     chan="$container/stable"
     stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 
-    if [ -n "${ABLETON_WINE_ROOT:-}" ]; then
-        echo "   layout: ABLETON_WINE_ROOT is set; leaving the install where it is"
+    if [ -n "${WORKS_RUNTIME:-}" ]; then
+        echo "   layout: WORKS_RUNTIME is set; leaving the install where it is"
         return 0
     fi
 
@@ -512,14 +631,14 @@ ableton_migrate_layout() {
     if [ -L "$chan" ]; then
         if [ -d "$legacy" ] && [ ! -L "$legacy" ]; then
             other="$(readlink -f "$chan" 2>/dev/null || true)"
-            if [ -z "$(ableton_runtime_id "$legacy")" ] && \
-               { [ -z "$other" ] || [ -z "$(ableton_runtime_id "$other")" ]; }; then
+            if [ -z "$(works_runtime_id "$legacy")" ] && \
+               { [ -z "$other" ] || [ -z "$(works_runtime_id "$other")" ]; }; then
                 echo "!! neither $legacy nor $chan can be identified from its" \
                      "BUILD-INFO; remove whichever is stale and rerun" >&2
                 return 1
             fi
-            id="$(ableton_store_absorb "$legacy" "$stamp")"
-            if [ -n "$id" ] && [ -n "$other" ] && ableton_build_is_newer "$container/$id" "$other"; then
+            id="$(works_store_absorb "$legacy" "$stamp")"
+            if [ -n "$id" ] && [ -n "$other" ] && works_build_is_newer "$container/$id" "$other"; then
                 ln -sfn "$id" "$chan"
                 echo "   layout: adopted the newer $id from $legacy"
             else
@@ -541,7 +660,7 @@ ableton_migrate_layout() {
         return 1
     fi
 
-    id="$(ableton_runtime_id "$legacy")"
+    id="$(works_runtime_id "$legacy")"
     [ -n "$id" ] || {
         echo "!! $legacy carries no readable ABLETON-WINE-BUILD-INFO.txt, so it" \
              "cannot be named; installing over it would be a guess" >&2
@@ -558,7 +677,7 @@ ableton_migrate_layout() {
     # gigabytes apiece.
     for d in "$legacy"-rollback-* "$legacy".failed-*; do
         [ -e "$d" ] || continue
-        ableton_store_absorb "$d" "$stamp" >/dev/null
+        works_store_absorb "$d" "$stamp" >/dev/null
     done
     echo "   layout: moved the runtime to $container/$id"
 }
@@ -568,8 +687,8 @@ ableton_migrate_layout() {
 # Keep this many entries per channel. A count rather than a policy: a channel
 # that turns over nightly wants a smaller one than a channel that turns over
 # monthly, and an unpacked runtime is ~392M against a 40-minute rebuild.
-ableton_runtime_keep() {
-    local _n="${ABLETON_RUNTIME_KEEP:-10}"
+works_runtime_keep() {
+    local _n="${WORKS_RUNTIME_KEEP:-10}"
     case "$_n" in ''|*[!0-9]*) _n=10 ;; esac      # nonsense reverts to the default
     [ "$_n" -ge 1 ] || _n=1                       # never prune to nothing
     printf '%s\n' "$_n"
@@ -587,11 +706,11 @@ ableton_runtime_keep() {
 # What the channel points at is never removed, whatever the count says. A
 # channel pointing at a pruned entry is a broken install produced by
 # housekeeping.
-ableton_prune_runtimes() {
+works_prune_runtimes() {
     local _container _keep _live _e _id _at _ver _key
-    _container="$(ableton_container_root)"
+    _container="$(works_runtime_store)"
     [ -d "$_container" ] || return 0
-    _keep="$(ableton_runtime_keep)"
+    _keep="$(works_runtime_keep)"
     # Every channel's target, not just this machine's. A second channel pointing
     # at an entry pruned on behalf of the first is a broken install produced by
     # housekeeping - the rule has to hold for all of them.
@@ -609,10 +728,10 @@ ableton_prune_runtimes() {
     done < <(
         for _e in "$_container"/*; do
             [ -d "$_e" ] && [ ! -L "$_e" ] || continue
-            _id="$(ableton_runtime_id "$_e")"
+            _id="$(works_runtime_id "$_e")"
             [ -n "$_id" ] || continue        # quarantine directories are not entries
-            _at="$(ableton_buildinfo_field "$_e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
-            _ver="$(ableton_buildinfo_field "$_e/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
+            _at="$(works_buildinfo_field "$_e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+            _ver="$(works_buildinfo_field "$_e/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
             if [ -n "$_at" ]; then printf '1 %s\t%s\n' "$_at" "$_e"
             else                   printf '0 %s\t%s\n' "$_ver" "$_e"; fi
         done | sort -V | head -n -"$_keep"
@@ -636,23 +755,23 @@ ableton_prune_runtimes() {
 # runtimes are, and because deleting trees is worth testing - which needs a
 # function with a seam, not inline code in a script that also stops systemd
 # units and rewrites the desktop database.
-ableton_remove_runtimes() {
+works_remove_runtimes() {
     local _container _legacy _d
-    if [ -n "${ABLETON_WINE_ROOT:-}" ]; then
+    if [ -n "${WORKS_RUNTIME:-}" ]; then
         # The user pinned a path; remove that and nothing else - but check what
         # it names first. This runs `rm -rf` on a variable, and a stale exported
         # value left from a test session would otherwise remove whatever it
         # happens to point at.
-        case "$ABLETON_WINE_ROOT" in
+        case "$WORKS_RUNTIME" in
             ""|/|"$HOME"|"$HOME"/)
-                echo "!! ABLETON_WINE_ROOT is '$ABLETON_WINE_ROOT'; refusing to remove that" >&2
+                echo "!! WORKS_RUNTIME is '$WORKS_RUNTIME'; refusing to remove that" >&2
                 return 1 ;;
         esac
-        [ -d "$ABLETON_WINE_ROOT/bin" ] || {
-            echo "!! $ABLETON_WINE_ROOT has no bin/ and does not look like a runtime;" \
+        [ -d "$WORKS_RUNTIME/bin" ] || {
+            echo "!! $WORKS_RUNTIME has no bin/ and does not look like a runtime;" \
                  "refusing to remove it" >&2
             return 1; }
-        rm -rf "$ABLETON_WINE_ROOT" && echo "removed $ABLETON_WINE_ROOT"
+        rm -rf "$WORKS_RUNTIME" && echo "removed $WORKS_RUNTIME"
         return 0
     fi
 
@@ -660,7 +779,7 @@ ableton_remove_runtimes() {
     # this is a single removal rather than a sibling glob. That glob is what
     # would orphan multi-gigabyte directories the moment any suffix joined the
     # runtime name - and the store's names are nothing but suffixes.
-    _container="$(ableton_container_root)"
+    _container="$(works_runtime_store)"
     [ ! -e "$_container" ] || { rm -rf "$_container" && echo "removed $_container"; }
 
     # An install that never migrated still has the flat layout. -L as well as
@@ -682,7 +801,7 @@ ableton_remove_runtimes() {
 # the single decision behind the selector defect, the packing defect, the
 # retention tie and the update prompt having nothing to compare.
 #
-# Same `key: value` shape as BUILD-INFO, so ableton_buildinfo_field reads it and
+# Same `key: value` shape as BUILD-INFO, so works_buildinfo_field reads it and
 # nothing needs jq:
 #
 #   channel:       stable
