@@ -31,7 +31,7 @@ while [ $# -gt 0 ]; do
         --channel)  shift; WANT_CHANNEL="${1:-}"
                     [ -n "$WANT_CHANNEL" ] || { echo "!! --channel needs a name" >&2; exit 1; } ;;
         --channel=*) WANT_CHANNEL="${1#--channel=}" ;;
-        -h|--help)  sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help)  sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "!! unknown option: $1 (try --help)" >&2; exit 1 ;;
     esac
     shift
@@ -98,21 +98,6 @@ if [ -n "$want_commit" ] && [ "$want_commit" = "$have_commit" ] && [ "$CHANNEL" 
     exit 0
 fi
 
-# Already in the store from an earlier install? Then this is a channel switch,
-# not a download.
-container="$(works_runtime_store)"
-for e in "$container"/*; do
-    [ -d "$e" ] && [ ! -L "$e" ] || continue
-    [ "$(works_buildinfo_field "$e/ABLETON-WINE-BUILD-INFO.txt" source-commit)" = "$want_commit" ] || continue
-    echo
-    echo "That build is already installed as ${e##*/} — no download needed."
-    [ "$CHECK" -eq 0 ] || exit 0
-    ln -sfn "${e##*/}" "$container/$CHANNEL"
-    printf '%s\n' "$CHANNEL" > "$(works_channel_file)"
-    echo "channel $CHANNEL -> ${e##*/}"
-    exit 0
-done
-
 # Strictly older, not "not newer". Two builds can share a timestamp -- the same
 # build published on two channels, or a rebuild of one commit -- and sort's
 # tail -1 returns the installed one when they are equal, which read as a
@@ -122,21 +107,65 @@ if [ -n "$have_at" ] && [ -n "$want_at" ] && [ "$have_at" != "$want_at" ] && \
     echo "   (this is OLDER than what you have)"
 fi
 
+# This refusal sits above every branch that acts, the channel switch included.
+# It used to sit underneath it, so a build already in the store was retargeted
+# straight across a Wine base change reporting success -- the one path where
+# costing no download made the change look harmless.
+#
+# The busy check deliberately does NOT come up here with it. What is running
+# only matters to the branch that replaces the tree; retargeting a channel under
+# a running Live is safe for the same reason `works runtime use` allows it, and
+# says so rather than refusing -- the resolver hands back the build, not the
+# channel, so a session that has already started keeps what it started with.
+#
+# A Plug is bound to a Wine base and cannot be taken back across one. Say it
+# before downloading 113M, not after.
+if [ -n "$have_wine" ] && [ -n "$want_wine" ] && [ "$have_wine" != "$want_wine" ]; then
+    echo
+    echo "!! This changes the Wine base: $have_wine -> $want_wine"
+    echo "   Your Plug will be re-bootstrapped and cannot be taken back."
+    # --check is a question, not an action, so it reports this rather than
+    # failing on it.
+    if [ "$CHECK" -eq 1 ]; then
+        echo "   (--check: nothing was changed)"
+        exit 0
+    fi
+    echo "   Refusing. Install it deliberately with the full installer if you mean it."
+    exit 1
+fi
+
+# Already in the store from an earlier install? Then this is a channel switch,
+# not a download.
+container="$(works_runtime_store)"
+for e in "$container"/*; do
+    [ -d "$e" ] && [ ! -L "$e" ] || continue
+    [ "$(works_buildinfo_field "$e/ABLETON-WINE-BUILD-INFO.txt" source-commit)" = "$want_commit" ] || continue
+    echo
+    echo "That build is already installed as ${e##*/} — no download needed."
+    [ "$CHECK" -eq 0 ] || exit 0
+    # Asked before the retarget, not after: the resolver follows the channel, so
+    # once it has moved this would be asking whether anything runs from the build
+    # being switched *to*. What the note is about is the one being switched from.
+    was_busy=""; works_runtime_busy && was_busy=1
+    ln -sfn "${e##*/}" "$container/$CHANNEL"
+    printf '%s\n' "$CHANNEL" > "$(works_channel_file)"
+    echo "channel $CHANNEL -> ${e##*/}"
+    # Same note `works runtime use` gives, for the same reason.
+    if [ -n "$was_busy" ]; then
+        echo "note: something is still running from the previous build. It keeps"
+        echo "      the build it started with; this takes effect on the next launch."
+    fi
+    exit 0
+done
+
 if [ "$CHECK" -eq 1 ]; then
     echo; echo "An update is available. Run without --check to install it."
     exit 0
 fi
 
-# A Wire is bound to a Wine base and cannot be taken back across one. Say it
-# before downloading 113M, not after.
-if [ -n "$have_wine" ] && [ -n "$want_wine" ] && [ "$have_wine" != "$want_wine" ]; then
-    echo
-    echo "!! This changes the Wine base: $have_wine -> $want_wine"
-    echo "   Your Wire will be re-bootstrapped and cannot be taken back."
-    echo "   Refusing. Install it deliberately with the full installer if you mean it."
-    exit 1
-fi
-
+# Here rather than higher up: this is the first line past which the tree gets
+# replaced, and replacing a tree under a running Live is what loses a session.
+# Everything above this point either only reports, or moves a symlink.
 if works_runtime_busy; then
     echo; echo "!! something is running from the runtime. Close Live first." >&2
     exit 1
