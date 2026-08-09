@@ -75,6 +75,19 @@ store() {
     [[ "$output" == *"  2026.01.01.1+aaaaaaa"* ]]
 }
 
+# guards: the path is what people copy into a script, a bug report or a `cd`,
+# and rebuilding it by hand from a store root and an id invites the typo
+@test "list shows each build's path, abbreviated under home" {
+    store
+    run RT list
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"PATH"* ]]
+    [[ "$output" == *"/runtimes/2026.06.01.1+bbbbbbb"* ]]
+    [[ "$output" == *"/runtimes/2026.01.01.1+aaaaaaa"* ]]
+    # under $HOME it is written ~/..., never the expanded home directory
+    [[ "$output" != *"$HOME/works"* ]] || { echo "home was not abbreviated" >&2; false; }
+}
+
 # guards: names tie across nightlies, so ordering is by built-at
 @test "list is newest first" {
     store

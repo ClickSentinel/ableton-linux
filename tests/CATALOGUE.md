@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-322 tests across 14 suites. See [README.md](README.md) for how to run
+323 tests across 14 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -23,7 +23,7 @@ for which run on a PR.
 - [tests/unit/manifest.bats](#manifest) — 19 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 37 test(s)
 - [tests/unit/promote.bats](#promote) — 11 test(s)
-- [tests/unit/works-runtime.bats](#works-runtime) — 23 test(s)
+- [tests/unit/works-runtime.bats](#works-runtime) — 24 test(s)
 - [tests/unit/works-update.bats](#works-update) — 27 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 66 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
@@ -437,25 +437,26 @@ resolve through it instead of naming a directory.
 | 2 | path answers on the store, with the build rather than the channel | — |
 | 3 | path honours an explicit pin | — |
 | 4 | list marks the live build | — |
-| 5 | list is newest first | names tie across nightlies, so ordering is by built-at |
-| 6 | list says so when there is no store yet | — |
-| 7 | list does not offer quarantined trees, but mentions them | set-aside trees are not builds you can choose, but their existence is |
-| 8 | use retargets the channel | — |
-| 9 | use --previous picks the other build | — |
-| 10 | use --previous refuses when only one build is installed | — |
-| 11 | use refuses a name that is not installed | the channel is what the launcher resolves through — pointing it at |
-| 12 | use refuses a directory with no readable BUILD-INFO | — |
-| 13 | use refuses an entry with no wine binary | — |
-| 14 | use refuses when there is no store | — |
-| 15 | list shows the Wine base each build carries | — |
-| 16 | use is silent when the base is unchanged | — |
-| 17 | use refuses a base change with no terminal to ask on | the prefix cannot be taken back, so this must not happen quietly |
-| 18 | use --force accepts a base change deliberately | — |
-| 19 | a downgrade is named as a downgrade | forward Wine supports, backward it does not - the wording has to differ |
-| 20 | use with no argument refuses when there is no terminal | a script calling `use` with no argument must fail, not block forever |
-| 21 | use with no argument leaves the channel alone | — |
-| 22 | list: a nightly id does not crowd the WINE column | the BUILD column was exactly as wide as a nightly id -- |
-| 23 | use accepts a nightly build by its full name | the id contains dots and a plus, so anything treating it as a pattern |
+| 5 | list shows each build's path, abbreviated under home | the path is what people copy into a script, a bug report or a `cd`, |
+| 6 | list is newest first | names tie across nightlies, so ordering is by built-at |
+| 7 | list says so when there is no store yet | — |
+| 8 | list does not offer quarantined trees, but mentions them | set-aside trees are not builds you can choose, but their existence is |
+| 9 | use retargets the channel | — |
+| 10 | use --previous picks the other build | — |
+| 11 | use --previous refuses when only one build is installed | — |
+| 12 | use refuses a name that is not installed | the channel is what the launcher resolves through — pointing it at |
+| 13 | use refuses a directory with no readable BUILD-INFO | — |
+| 14 | use refuses an entry with no wine binary | — |
+| 15 | use refuses when there is no store | — |
+| 16 | list shows the Wine base each build carries | — |
+| 17 | use is silent when the base is unchanged | — |
+| 18 | use refuses a base change with no terminal to ask on | the prefix cannot be taken back, so this must not happen quietly |
+| 19 | use --force accepts a base change deliberately | — |
+| 20 | a downgrade is named as a downgrade | forward Wine supports, backward it does not - the wording has to differ |
+| 21 | use with no argument refuses when there is no terminal | a script calling `use` with no argument must fail, not block forever |
+| 22 | use with no argument leaves the channel alone | — |
+| 23 | list: a nightly id does not crowd the WINE column | the BUILD column was exactly as wide as a nightly id -- |
+| 24 | use accepts a nightly build by its full name | the id contains dots and a plus, so anything treating it as a pattern |
 
 <a id="works-update"></a>
 
@@ -709,6 +710,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the id contains dots and a plus, so anything treating it as a pattern` | works-runtime: use accepts a nightly build by its full name |
 | `the installer name becomes both a URL component and a filename` | manifest: an installer name containing a path is refused |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
+| `the path is what people copy into a script, a bug report or a `cd`,` | works-runtime: list shows each build's path, abbreviated under home |
 | `the prefix cannot be taken back, so this must not happen quietly` | works-runtime: use refuses a base change with no terminal to ask on |
 | `the prefix is the one thing here that cannot be re-downloaded` | migrate-layout: plug: the contents survive the move intact |
 | `the promote step and its dated rollback, which is where the store's` | install-runs: a second install promotes and leaves the previous runtime behind |

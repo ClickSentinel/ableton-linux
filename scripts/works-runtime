@@ -81,21 +81,28 @@ cmd_path() {
 base_of() { works_buildinfo_field "$container/$1/ABLETON-WINE-BUILD-INFO.txt" wine; }
 
 cmd_list() {
-    local live e at base n=0
+    local live e at base path n=0
     live="$(readlink -f "$channel" 2>/dev/null || true)"
     if [ ! -d "$container" ]; then
         echo "No version store yet — this install predates it."
         echo "  runtime: $(works_runtime_path)"
         return 0
     fi
-    printf '  %-32s %-12s %s\n' "BUILD" "WINE" "BUILT"
+    # The path is spelled out per build rather than left implied by the store
+    # root: it is the thing people copy - into a script, a bug report, a `cd` -
+    # and reconstructing it by hand from a header and an id invites the typo.
+    # $HOME is abbreviated because these are always under it and the width is
+    # better spent on the build.
+    printf '  %-32s %-12s %-22s %s\n' "BUILD" "WINE" "BUILT" "PATH"
     while read -r e; do
         [ -n "$e" ] || continue
         n=$((n+1))
         at="$(works_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
         base="$(base_of "$e")"
-        if [ "$container/$e" = "$live" ]; then printf '* %-32s %-12s %s\n' "$e" "${base:-?}" "${at:-—}"
-        else                                   printf '  %-32s %-12s %s\n' "$e" "${base:-?}" "${at:-—}"; fi
+        path="$container/$e"
+        case "$path" in "$HOME"/*) path="~${path#"$HOME"}" ;; esac
+        if [ "$container/$e" = "$live" ]; then printf '* %-32s %-12s %-22s %s\n' "$e" "${base:-?}" "${at:-—}" "$path"
+        else                                   printf '  %-32s %-12s %-22s %s\n' "$e" "${base:-?}" "${at:-—}" "$path"; fi
     done < <(sorted)
     [ "$n" -gt 0 ] || echo "No installed builds found in $container"
     local aside
