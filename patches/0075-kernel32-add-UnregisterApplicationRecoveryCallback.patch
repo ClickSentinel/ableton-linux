@@ -1,0 +1,46 @@
+Subject: kernel32: add UnregisterApplicationRecoveryCallback
+
+Applications link UnregisterApplicationRecoveryCallback as a static
+import. Wine implements the register half of the API
+(RegisterApplicationRecoveryCallback fakes success) but leaves the
+unregister half a commented-out stub, so the loader binds the import
+to a generated stub that raises EXCEPTION_WINE_STUB the first time
+the application tears down its recovery callback on exit.
+
+Export the function and fake success to match the register half:
+there is no recovery manager to unregister from, and the callback is
+being torn down anyway.
+
+diff --git a/dlls/kernel32/kernel32.spec b/dlls/kernel32/kernel32.spec
+index 57b1b9f..f286db6 100644
+--- a/dlls/kernel32/kernel32.spec
++++ b/dlls/kernel32/kernel32.spec
+@@ -1588,7 +1588,7 @@
+ @ stdcall -import UnlockFileEx(long long long long ptr)
+ @ stdcall -import UnmapViewOfFile(ptr)
+ @ stdcall -import UnmapViewOfFileEx(ptr long)
+-# @ stub UnregisterApplicationRecoveryCallback
++@ stdcall UnregisterApplicationRecoveryCallback()
+ @ stdcall UnregisterApplicationRestart()
+ # @ stub UnregisterConsoleIME
+ @ stdcall UnregisterWait(long)
+diff --git a/dlls/kernel32/process.c b/dlls/kernel32/process.c
+index 98313f4..5410b60 100644
+--- a/dlls/kernel32/process.c
++++ b/dlls/kernel32/process.c
+@@ -598,6 +598,15 @@ HRESULT WINAPI RegisterApplicationRecoveryCallback(APPLICATION_RECOVERY_CALLBACK
+     return S_OK;
+ }
+ 
++/**********************************************************************
++ *           UnregisterApplicationRecoveryCallback     (KERNEL32.@)
++ */
++HRESULT WINAPI UnregisterApplicationRecoveryCallback(void)
++{
++    FIXME(": stub, faking success\n");
++    return S_OK;
++}
++
+ static SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *get_logical_processor_info(void)
+ {
+     DWORD size = 0;

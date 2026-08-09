@@ -1,0 +1,197 @@
+Subject: win32u: pass the initial monitor DPI to the window creation request
+
+Backport of Wine MR 11573 by Rémi Bernon, proposed upstream as the
+fix for bug 60023: windows created by a per-monitor-DPI-aware process
+are sized at 1 / (LogPixels / 96)^2 of their request, a regression
+between Wine 11.12 and 11.13. The server created every window at the
+default 96 DPI and corrected it only later, so the first rectangle
+conversions ran against the wrong monitor DPI.
+
+Pass the creating thread's monitor DPI in the create_window request
+and seed the server-side window with it. The desktop and message
+windows take the primary monitor's DPI when one exists.
+
+Adaptations from the upstream commit: get_monitor_from_rect takes an
+int in 11.13, and the regenerated protocol files are included, with
+SERVER_PROTOCOL_VERSION raised from 956 to 957 because the
+create_window request grows two fields.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=60023
+Upstream-commit: 8ba41b5eed459649ab7e3436738a534168aed5e1 (MR 11573, unmerged as of 2026-08-06)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index e07a3b5..5110d70 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -5851,24 +5851,31 @@ void destroy_thread_windows(void)
+  * Create a window handle with the server.
+  */
+ static WND *create_window_handle( HWND parent, HWND owner, UNICODE_STRING *name, HINSTANCE class_instance,
+-                                  HINSTANCE instance, BOOL ansi, DWORD style, DWORD ex_style )
++                                  const CREATESTRUCTW *cs, BOOL ansi, DWORD style, DWORD ex_style )
+ {
++    RECT rect = { cs->x, cs->y, cs->x + cs->cx, cs->y + cs->cy };
+     UINT dpi_context = get_thread_dpi_awareness_context();
+     HWND handle = 0, full_parent = 0, full_owner = 0;
+     struct tagCLASS *class = NULL;
++    struct ratio dpi, raw_dpi;
+     WND *win;
+ 
++    if (parent && parent != get_desktop_window()) dpi = get_win_monitor_dpi( parent, &raw_dpi );
++    else dpi = monitor_dpi_from_rect( rect, get_thread_dpi(), &raw_dpi );
++
+     SERVER_START_REQ( create_window )
+     {
+         req->parent          = wine_server_user_handle( parent );
+         req->owner           = wine_server_user_handle( owner );
+         req->class_instance  = wine_server_client_ptr( class_instance );
+-        req->instance        = wine_server_client_ptr( instance );
++        req->instance        = wine_server_client_ptr( cs->hInstance );
+         req->dpi_context     = dpi_context;
+         req->style           = style;
+         req->ex_style        = ex_style;
+         req->ansi            = ansi;
+         req->atom            = wine_server_add_atom( req, name );
++        req->dpi             = dpi;
++        req->raw_dpi         = raw_dpi;
+         if (!wine_server_call_err( req ))
+         {
+             handle      = wine_server_ptr_handle( reply->handle );
+@@ -6088,7 +6095,7 @@ HWND WINAPI NtUserCreateWindowEx( DWORD ex_style, UNICODE_STRING *class_name,
+     style = cs.style & ~WS_VISIBLE;
+     ex_style = cs.dwExStyle & ~WS_EX_LAYERED;
+     if (!(win = create_window_handle( parent, owner, class_name, class_instance,
+-                                      cs.hInstance, ansi, style, ex_style )))
++                                      &cs, ansi, style, ex_style )))
+         return 0;
+     hwnd = win->handle;
+ 
+diff --git a/include/wine/server_protocol.h b/include/wine/server_protocol.h
+index efc1cbe..7c6245e 100644
+--- a/include/wine/server_protocol.h
++++ b/include/wine/server_protocol.h
+@@ -3519,6 +3519,8 @@ struct create_window_request
+     unsigned int   style;
+     unsigned int   ex_style;
+     unsigned int   ansi;
++    struct ratio   dpi;
++    struct ratio   raw_dpi;
+     /* VARARG(class,unicode_str); */
+ };
+ struct create_window_reply
+@@ -7158,6 +7160,6 @@ union generic_reply
+     struct d3dkmt_mutex_release_reply d3dkmt_mutex_release_reply;
+ };
+ 
+-#define SERVER_PROTOCOL_VERSION 956
++#define SERVER_PROTOCOL_VERSION 957
+ 
+ #endif /* __WINE_WINE_SERVER_PROTOCOL_H */
+diff --git a/server/protocol.def b/server/protocol.def
+index 30235df..3526c4a 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -2653,6 +2653,8 @@ enum message_type
+     unsigned int   style;       /* window style */
+     unsigned int   ex_style;    /* window extended style */
+     unsigned int   ansi;        /* window created as ansi */
++    struct ratio   dpi;         /* initial monitor DPI */
++    struct ratio   raw_dpi;     /* initial monitor raw DPI */
+     VARARG(class,unicode_str);  /* class name */
+ @REPLY
+     user_handle_t  handle;      /* created window */
+diff --git a/server/request_handlers.h b/server/request_handlers.h
+index 8279782..bf1523c 100644
+--- a/server/request_handlers.h
++++ b/server/request_handlers.h
+@@ -1491,7 +1491,9 @@ C_ASSERT( offsetof(struct create_window_request, dpi_context) == 40 );
+ C_ASSERT( offsetof(struct create_window_request, style) == 44 );
+ C_ASSERT( offsetof(struct create_window_request, ex_style) == 48 );
+ C_ASSERT( offsetof(struct create_window_request, ansi) == 52 );
+-C_ASSERT( sizeof(struct create_window_request) == 56 );
++C_ASSERT( offsetof(struct create_window_request, dpi) == 56 );
++C_ASSERT( offsetof(struct create_window_request, raw_dpi) == 60 );
++C_ASSERT( sizeof(struct create_window_request) == 64 );
+ C_ASSERT( offsetof(struct create_window_reply, handle) == 8 );
+ C_ASSERT( offsetof(struct create_window_reply, parent) == 12 );
+ C_ASSERT( offsetof(struct create_window_reply, owner) == 16 );
+diff --git a/server/request_trace.h b/server/request_trace.h
+index 497c88e..785279f 100644
+--- a/server/request_trace.h
++++ b/server/request_trace.h
+@@ -1696,6 +1696,8 @@ static void dump_create_window_request( const struct create_window_request *req
+     fprintf( stderr, ", style=%08x", req->style );
+     fprintf( stderr, ", ex_style=%08x", req->ex_style );
+     fprintf( stderr, ", ansi=%08x", req->ansi );
++    dump_ratio( ", dpi=", &req->dpi );
++    dump_ratio( ", raw_dpi=", &req->raw_dpi );
+     dump_varargs_unicode_str( ", class=", cur_size );
+ }
+ 
+diff --git a/server/window.c b/server/window.c
+index 73bad90..962373f 100644
+--- a/server/window.c
++++ b/server/window.c
+@@ -621,7 +621,8 @@ void post_desktop_message( struct desktop *desktop, unsigned int message,
+ 
+ /* create a new window structure (note: the window is not linked in the window tree) */
+ static struct window *create_window( struct window *parent, struct window *owner, atom_t atom,
+-                                     mod_handle_t class_instance, bool ansi )
++                                     mod_handle_t class_instance, bool ansi, struct ratio dpi,
++                                     struct ratio raw_dpi )
+ {
+     data_size_t extra_size, private_size;
+     struct window *win = NULL;
+@@ -694,10 +695,8 @@ static struct window *create_window( struct window *parent, struct window *owner
+         shared->dpi_context     = NTUSER_DPI_PER_MONITOR_AWARE;
+         shared->fnid            = fnid;
+         shared->private_size    = private_size;
+-        shared->dpi.num         = USER_DEFAULT_SCREEN_DPI;
+-        shared->dpi.den         = 1;
+-        shared->raw_dpi.num     = USER_DEFAULT_SCREEN_DPI;
+-        shared->raw_dpi.den     = 1;
++        shared->dpi             = dpi;
++        shared->raw_dpi         = raw_dpi;
+         shared->extra_size      = extra_size;
+         memset( (void *)&shared->info, 0, sizeof(shared->info) );
+         memset( (void *)shared->extra, 0, extra_size );
+@@ -2259,7 +2258,7 @@ DECL_HANDLER(create_window)
+ 
+     if (!atom) atom = find_atom( table, &cls_name );
+ 
+-    if (!(win = create_window( parent, owner, atom, req->class_instance, !!req->ansi ))) return;
++    if (!(win = create_window( parent, owner, atom, req->class_instance, !!req->ansi, req->dpi, req->raw_dpi ))) return;
+ 
+     /* FIXME: NTUSER_DPI_PER_MONITOR_AWARE_V2 isn't implemented */
+     if (NTUSER_DPI_CONTEXT_IS_MONITOR_AWARE( dpi_context )) dpi_context = NTUSER_DPI_PER_MONITOR_AWARE;
+@@ -2353,13 +2352,18 @@ DECL_HANDLER(destroy_window)
+ /* retrieve the desktop window for the current thread */
+ DECL_HANDLER(get_desktop_window)
+ {
++    static const struct monitor_info default_info = { .dpi = { USER_DEFAULT_SCREEN_DPI, 1 }, .raw_dpi = { USER_DEFAULT_SCREEN_DPI, 1 } };
++    static const struct rectangle desktop_rect = { 0, 0, 1, 1 };
++    const struct monitor_info *info = NULL;
++
+     struct desktop *desktop = get_thread_desktop( current, 0 );
+ 
+     if (!desktop) return;
+ 
+     if (!desktop->top_window && req->force)  /* create it */
+     {
+-        if ((desktop->top_window = create_window( NULL, NULL, DESKTOP_ATOM, 0, false )))
++        if (!(info = get_monitor_from_rect( desktop->winstation, &desktop_rect, 0 ))) info = &default_info;
++        if ((desktop->top_window = create_window( NULL, NULL, DESKTOP_ATOM, 0, false, info->dpi, info->raw_dpi )))
+         {
+             detach_window_thread( desktop->top_window );
+             desktop->top_window->style  = WS_POPUP | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
+@@ -2372,7 +2376,9 @@ DECL_HANDLER(get_desktop_window)
+         static const struct unicode_str name = { messageW, sizeof(messageW) };
+         struct atom_table *table = get_user_atom_table();
+         atom_t atom = add_atom( table, &name );
+-        if (atom && (desktop->msg_window = create_window( NULL, NULL, atom, 0, false )))
++
++        if (!info && !(info = get_monitor_from_rect( desktop->winstation, &desktop_rect, 0 ))) info = &default_info;
++        if (atom && (desktop->msg_window = create_window( NULL, NULL, atom, 0, false, info->dpi, info->raw_dpi )))
+         {
+             detach_window_thread( desktop->msg_window );
+             desktop->msg_window->style = WS_POPUP | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;

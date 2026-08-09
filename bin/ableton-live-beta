@@ -8,10 +8,30 @@ for _l in "$(dirname "$0")/runtime-env.sh" "$HOME/works/lib/runtime-env.sh"; do
 done
 command -v works_runtime_path >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0 or in ~/works/apps/ableton-live" >&2; exit 1; }
+
+# Same diagnostic capture as scripts/ableton-live, at its own path so a beta
+# session never overwrites a stable one. This launcher ships a desktop entry
+# (bin/ableton-live-beta.desktop.in), and a desktop launch inherits stderr from
+# the desktop environment, which may be /dev/null; the tester kit's run-session
+# already captures both streams and needs nothing from here. ">>" creates the
+# file and proves it writable without discarding anything.
+diagnostic_dir="$HOME/.log/ableton-wine"
+if mkdir -p -- "$diagnostic_dir" && : >> "$diagnostic_dir/live-beta.log"; then
+    # Rotation preserves the previous beta session if the stable-Suite guard
+    # below refuses this launch.
+    pgrep -af 'Ableton Live 12 Beta[.]exe' 2>/dev/null | grep -q 'ProgramData' \
+        || mv -f -- "$diagnostic_dir/live-beta.log" "$diagnostic_dir/live-beta.log.1"
+    exec 2> >(tee -a "$diagnostic_dir/live-beta.log" >&2)
+else
+    echo "ableton-live-beta: cannot write diagnostics to $diagnostic_dir/live-beta.log" >&2
+fi
+
 WINE_ROOT="$(works_runtime_path)"
 export WINEPREFIX="${ABLETON_BETA_WINEPREFIX:-$HOME/works/plugs/beta}"
 export PATH="$WINE_ROOT/bin:$PATH"
-export WINEDEBUG="${WINEDEBUG:--all}"
+# -all silences Wine's debug spam; +winediag keeps the rare one-line user
+# notices, such as the present-fallback warning from patch 0071.
+export WINEDEBUG="${WINEDEBUG:--all,+winediag}"
 export WINE_D3D_CONFIG="${WINE_D3D_CONFIG:-csmt=0x1}"
 export WINED3D_DCOMP_FORCE_FULL_REDRAW="${WINED3D_DCOMP_FORCE_FULL_REDRAW:-1}"
 # Report host mount points as plain dirs (patch 0033); Live's browser treats

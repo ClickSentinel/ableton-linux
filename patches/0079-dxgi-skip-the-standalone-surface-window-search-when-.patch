@@ -1,0 +1,159 @@
+Subject: dxgi: skip the standalone-surface window search when the owner presents
+
+Nothing binds a standalone DXGI surface to a window, so ReleaseDC ends
+its work by enumerating every top-level window on the desktop and
+blitting the surface into any visible popup or owned window whose client
+area happens to match. That heuristic is the only option for a surface
+whose pixels have nowhere else to go, and it stays for those.
+
+It is pure waste for a surface that is already delivered elsewhere.
+ID2D1DCRenderTarget is the case that matters: its present blits the
+surface into the application's own device context, which is the correct
+and complete delivery, and it runs GetDC and ReleaseDC twice per frame
+(once in BeginDraw to pull the target's existing content in, once in
+present to push the result back out). Each of those releases costs a
+desktop-wide window enumeration with a GetWindowLongW and GetClientRect
+round trip per window, plus a full-surface BitBlt into every window that
+matched. An application drawing its interface this way ran the
+enumeration 138 times in the first fifteen seconds of startup on the
+measured setup.
+
+Let the owner of a standalone surface say that it presents the surface
+itself, with a private-data marker in a header the two DLLs share, and
+have the DC render target set it on the surface it creates in BindDC.
+Surfaces that do not set it, including the composition surfaces the
+heuristic was written for, keep the existing behaviour exactly.
+
+Also skip the enumeration when the caller passes an empty dirty
+rectangle, which says no pixels changed.
+
+diff --git a/dlls/d2d1/dc_render_target.c b/dlls/d2d1/dc_render_target.c
+index b09b77f..61db565 100644
+--- a/dlls/d2d1/dc_render_target.c
++++ b/dlls/d2d1/dc_render_target.c
+@@ -18,6 +18,7 @@
+  */
+ 
+ #include "d2d1_private.h"
++#include "wine/dxgi_surface_owner.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(d2d);
+ 
+@@ -753,6 +754,17 @@ static HRESULT STDMETHODCALLTYPE d2d_dc_render_target_BindDC(ID2D1DCRenderTarget
+     bitmap_impl = unsafe_impl_from_ID2D1Bitmap(bitmap);
+     ID3D11Resource_QueryInterface(bitmap_impl->resource, &IID_IDXGISurface1, (void **)&dxgi_surface);
+ 
++    if (dxgi_surface)
++    {
++        /* This target hands its pixels to the application's device context in
++         * d2d_dc_render_target_present, so dxgi does not have to search the
++         * desktop for a window to blit the surface into. */
++        BOOL owner_presents = TRUE;
++
++        IDXGISurface1_SetPrivateData(dxgi_surface, &WINE_DXGI_SURFACE_OWNER_PRESENTS,
++                sizeof(owner_presents), &owner_presents);
++    }
++
+     ID2D1DeviceContext_SetTarget(context, (ID2D1Image *)bitmap);
+     ID2D1Bitmap_Release(bitmap);
+     ID2D1DeviceContext_Release(context);
+diff --git a/dlls/dxgi/resource.c b/dlls/dxgi/resource.c
+index e3c3300..c6b109a 100644
+--- a/dlls/dxgi/resource.c
++++ b/dlls/dxgi/resource.c
+@@ -18,6 +18,7 @@
+  */
+ 
+ #include "dxgi_private.h"
++#include "wine/dxgi_surface_owner.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(dxgi);
+ 
+@@ -324,6 +325,19 @@ static void dxgi_surface_blit_to_popup_windows(HDC src_dc,
+                 width, height, data.blit_count);
+ }
+ 
++/* An owner that delivers the surface's pixels itself has no use for the window
++ * search below, and marked itself so (see wine/dxgi_surface_owner.h). */
++static BOOL dxgi_surface_owner_presents(IDXGISurface2 *iface)
++{
++    BOOL presents = FALSE;
++    UINT size = sizeof(presents);
++
++    if (FAILED(dxgi_surface_GetPrivateData(iface, &WINE_DXGI_SURFACE_OWNER_PRESENTS, &size, &presents)))
++        return FALSE;
++
++    return presents;
++}
++
+ static HRESULT STDMETHODCALLTYPE dxgi_surface_ReleaseDC(IDXGISurface2 *iface, RECT *dirty_rect)
+ {
+     struct dxgi_resource *resource = impl_from_IDXGISurface2(iface);
+@@ -333,8 +347,12 @@ static HRESULT STDMETHODCALLTYPE dxgi_surface_ReleaseDC(IDXGISurface2 *iface, RE
+ 
+     /* Blit standalone surface content to matching popup windows before
+      * releasing the DC. On Windows, DirectComposition would composite
+-     * DXGI surface content into associated windows automatically. */
+-    if (resource->dc)
++     * DXGI surface content into associated windows automatically.
++     *
++     * An empty dirty rectangle says the caller changed nothing, so there is
++     * nothing to publish; the enumeration is skipped in that case as well. */
++    if (resource->dc && !dxgi_surface_owner_presents(iface)
++            && !(dirty_rect && IsRectEmpty(dirty_rect)))
+     {
+         struct wined3d_sub_resource_desc desc;
+         struct wined3d_texture *texture;
+diff --git a/include/Makefile.in b/include/Makefile.in
+index f5a4487..2b5a73c 100644
+--- a/include/Makefile.in
++++ b/include/Makefile.in
+@@ -1117,6 +1117,7 @@ SOURCES = \
+ 	wine/dcetypes.idl \
+ 	wine/debug.h \
+ 	wine/dplaysp.h \
++	wine/dxgi_surface_owner.h \
+ 	wine/epm.idl \
+ 	wine/exception.h \
+ 	wine/fil_data.idl \
+diff --git a/include/wine/dxgi_surface_owner.h b/include/wine/dxgi_surface_owner.h
+new file mode 100644
+index 0000000..8cfa914
+--- /dev/null
++++ b/include/wine/dxgi_surface_owner.h
+@@ -0,0 +1,35 @@
++/*
++ * Marker for DXGI surfaces whose owner presents them itself.
++ *
++ * Copyright 2026 the Wine project authors.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
++ */
++
++#ifndef __WINE_DXGI_SURFACE_OWNER_H
++#define __WINE_DXGI_SURFACE_OWNER_H
++
++/* Set to a non-zero BOOL with IDXGISurface1::SetPrivateData by whoever created
++ * a standalone (non-swapchain) surface and takes responsibility for getting its
++ * pixels to their destination.  Nothing binds a standalone surface to a window,
++ * so dxgi's ReleaseDC otherwise falls back to enumerating the desktop for a
++ * window whose client area matches the surface.  An owner that already delivers
++ * its own pixels, such as an ID2D1DCRenderTarget blitting to the application's
++ * device context, makes that search both pointless and a source of stray blits
++ * into unrelated same-sized windows. */
++static const GUID WINE_DXGI_SURFACE_OWNER_PRESENTS =
++        {0x5b3f9c14,0x7ad2,0x4e6b,{0x9f,0x21,0xc8,0x4d,0x0e,0x77,0xb3,0x52}};
++
++#endif  /* __WINE_DXGI_SURFACE_OWNER_H */

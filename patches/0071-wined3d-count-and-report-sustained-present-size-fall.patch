@@ -1,0 +1,304 @@
+From 442bfc1a80f5261e983c18a3b520e24acb0abbf0 Mon Sep 17 00:00:00 2001
+From: Shibco <cade@parare.al>
+Date: Wed, 5 Aug 2026 12:49:03 +0200
+Subject: [PATCH] wined3d: count and report sustained present-size fallbacks
+ (issue 100)
+
+The 0058 gate keeps every frame correct, but it decides per frame and
+tells nobody: a swapchain that fails the size check on every present
+runs its whole session on the GDI copy path at about one core of CPU
+(issue 100 measured 98.9% against 25.2% once 0059 landed). The only
+sign was a fire-once FIXME and a rate-limited TRACE behind a global
+static counter, both invisible under the launcher's WINEDEBUG=-all.
+The danger left is a persistent, previously unknown mismatch topology
+that nobody can see.
+
+Count per swapchain instead, on the CS thread that runs the gate:
+total gate decisions, fallback frames, the longest consecutive run,
+and the longest run repeating one identical (dst, client) rect pair.
+The pair repeat separates an interactive resize from a real fault: a
+drag changes the pair every frame, a persistent coordinate topology
+repeats it. A five-second ratio window with a two-strike rule catches
+a fault that oscillates between pairs. An idle second drops a partial
+window, but the completed strike survives pauses under thirty seconds
+so a fault bursting for longer than one window still warns without
+joining unrelated events. A shorter burst never completes a window and
+so never scores a strike; carrying the strike across the pause lowers
+what one burst must sustain from about twelve seconds to about five
+and a half.
+
+When one pair persists for 120 frames, about two seconds at 60Hz, or
+the fallback ratio stays above half for two windows, warn once per
+swapchain: two MESSAGE lines that survive WINEDEBUG=-all and ask for
+an issue report, and one machine-parsable ERR_(winediag) line with
+both rects, both DPI awareness contexts, the window DPI and styles,
+the swapchain flags, the GPU description, and the session type and
+desktop from the host environment. Wine renames host XDG_* variables
+with a WINE_HOST_ prefix in the Win32 environment block, so the
+prefixed names are read first and the unprefixed ones kept as a
+fallback. Swapchain destruction prints a one-line summary when the
+sustained warning fired for that swapchain, so a fallback that lasted
+an hour leaves evidence even if nobody watched the session.
+
+The fallback behaviour is unchanged, and 0058's fire-once FIXME stays
+as its build-audit fingerprint. Threshold shapes follow the prior art:
+DXVK warns once on its d3d9 GDI fallback with no counters, Firefox
+limits GPU device resets with a count-and-rate rule, and Chromium
+forgives one GPU crash per five minutes so transient trouble cannot
+trip a permanent response.
+---
+ dlls/wined3d/swapchain.c       | 180 +++++++++++++++++++++++++++++++++---
+ dlls/wined3d/wined3d_private.h |  21 +++++
+ 2 files changed, 190 insertions(+), 11 deletions(-)
+
+diff --git a/dlls/wined3d/swapchain.c b/dlls/wined3d/swapchain.c
+index 91c8c90..858dce3 100644
+--- a/dlls/wined3d/swapchain.c
++++ b/dlls/wined3d/swapchain.c
+@@ -26,6 +26,7 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(d3d);
+ WINE_DECLARE_DEBUG_CHANNEL(d3d_perf);
++WINE_DECLARE_DEBUG_CHANNEL(winediag);
+ 
+ static BOOL set_window_present_rect(HWND hwnd, UINT x, UINT y, UINT width, UINT height)
+ {
+@@ -47,6 +48,16 @@ void wined3d_swapchain_cleanup(struct wined3d_swapchain *swapchain)
+ 
+     TRACE("Destroying swapchain %p.\n", swapchain);
+ 
++    /* The 0058 gate's exit report: one summary line, printed only when the
++     * sustained warning fired for this swapchain, so a session that spent
++     * an hour on the copy path leaves a trace even if nobody saw it fire.
++     * A transient fallback (a resize race) stays quiet at destroy. */
++    if (swapchain->present_mismatch.warned)
++        ERR_(winediag)("Swapchain %p present-size mismatch summary: %u of %u presents fell back to GDI, "
++                "longest run %u frames, longest identical-pair run %u frames.\n",
++                swapchain, swapchain->present_mismatch.mismatches, swapchain->present_mismatch.total,
++                swapchain->present_mismatch.consecutive_max, swapchain->present_mismatch.stable_run_max);
++
+     if (swapchain->comp_dc)
+     {
+         SelectObject(swapchain->comp_dc, swapchain->comp_old_bitmap);
+@@ -1289,11 +1299,80 @@ static bool swapchain_present_is_partial_copy(struct wined3d_swapchain *swapchai
+  * origin then lands the frame low, black band on top, bottom rows clipped
+  * (issue 100; the niri report on PR 98).  The GDI present path anchors
+  * top-left and shows the same frame correctly under the mismatch. */
+-static bool swapchain_gl_present_size_agrees(const struct wined3d_swapchain *swapchain, const RECT *dst_rect)
++/* Warning thresholds: 120 identical-pair frames is about two seconds at
++ * 60Hz; a resize drag changes the pair every frame and cannot reach it.
++ * The ratio rule needs two >50% five-second windows; idle drops a partial
++ * window after one second and a prior strike only after 30 seconds. */
++#define PRESENT_MISMATCH_STABLE_LIMIT 120
++#define PRESENT_MISMATCH_WINDOW_MS 5000
++#define PRESENT_MISMATCH_IDLE_MS 1000
++#define PRESENT_MISMATCH_STRIKE_RESET_MS 30000
++#define PRESENT_MISMATCH_WINDOW_MIN_PRESENTS 60
++#define PRESENT_MISMATCH_WINDOW_STRIKES 2
++
++/* One-shot, per swapchain: the gate has failed long enough that this is a
++ * persistent coordinate fault, not a resize race, and the swapchain is
++ * living on the copy path (issue 100's DPI-context gap cost a full core
++ * this way, silently).  MESSAGE prints regardless of WINEDEBUG, so the
++ * launcher's -all default cannot hide the notice; the winediag line
++ * carries the evidence on a single line so an issue report can quote it
++ * whole.  The user-facing text stays in Simplified Technical English. */
++static void swapchain_present_mismatch_warn(struct wined3d_swapchain *swapchain,
++        const RECT *dst_rect, const RECT *client_rect)
++{
++    HWND window = swapchain->win_handle;
++    char session[32], desktop[64];
++    DWORD len;
++
++    swapchain->present_mismatch.warned = true;
++
++    /* Wine renames the host XDG_* variables with a WINE_HOST_ prefix in
++     * the Win32 environment block (ntdll is_special_env_var), so read the
++     * prefixed names first and keep the unprefixed ones as a fallback.
++     * GetEnvironmentVariableA() returns the required size, without a usable
++     * string, when the buffer is too small; reject that result before the
++     * values reach the %s diagnostics below. */
++    len = GetEnvironmentVariableA("WINE_HOST_XDG_SESSION_TYPE", session, sizeof(session));
++    if (!len || len >= sizeof(session))
++    {
++        len = GetEnvironmentVariableA("XDG_SESSION_TYPE", session, sizeof(session));
++        if (!len || len >= sizeof(session))
++            strcpy(session, "unknown");
++    }
++    len = GetEnvironmentVariableA("WINE_HOST_XDG_CURRENT_DESKTOP", desktop, sizeof(desktop));
++    if (!len || len >= sizeof(desktop))
++    {
++        len = GetEnvironmentVariableA("XDG_CURRENT_DESKTOP", desktop, sizeof(desktop));
++        if (!len || len >= sizeof(desktop))
++            strcpy(desktop, "unknown");
++    }
++
++    MESSAGE("ableton-wine: This window now shows each frame through a slow fallback path. "
++            "This path can use one full processor core.\n");
++    MESSAGE("ableton-wine: Please make a report at https://github.com/shibco/ableton-linux/issues. "
++            "Include the log line that contains 'Sustained present-size mismatch'.\n");
++    ERR_(winediag)("Sustained present-size mismatch: win %p dst %s client %s backbuffer %ux%u "
++            "dpi-win %p dpi-cs %p dpi %u style %#x exstyle %#x swapchain-flags %#x gpu \"%s\" "
++            "session %s desktop %s presents %u mismatches %u consecutive %u identical-pair %u.\n",
++            window, wine_dbgstr_rect(dst_rect), wine_dbgstr_rect(client_rect),
++            swapchain->state.desc.backbuffer_width, swapchain->state.desc.backbuffer_height,
++            GetWindowDpiAwarenessContext(window), GetThreadDpiAwarenessContext(),
++            GetDpiForWindow(window),
++            (unsigned int)GetWindowLongW(window, GWL_STYLE),
++            (unsigned int)GetWindowLongW(window, GWL_EXSTYLE),
++            swapchain->state.desc.flags, swapchain->device->adapter->driver_info.description,
++            session, desktop,
++            swapchain->present_mismatch.total, swapchain->present_mismatch.mismatches,
++            swapchain->present_mismatch.consecutive_max, swapchain->present_mismatch.stable_run_max);
++}
++
++static bool swapchain_gl_present_size_agrees(struct wined3d_swapchain *swapchain, const RECT *dst_rect)
+ {
+     static unsigned int mismatch_count;
+     DPI_AWARENESS_CONTEXT prev;
+     RECT client_rect;
++    ULONGLONG now;
++    bool agrees;
+ 
+     /* Ask the way translate_drawable_coords now asks (0059) and the way
+      * dst_rect was captured (0023): in the window's own DPI context.  An
+@@ -1305,17 +1378,95 @@ static bool swapchain_gl_present_size_agrees(const struct wined3d_swapchain *swa
+     GetClientRect(swapchain->win_handle, &client_rect);
+     SetThreadDpiAwarenessContext(prev);
+ 
+-    if (client_rect.right - client_rect.left == dst_rect->right - dst_rect->left
+-            && client_rect.bottom - client_rect.top == dst_rect->bottom - dst_rect->top)
+-        return true;
++    agrees = client_rect.right - client_rect.left == dst_rect->right - dst_rect->left
++            && client_rect.bottom - client_rect.top == dst_rect->bottom - dst_rect->top;
+ 
+-    if (!mismatch_count++)
+-        FIXME("Present-time client rect disagrees with the captured dst rect, using GDI present for these frames.\n");
+-    if (mismatch_count <= 5 || !(mismatch_count % 300))
+-        TRACE("Size disagreement #%u: dst %s, cs-thread client %s, backbuffer %ux%u.\n",
+-                mismatch_count, wine_dbgstr_rect(dst_rect), wine_dbgstr_rect(&client_rect),
+-                swapchain->state.desc.backbuffer_width, swapchain->state.desc.backbuffer_height);
+-    return false;
++    /* Telemetry, per swapchain, CS thread only.  The fallback keeps every
++     * frame correct; what must not happen is a swapchain living on it with
++     * nobody told.  The hot path below is integer work; the expensive
++     * context gathering runs once, behind the warned latch. */
++    now = GetTickCount64();
++    if (swapchain->present_mismatch.window_start
++            && now - swapchain->present_mismatch.window_last_present >= PRESENT_MISMATCH_IDLE_MS)
++    {
++        if (now - swapchain->present_mismatch.window_last_present >= PRESENT_MISMATCH_STRIKE_RESET_MS)
++            swapchain->present_mismatch.window_strikes = 0;
++        swapchain->present_mismatch.window_start = now;
++        swapchain->present_mismatch.window_total = 0;
++        swapchain->present_mismatch.window_mismatches = 0;
++    }
++    else if (!swapchain->present_mismatch.window_start)
++    {
++        swapchain->present_mismatch.window_start = now;
++    }
++    swapchain->present_mismatch.window_last_present = now;
++
++    ++swapchain->present_mismatch.total;
++    ++swapchain->present_mismatch.window_total;
++
++    if (agrees)
++    {
++        swapchain->present_mismatch.consecutive = 0;
++        swapchain->present_mismatch.stable_run = 0;
++    }
++    else
++    {
++        ++swapchain->present_mismatch.mismatches;
++        ++swapchain->present_mismatch.window_mismatches;
++        if (++swapchain->present_mismatch.consecutive > swapchain->present_mismatch.consecutive_max)
++            swapchain->present_mismatch.consecutive_max = swapchain->present_mismatch.consecutive;
++
++        if (EqualRect(&swapchain->present_mismatch.last_dst, dst_rect)
++                && EqualRect(&swapchain->present_mismatch.last_client, &client_rect))
++        {
++            ++swapchain->present_mismatch.stable_run;
++        }
++        else
++        {
++            swapchain->present_mismatch.stable_run = 1;
++            swapchain->present_mismatch.last_dst = *dst_rect;
++            swapchain->present_mismatch.last_client = client_rect;
++        }
++        if (swapchain->present_mismatch.stable_run > swapchain->present_mismatch.stable_run_max)
++            swapchain->present_mismatch.stable_run_max = swapchain->present_mismatch.stable_run;
++
++        if (!mismatch_count++)
++            FIXME("Present-time client rect disagrees with the captured dst rect, using GDI present for these frames.\n");
++        if (swapchain->present_mismatch.mismatches <= 5 || swapchain->present_mismatch.stable_run == 1)
++            TRACE("Size disagreement #%u: dst %s, cs-thread client %s, backbuffer %ux%u.\n",
++                    swapchain->present_mismatch.mismatches, wine_dbgstr_rect(dst_rect),
++                    wine_dbgstr_rect(&client_rect),
++                    swapchain->state.desc.backbuffer_width, swapchain->state.desc.backbuffer_height);
++
++        if (!swapchain->present_mismatch.warned
++                && swapchain->present_mismatch.stable_run >= PRESENT_MISMATCH_STABLE_LIMIT)
++            swapchain_present_mismatch_warn(swapchain, dst_rect, &client_rect);
++    }
++
++    /* The rolling-ratio window catches a fault that oscillates between rect
++     * pairs and so never grows a stable run.  The idle reset drops a partial
++     * window but keeps its strike across short gaps; a long idle drops the
++     * strike so disconnected bursts cannot accumulate. */
++    if (now - swapchain->present_mismatch.window_start >= PRESENT_MISMATCH_WINDOW_MS)
++    {
++        if (swapchain->present_mismatch.window_total >= PRESENT_MISMATCH_WINDOW_MIN_PRESENTS
++                && swapchain->present_mismatch.window_mismatches * 2 > swapchain->present_mismatch.window_total)
++        {
++            if (++swapchain->present_mismatch.window_strikes >= PRESENT_MISMATCH_WINDOW_STRIKES
++                    && !swapchain->present_mismatch.warned)
++                swapchain_present_mismatch_warn(swapchain, &swapchain->present_mismatch.last_dst,
++                        &swapchain->present_mismatch.last_client);
++        }
++        else
++        {
++            swapchain->present_mismatch.window_strikes = 0;
++        }
++        swapchain->present_mismatch.window_start = now;
++        swapchain->present_mismatch.window_total = 0;
++        swapchain->present_mismatch.window_mismatches = 0;
++    }
++
++    return agrees;
+ }
+ 
+ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
+diff --git a/dlls/wined3d/wined3d_private.h b/dlls/wined3d/wined3d_private.h
+index 21c4adc..bc2c7aa 100644
+--- a/dlls/wined3d/wined3d_private.h
++++ b/dlls/wined3d/wined3d_private.h
+@@ -4210,6 +4210,27 @@ struct wined3d_swapchain
+     LARGE_INTEGER last_present_time;
+     LONG prev_time, frames;
+ 
++    /* Telemetry for the 0058 present-size gate.  Written only on the CS
++     * thread, in swapchain_gl_present_size_agrees(); zeroed by the calloc in
++     * adapter_create_swapchain.  stable_run counts consecutive mismatched
++     * frames that repeat one identical (dst, client) rect pair: an
++     * interactive resize changes the pair every frame, a persistent
++     * coordinate-topology fault repeats it.  The window_* fields are a
++     * ratio window; idle drops its partial counts, while a completed strike
++     * survives short pauses but resets after 30 seconds. */
++    struct
++    {
++        unsigned int total;                 /* gate decisions */
++        unsigned int mismatches;            /* frames sent to the GDI fallback */
++        unsigned int consecutive, consecutive_max;
++        unsigned int stable_run, stable_run_max;
++        RECT last_dst, last_client;
++        ULONGLONG window_start, window_last_present;
++        unsigned int window_total, window_mismatches;
++        unsigned int window_strikes;        /* consecutive windows over the ratio bar */
++        bool warned;
++    } present_mismatch;
++
+     struct wined3d_swapchain_state state;
+     HWND win_handle;
+     HDC dc;
+-- 
+2.55.0

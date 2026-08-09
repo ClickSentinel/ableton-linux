@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=@NAME@
-Comment=Music production (Wine, patched d2d1-dcomp stack)
+Comment=Music production and performance
 Exec=@HOME@/.local/bin/ableton-live %f
 Type=Application
 StartupNotify=true

@@ -5,11 +5,35 @@
 #            ABLETON_LIVE_EXE=/path/into/prefix/.../Ableton Live NN Edition.exe (pick one install),
 #            ABLETON_LIVE_VERSION=11|12 (restrict discovery to one major version),
 #            ABLETON_RT=off (skip the realtime probe; run Live under normal scheduling),
+#            ABLETON_SHORTCUTS=take (GNOME: hold the desktop shortcuts that shadow Live
+#              bindings, Ctrl+Alt+Up/Down and for Live 11 Ctrl+Alt+Delete, while Live
+#              runs; they restore when Live exits; default preserve touches nothing),
 #            ABLETON_POWER=off (skip the session performance power-profile hold),
 #            ABLETON_LINKD=/path/to/ableton-linkd (Ableton Link session anchor override),
 #            WINE_X11_FORCE_OFFSCREEN_CLASS=off (disable the M4L selection-flicker fix),
 #            WINE_WIN32_FULLSCREEN_CLASS=off (disable Live fullscreen normalization).
 set -u
+
+# Keep diagnostics from the current launch at one stable path. Tee preserves
+# terminal output while also covering desktop launchers whose stderr is
+# otherwise inherited from the desktop environment (and may be /dev/null).
+# ">>" creates the file and proves it writable without discarding anything.
+diagnostic_dir="$HOME/.log/ableton-wine"
+if mkdir -p -- "$diagnostic_dir" && : >> "$diagnostic_dir/live.log"; then
+    # Rotate to a fresh log only when this launcher is the one bringing Live up. Every
+    # Live desktop entry - .als, .auz, ableton:// - runs this same script to hand
+    # its argument to the running instance, so truncating unconditionally would
+    # wipe the running session's diagnostics, including the patch 0071 present
+    # fallback warning that lands about two seconds into a faulted session. Same
+    # already-running test as the single-instance guard below. Rotation preserves
+    # the previous session when a later guard refuses this launch.
+    pgrep -af "Ableton Live.*\.exe" 2>/dev/null | grep -q "ProgramData" \
+        || mv -f -- "$diagnostic_dir/live.log" "$diagnostic_dir/live.log.1"
+    exec 2> >(tee -a "$diagnostic_dir/live.log" >&2)
+else
+    echo "ableton-live: cannot write diagnostics to $diagnostic_dir/live.log" >&2
+fi
+
 # Clear inherited Wine variables so this launch uses only the patched build.
 # Runtime and prefix paths resolve in one place; see scripts/runtime-env.sh.
 for _l in "$(dirname "$0")/runtime-env.sh" "$HOME/works/lib/runtime-env.sh"; do
@@ -19,7 +43,9 @@ command -v works_runtime_path >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0 or in ~/works/apps/ableton-live" >&2; exit 1; }
 works_bind_runtime
 # Disable Wine debug logging; fixme spam from the D3D poll loop stalls Live's UI thread.
-export WINEDEBUG="${WINEDEBUG:--all}"
+# Keep the winediag channel on: it carries only rare one-line notices that a
+# person should read, such as the present-fallback warning from patch 0071.
+export WINEDEBUG="${WINEDEBUG:--all,+winediag}"
 export WINE_D3D_CONFIG="${WINE_D3D_CONFIG:-csmt=0x1}"
 export WINED3D_DCOMP_FORCE_FULL_REDRAW="${WINED3D_DCOMP_FORCE_FULL_REDRAW:-1}"
 # M4L child visibility otherwise makes winex11 detach and reattach Live's whole
@@ -189,6 +215,35 @@ if [ -n "$live_exe_unix" ]; then
         EXE="C:\\${rel//\//\\}"
     else
         EXE="$live_exe_unix"    # outside the prefix: wine resolves unix paths too
+    fi
+fi
+
+# Keep the menu entry tracking the installed edition: install.sh renders it
+# before Live exists in the prefix, so name, icon and window class heal here
+# on each start. An entry that does not route through this launcher is
+# hand-made and stays untouched.
+if [ -n "$exe_base" ]; then
+    apps_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+    live_entry="$apps_dir/ableton-live.desktop"
+    if [ -f "$live_entry" ] && grep -qF ".local/bin/ableton-live" "$live_entry"; then
+        entry_name="${exe_base%.exe}"
+        entry_wmclass="$(printf '%s' "$exe_base" | tr '[:upper:]' '[:lower:]')"
+        entry_edition="$(printf '%s' "$entry_name" | awk '{print tolower($NF)}')"
+        entry_icon="live-suite"
+        [ -f "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps/live-$entry_edition.svg" ] \
+            && entry_icon="live-$entry_edition"
+        if ! grep -qxF "Name=$entry_name" "$live_entry" \
+            || ! grep -qxF "Icon=$entry_icon" "$live_entry" \
+            || ! grep -qxF "StartupWMClass=$entry_wmclass" "$live_entry"; then
+            awk -v name="$entry_name" -v icon="$entry_icon" -v wmclass="$entry_wmclass" '
+                /^Name=/           { print "Name=" name; next }
+                /^Icon=/           { print "Icon=" icon; next }
+                /^StartupWMClass=/ { print "StartupWMClass=" wmclass; seen = 1; next }
+                { print }
+                END { if (!seen) print "StartupWMClass=" wmclass }
+            ' "$live_entry" > "$live_entry.tmp" && mv "$live_entry.tmp" "$live_entry"
+            update-desktop-database "$apps_dir" 2>/dev/null || true
+        fi
     fi
 fi
 
@@ -650,6 +705,44 @@ sync_font_fallback() {   # family -> register its SystemLink chain from what syn
         /v "$fam" /t REG_MULTI_SZ /d "${want}\0" /f >/dev/null 2>&1 9>&-
 }
 
+# Wine takes the antialiasing mode for GDI text from the host's Xft resources,
+# so a desktop set to grayscale renders Live's menus and dialogs grayscale
+# whatever the prefix asks for. An explicit prefix policy outranks that
+# (patch 0087), and this is what keeps it set: setup-prefix.sh
+# seeds it, and a prefix made by an older release has nothing.
+# ABLETON_TEXT_SMOOTHING=grayscale writes a deliberate grayscale marker,
+# preserve leaves whatever the prefix already carries.
+sync_text_smoothing() {
+    local want_enabled want_type order cur_enabled cur_type
+    case "${ABLETON_TEXT_SMOOTHING:-subpixel}" in
+        preserve) return 0 ;;
+        grayscale) want_enabled=1; want_type=1 ;;
+        subpixel)  want_enabled=2; want_type=2 ;;
+        *)
+            echo "ableton-live: ABLETON_TEXT_SMOOTHING must be subpixel, grayscale, or preserve: using subpixel" >&2
+            want_enabled=2; want_type=2 ;;
+    esac
+    cur_enabled="$(awk '/^\[Control Panel\\\\Desktop\]/{f=1;next} /^\[/{f=0} f&&/"FontSmoothing"=/{gsub(/.*="?/,""); gsub(/"\r?$/,""); print; exit}' "$WINEPREFIX/user.reg" 2>/dev/null || true)"
+    cur_type="$(awk '/^\[Control Panel\\\\Desktop\]/{f=1;next} /^\[/{f=0} f&&/"FontSmoothingType"=dword:/{gsub(/.*dword:/,""); gsub(/\r/,""); print; exit}' "$WINEPREFIX/user.reg" 2>/dev/null || true)"
+    # Smoothing off is itself an explicit prefix policy. Never turn it back on
+    # merely because the launcher defaults to subpixel rendering.
+    [ "$cur_enabled" = 0 ] && return 0
+    [ "$cur_enabled" = "$want_enabled" ] && [ "$((16#${cur_type:-0}))" = "$want_type" ] && return 0
+
+    # A BGR panel rendered as RGB fringes the wrong way, so follow the host
+    # where it states an order.
+    order=1
+    if command -v gsettings >/dev/null 2>&1; then
+        case "$(gsettings get org.gnome.desktop.interface font-rgba-order 2>/dev/null | tr -d "'")" in
+            bgr) order=0 ;;
+        esac
+    fi
+    echo "ableton-live: setting text antialiasing to ${ABLETON_TEXT_SMOOTHING:-subpixel}" >&2
+    "$WINE_ROOT/bin/wine" reg add 'HKCU\Control Panel\Desktop' /v FontSmoothing /t REG_SZ /d "$want_enabled" /f >/dev/null 2>&1 9>&-
+    "$WINE_ROOT/bin/wine" reg add 'HKCU\Control Panel\Desktop' /v FontSmoothingType /t REG_DWORD /d "$want_type" /f >/dev/null 2>&1 9>&-
+    "$WINE_ROOT/bin/wine" reg add 'HKCU\Control Panel\Desktop' /v FontSmoothingOrientation /t REG_DWORD /d "$order" /f >/dev/null 2>&1 9>&-
+}
+
 sync_ui_font() {
     local mode="${ABLETON_UI_FONT:-auto}" winfonts="$WINEPREFIX/drive_c/windows/Fonts"
     local fonts_dir="" family="" f linked=0
@@ -763,6 +856,36 @@ if ! pgrep -af "Ableton Live.*\.exe" 2>/dev/null | grep "ProgramData" >/dev/null
         fi
     fi
     sync_ui_font
+    sync_text_smoothing
+fi
+
+# GNOME consumes Live's Ctrl+Alt+Up/Down shortcuts (and Live 11's
+# Ctrl+Alt+Delete) before Wine sees them.  ABLETON_SHORTCUTS=take temporarily
+# removes only those entries.  The helper uses session-global, crash-recoverable
+# state because GSettings itself is session-global; it also preserves any user
+# edit made while Live runs.  Opt-in: the held keys are unavailable to every
+# other window until the last opted-in Live exits.  See the shortcut support note.
+shortcut_lib=""
+for f in "$HOME/works/lib/shortcut-hold.sh" \
+         "${BASH_SOURCE[0]%/*}/shortcut-hold.sh"; do
+    if [ -r "$f" ]; then shortcut_lib="$f"; break; fi
+done
+ableton_shortcuts_active=0
+if [ -n "$shortcut_lib" ]; then
+    . "$shortcut_lib"
+    shortcut_allow_hold=0
+    [ -n "$EXE" ] && shortcut_allow_hold=1
+    # Always run recovery, even if Live was uninstalled after an interrupted
+    # hold.  A new hold is allowed only after discovery confirmed an executable.
+    ableton_shortcuts_prepare "$exe_base" "$WINEPREFIX/.ableton-shortcut-hold" "$shortcut_allow_hold"
+    if [ "$ableton_shortcuts_active" -eq 1 ]; then
+        # The watcher can outlive a failed launch.  Do not let it keep the
+        # single-launch guard open while it waits to restore the desktop.
+        ( exec 9>&-; ableton_shortcuts_watch_loop ) </dev/null >/dev/null 2>&1 &
+        disown
+    fi
+elif [ "${ABLETON_SHORTCUTS:-preserve}" = take ] && [ -n "$EXE" ]; then
+    echo "ableton-live: shortcut hold helper is missing; leaving desktop shortcuts unchanged" >&2
 fi
 
 # Audio: PipeASIO -> PipeWire (native client, no JACK layer). Defaults live in

@@ -103,7 +103,8 @@ cp -a "dist/BUILD-INFO-${VERSION}.txt" "$kit/" 2>/dev/null || true
 mkdir -p "$kit/scripts"
 cp -a scripts/runtime-env.sh scripts/works scripts/works-runtime scripts/works-update scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
       scripts/ableton-live scripts/max9 scripts/detect-scale.sh \
-      scripts/detect-theme.sh scripts/check-live-audio.sh scripts/setup-link.sh \
+      scripts/detect-theme.sh scripts/shortcut-hold.sh \
+      scripts/check-live-audio.sh scripts/setup-link.sh \
       "$kit/scripts/"
 install -m644 scripts/ableton-linkd.service "$kit/scripts/ableton-linkd.service"
 install -m644 tools/setsyscolors.exe "$kit/scripts/setsyscolors.exe"

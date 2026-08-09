@@ -13,7 +13,10 @@ done
 command -v works_runtime_path >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0 or in ~/works/apps/ableton-live" >&2; exit 1; }
 works_bind_runtime
-export WINEDEBUG="${WINEDEBUG:--all}"
+# Disable Wine debug logging; fixme spam from the D3D poll loop stalls Live's UI thread.
+# Keep the winediag channel on: it carries only rare one-line notices that a
+# person should read, such as the present-fallback warning from patch 0071.
+export WINEDEBUG="${WINEDEBUG:--all,+winediag}"
 export WINE_D3D_CONFIG="${WINE_D3D_CONFIG:-csmt=0x1}"
 export WINE_DISABLE_UNIX_MOUNT_REPARSE="${WINE_DISABLE_UNIX_MOUNT_REPARSE:-1}"
 export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}mscoree,mshtml="

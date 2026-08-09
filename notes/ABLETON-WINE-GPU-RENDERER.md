@@ -96,7 +96,7 @@ and keeps the direct path.
 To confirm which path a build uses, start Live with
 `WINEDEBUG=fixme+all,err+all` and count the message `Using GDI present`
 in the log. One occurrence means the copy path. Zero means the direct
-path. The launcher sets `WINEDEBUG=-all` by default, so pass
+path. The launcher sets `WINEDEBUG=-all,+winediag` by default, so pass
 `WINEDEBUG` explicitly. Turn tracing off when measuring bandwidth,
 because the log's own writes count toward `/proc/<pid>/io`.
 
@@ -142,7 +142,7 @@ disagreement it detects has a root cause worth fixing.
 
 The trigger is fractional display scaling, not a compositor, a driver
 or a window manager. It reproduces on AMD Navi 31 under COSMIC/Wayland
-— a setup with no symptom at 100% — by putting the prefix at 125%
+(a setup with no symptom at 100%) by putting the prefix at 125%
 (`ABLETON_DPI_MODE=dpi120`, LogPixels 120). That covers both reports:
 niri at 125%, and issue 100's KDE/NVIDIA machine, where the trigger is
 Live's Enable HiDPI Mode.
@@ -173,10 +173,107 @@ CPU sampled with `top -b`, 15 readings at 2s (one core = 100%):
 | + 0058 + 0059 | no | 25.2% | direct |
 
 0058 on its own trades the bar for the copy path's cost on every
-scaled setup, and that cost is not noticeable by feel — only by
+scaled setup, and that cost is not noticeable by feel, only by
 measurement. With 0059 there is nothing to trade: the bar is gone and
 the direct path survives. 0058 stays in as the safety net, silent, and
 as the assertion that the two contexts now agree.
+
+### The fallback now reports itself; patch 0071 counts it (2026-08-05)
+
+The section above calls the 0058 gate silent. Patch 0071 supersedes
+that. The gate now counts its own decisions and reports a sustained
+fallback.
+
+The reason is the row in the table above. A machine on the copy path
+loses about one processor core. The screen stays correct. The user
+feels a slow computer and sees no cause. Before patch 0071, the only
+signs were one FIXME line and some TRACE lines. The launcher hides
+both. A swapchain could stay on the copy path for a full session, and
+no record existed.
+
+Patch 0071 adds counters to each swapchain. A swapchain is the set of
+frame buffers that Wine keeps for one window. The counters record: the
+number of gate decisions, the number of fallback frames, the longest
+unbroken run of fallback frames, and the longest run that repeats one
+identical pair of rectangles.
+
+The repeated pair is the test that separates a window resize from a
+real fault. During a resize, the window size changes on every frame,
+so the two compared rectangles also change on every frame. A
+persistent fault compares the same two rectangles on every frame. When
+the same pair repeats for 120 frames, about two seconds, the gate
+reports a fault. A second rule covers faults that alternate between
+rectangle pairs: when more than half of the frames in a five-second
+window fall back, and this happens in two qualifying windows, the gate
+also reports a fault. A pause of at least one second discards an
+unfinished window. One completed strike survives pauses shorter than
+30 seconds, so a fault that presents in bursts longer than five seconds
+still warns; a pause of 30 seconds or longer clears it before unrelated
+activity can accumulate. The five seconds are the mechanism, not a
+margin: a burst shorter than the ratio window never completes one, so it
+never scores a strike at all. Carrying the strike across the pause is
+what lowers the requirement, from about twelve seconds of unbroken
+mismatch to about five and a half.
+
+The 30-second reset is a chosen trade rather than a derived bound. It
+admits one narrow false positive: two 6-second bursts of more than half
+fallback warn across any gap shorter than 30 seconds. Measured healthy
+sessions sit well below that shape.
+
+The report prints once for each swapchain and has two parts. Two
+`ableton-wine:` lines always print, on every WINEDEBUG setting. They
+name the symptom and ask the user to open an issue. One
+`err:winediag:` line carries the evidence: both rectangles, the
+backbuffer size, both DPI awareness contexts, the window DPI, the
+window styles, the swapchain flags, the GPU name, and the session type
+and desktop from the host environment. Wine prefixes host XDG_*
+variables with WINE_HOST_ in the Win32 environment block, so the patch
+reads WINE_HOST_XDG_SESSION_TYPE and WINE_HOST_XDG_CURRENT_DESKTOP.
+The line stays on one line so a user can copy it whole into an issue.
+The launchers, the Max 9 launcher, and the beta tester kit now set
+`WINEDEBUG=-all,+winediag`, which keeps all debug output off and lets
+only these rare notices through. When Wine destroys a swapchain that
+warned, it prints one summary line with the totals, so a long session
+leaves a record even when nobody watched it.
+
+A desktop launch inherits stderr from the desktop environment, which may
+be /dev/null, so the notice needs somewhere to land. `scripts/ableton-live`
+tees stderr to `~/.log/ableton-wine/live.log` and `bin/ableton-live-beta`
+to `live-beta.log` beside it; the tester kit's `run-session` already
+captures both streams into its session file. Each launcher starts a fresh
+log only when it is the one bringing Live up: every Live desktop entry
+(`.als`, `.auz`, `ableton://`) runs the same launcher again to hand its
+argument to the running instance, and truncating on that path would wipe
+the warning the running session had already recorded.
+
+Status on 2026-08-07: the patch compiles clean and the built
+`wined3d.dll` contains both audit fingerprints. At 125%, the persistent
+fault rig fired at exactly identical-pair 120, with dst
+(0,0)-(1706,896) against client (0,0)-(1365,717). A separate 26-second
+healthy edge drag at 100% (96 DPI) measured 613 of 3028 presents
+falling back, longest run 7, and no warning. The ratio rule's idle-gap
+and maximum-counter paths are model-checked. The normal 125% resize and
+full-session checks below remain runtime acceptance checks:
+
+1. Build with the 0059 `swapchain.c` bracket reverted. The gate then
+   compares a CS-thread-context height against a window-context
+   dst_rect and disagrees on every scaled frame. Set the prefix to
+   125%. Start Live and move the mouse over the window. The warning
+   must appear within about ten seconds. Reverting the 0059
+   `texture.c` hunk instead does not work: the bar returns, but the
+   bracketed gate still sees two rectangles that agree.
+2. On a normal build at 125%, drag a window edge for ten seconds. The
+   warning must not appear.
+3. On a normal build, run a full session. No `Sustained present-size
+   mismatch` line and no destroy summary must appear.
+
+Status on 2026-08-08: the burst figures above come from review, from a
+sweep of the counter logic rather than a Live session. Sweeping burst
+length at 100% mismatch with 6-second pauses, bursts of 5.5 seconds and
+longer warned, and bursts of 5 seconds and shorter stayed silent through
+3000 mismatched frames. The same sweep put the false-positive boundary at
+a 30-second gap. A Live session has not been run against these thresholds;
+acceptance checks 1 to 3 above still stand.
 
 ## Device identification (added 2026-07-30, updated 2026-08-01, issue 84)
 
@@ -216,6 +313,7 @@ text.
 - [Patch 0053](../patches/0053-winex11-export-the-app-minimum-tracking-size-as-PMin.patch)
 - [Patch 0055](../patches/0055-dxgi-prefer-GL-present-for-top-level-swapchain-devic.patch)
 - [Patch 0057](../patches/0057-wined3d-add-Intel-graphics-devices-from-Ice-Lake-to-.patch)
+- [Patch 0071](../patches/0071-wined3d-count-and-report-sustained-present-size-fall.patch)
 - Resize trace from the diagnosis session:
   `~/Projects/Code/ableton/live-resize-trace-gpu-20260727.log`
   (machine-local)

@@ -11,9 +11,10 @@ narrative — 5 merge conflicts, three build breaks the clean rebase didn't
 catch, a build.sh/pipefail tooling gotcha — is in
 `notes/ABLETON-WINE-11.11-TO-11.13-BASE-BUMP.md`.
 
-The current Wine series contains 64 files, numbered 0001 through 0069.
-Patches 0027 and 0044 are intentionally absent. Patches 0066 through 0068
-are reserved by PR 124 and will enter this branch when it rebases after merge.
+The current Wine series contains 81 files, numbered 0001 through 0089.
+Patches 0027 and 0044 are intentionally absent. Numbers 0066 through 0068
+and 0072 through 0074 are reserved by open pull requests and will enter this
+branch as those merge.
 
 ## Applying the series
 
@@ -251,3 +252,122 @@ Apply them in sequence with the rest of the series.
   borderless fullscreen, unselected windows, and plugin windows retain Wine's
   existing behavior. `WINE_WIN32_RESIZABLE_CLASS=off` disables only this fix
   for comparison. See `notes/ABLETON-WINE-GPU-RENDERER.md`.
+- `0070`: break the DefWindowProc Alt/F10 menu-bar arming on the win32u
+  input retrieval path, so an Alt chord Live consumes (Alt+0 through Alt+8
+  and the other Alt shortcuts) no longer activates the menu bar on Alt
+  release. Windows keeps this state in win32k queue flags that message
+  consumption cannot starve. Alt+letter menu mnemonics and bare Alt are
+  unchanged. Repro: `tools/altnum-menu-repro.c`. See
+  `notes/ABLETON-WINE-SHORTCUT-PARITY.md`.
+- `0071`: report a sustained present-size fallback instead of staying
+  silent. The 0058 gate keeps every frame correct but decides per frame; a
+  persistent coordinate fault once pinned a swapchain to the GDI copy path
+  at about one core of CPU with no visible sign (issue 100: 98.9% against
+  25.2% of a core). Counts gate decisions per swapchain, separates resize
+  races from persistent faults by whether the mismatched rect pair repeats,
+  warns once per swapchain with the evidence on the `winediag` channel plus
+  an unconditional MESSAGE line, and prints a one-line summary when the
+  swapchain is destroyed. The launchers now run `WINEDEBUG=-all,+winediag`
+  so the warning reaches the log. See `notes/ABLETON-WINE-GPU-RENDERER.md`.
+- `0075`: export UnregisterApplicationRecoveryCallback from kernel32.
+  Applications link it as a static import, so the generated stub
+  raised EXCEPTION_WINE_STUB during exit teardown. Fakes success to
+  match the register half of the API.
+- `0076`: implement userenv DeriveAppContainerSidFromAppContainerName:
+  SHA-256 over the lowercased container name, SID S-1-15-2 plus the
+  first seven digest words. libcef.dll links it as a regular import;
+  the generated stub fired when Chromium's sandbox derived the
+  AppContainer SID for a sandboxed child process.
+- `0077`: advertise the minimize and maximize Motif functions for
+  disabled windows, extending 0037's close-function reasoning. Hints
+  computed during a WS_DISABLED phase (a startup modal holding the
+  main window) made mutter refuse the application's own programmatic
+  SW_SHOWMAXIMIZED restore.
+- `0078`: pass the initial monitor DPI to the create_window request.
+  Backport of Wine MR 11573, the proposed fix for upstream bug 60023,
+  the 11.12 to 11.13 regression that sizes windows of per-monitor-aware
+  processes at a quarter of their request. Includes the regenerated
+  protocol files; 0078 carries the SERVER_PROTOCOL_VERSION bump
+  itself (956 → 957).
+- `0079`: skip the standalone-surface window search in dxgi's ReleaseDC
+  when the surface's owner presents it itself. Nothing binds a
+  standalone DXGI surface to a window, so ReleaseDC enumerates the
+  desktop and blits into any same-sized popup. An ID2D1DCRenderTarget
+  already blits to the application's device context in its present, and
+  runs GetDC/ReleaseDC twice per frame. An application drawing its
+  interface this way triggered 138 enumerations in fifteen seconds of
+  startup on the measured setup. The owner marks the surface through a private-data GUID
+  in a shared header; the gate also skips when the dirty rectangle
+  is empty. Unmarked surfaces, including the composition surfaces
+  the search was written for, are unaffected.
+- `0080`: implement the ninput pointer interaction context entry points.
+  An application driving pointer input through an interaction context
+  calls `ProcessPointerFramesInteractionContext` once per frame while
+  the mouse is over its interface; the spec-file stub raised
+  EXCEPTION_WINE_STUB and ended the process. Implements it and the Add,
+  Remove, Reset and Stop siblings, which belong to the same lifecycle,
+  so fixing one does not just move the crash. No gestures are produced;
+  applications keep the ordinary window messages they already receive.
+- `0081`: rasterise ClearType glyph runs at subpixel resolution. Wine
+  filled the three-samples-per-pixel texture by rendering each glyph once
+  in greyscale and copying that coverage into all three subpixels, so
+  DirectWrite text resolved horizontally at one sample per pixel where
+  Windows uses three. Renders the outline scaled three times horizontally
+  and filters each row with the five-tap FIR FreeType uses for
+  `FT_RENDER_MODE_LCD`; the rendered form joins the glyph cache key.
+  Renumbered from 0070 when this branch merged `feature/dwrite-cleartype`,
+  whose 0070 is the host font cache.
+- `0082`: blend ClearType glyph runs per subpixel channel. d2d1 wrapped
+  0081's texture in an alpha mask three times as wide and sampled it back
+  down, averaging the three samples into one, so Direct2D text was
+  greyscale either way. Draws the run once per channel, each pass masked
+  by that channel's coverage and writing only its own colour channel,
+  through three cached blend states differing from the standard one only
+  in the write mask. The first version let alpha ride with the green pass;
+  0086 confines ClearType to opaque targets and leaves alpha untouched.
+  Non-ClearType runs keep the single-pass path. Renumbered from 0071.
+- `0083`: take the ClearType level and pixel geometry from the system
+  font-smoothing settings. `CreateMonitorRenderingParams` reported a
+  ClearType level of zero and a flat pixel geometry unconditionally, and
+  d2d1 only promotes `DWRITE_TEXT_ANTIALIAS_MODE_DEFAULT` to ClearType
+  above zero, so every application taking the default drew greyscale and
+  0081/0082 were unreachable outside code naming ClearType explicitly.
+  Smoothing off or standard keeps greyscale; ClearType gives level 1.0
+  with the geometry from the smoothing orientation.
+- `0084`: let a prefix's own font smoothing outrank the host's. GDI took
+  its antialiasing mode from the host's fontconfig before consulting the
+  prefix, so a desktop set to greyscale rendered every Win32 menu and
+  control greyscale whatever `FontSmoothingType` said, which is GNOME's
+  default. A fresh prefix carries no `FontSmoothingType`, so its presence
+  means the decision was deliberate and now outranks fontconfig; a prefix
+  that says nothing still follows the host.
+  `WINE_DISABLE_PREFIX_FONT_SMOOTHING=1` restores host precedence. This is
+  the GDI half of the ClearType work, 0081 to 0083 being the DirectWrite
+  and Direct2D half.
+- `0085`: retain the two-subpixel tails produced by FreeType's five-tap LCD
+  filter. DirectWrite's texture bounds now give outline glyphs one whole
+  pixel of horizontal padding while embedded bitmaps keep exact bounds.
+  FreeType outline-copy, bitmap-render, and row-filter allocation failures
+  are propagated rather than returning a clipped or partially filtered run.
+- `0086`: make the d2d1 compositor obey the active pixel geometry and
+  ClearType level. RGB/BGR controls the coverage-to-output-channel mapping;
+  a reduced ClearType level interpolates each channel toward grayscale.
+  ClearType is restricted to opaque bitmap targets using source-over, as
+  transparent targets and alternate primitive blends cannot preserve its
+  per-channel contract. All three masks and blend states are allocated
+  before drawing, and alpha is no longer modified by a colour-only pass.
+- `0087`: resolve GDI smoothing by explicit provenance instead of treating
+  every incoming XRender value as a device constraint. Real constraints win,
+  then an application's `lfQuality`, then an explicit prefix policy (including
+  smoothing off), then the tagged host default, then the font fallback.
+  A missing orientation now defaults to horizontal RGB.
+- `0088`: add `HKCU\Software\Wine\Fonts\DesktopUIFont` as a semantic policy
+  for `DEFAULT_GUI_FONT`, including its DPI-scaled stock object. This gives
+  desktop integration a Wine-owned UI-font route without globally replacing
+  an application's explicit request for Tahoma or changing legacy
+  `SYSTEM_FONT` metrics. Nothing in this repository writes the value; it is
+  an integration hook for downstream desktop tooling.
+- `0089`: keep ClearType coverage interpolation signed. The first 0086
+  expression mixed an unsigned grayscale value with a lower channel sample,
+  so subtraction underflow could saturate that channel to 255 instead of
+  reducing it.

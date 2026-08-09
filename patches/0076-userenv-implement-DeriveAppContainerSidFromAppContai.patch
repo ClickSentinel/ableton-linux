@@ -1,0 +1,99 @@
+Subject: userenv: implement DeriveAppContainerSidFromAppContainerName
+
+Chromium's sandbox derives an AppContainer SID for every sandboxed
+child it spawns, and libcef.dll links the function as a regular
+import. Wine's userenv does not export it, so the loader binds a
+generated stub, and a CEF-embedding application aborts the moment the
+sandbox setup path first runs it.
+
+Implement the documented derivation: lowercase the container name,
+SHA-256 the UTF-16 bytes, and build S-1-15-2 followed by the first
+seven 32-bit words of the digest. Allocate the SID through
+AllocateAndInitializeSid so callers free it with FreeSid as
+documented.
+
+diff --git a/dlls/userenv/Makefile.in b/dlls/userenv/Makefile.in
+index aa94f7b..8a06ab8 100644
+--- a/dlls/userenv/Makefile.in
++++ b/dlls/userenv/Makefile.in
+@@ -1,6 +1,6 @@
+ EXTRADEFS = -D_USERENV_
+ MODULE    = userenv.dll
+-IMPORTS   = advapi32
++IMPORTS   = advapi32 bcrypt
+ IMPORTLIB = userenv
+ 
+ SOURCES = \
+diff --git a/dlls/userenv/userenv.spec b/dlls/userenv/userenv.spec
+index 6395bba..a09e45a 100644
+--- a/dlls/userenv/userenv.spec
++++ b/dlls/userenv/userenv.spec
+@@ -2,6 +2,7 @@
+ 
+ @ stdcall CreateAppContainerProfile(wstr wstr wstr ptr long ptr)
+ @ stdcall CreateEnvironmentBlock(ptr ptr long)
++@ stdcall DeriveAppContainerSidFromAppContainerName(wstr ptr)
+ @ stdcall DestroyEnvironmentBlock(ptr)
+ @ stdcall EnterCriticalPolicySection(long)
+ @ stdcall ExpandEnvironmentStringsForUserA(ptr str ptr long)
+diff --git a/dlls/userenv/userenv_main.c b/dlls/userenv/userenv_main.c
+index 54f713e..b57da5b 100644
+--- a/dlls/userenv/userenv_main.c
++++ b/dlls/userenv/userenv_main.c
+@@ -28,6 +28,7 @@
+ #include "winnls.h"
+ #include "sddl.h"
+ #include "objbase.h"
++#include "bcrypt.h"
+ #include "userenv.h"
+ 
+ #include "wine/debug.h"
+@@ -696,3 +697,36 @@ HRESULT WINAPI CreateAppContainerProfile(PCWSTR container_name, PCWSTR display_n
+ 
+     return E_NOTIMPL;
+ }
++
++/***********************************************************************
++ *           DeriveAppContainerSidFromAppContainerName   (USERENV.@)
++ */
++HRESULT WINAPI DeriveAppContainerSidFromAppContainerName(PCWSTR container_name, PSID *sid)
++{
++    SID_IDENTIFIER_AUTHORITY authority = { SECURITY_APP_PACKAGE_AUTHORITY };
++    DWORD sub[7];
++    UCHAR hash[32];
++    WCHAR *lower;
++    NTSTATUS status;
++    SIZE_T len, i;
++
++    TRACE("(%s, %p)\n", debugstr_w(container_name), sid);
++
++    if (!container_name || !*container_name || !sid) return E_INVALIDARG;
++
++    len = lstrlenW(container_name);
++    if (!(lower = HeapAlloc(GetProcessHeap(), 0, len * sizeof(WCHAR)))) return E_OUTOFMEMORY;
++    for (i = 0; i < len; i++) lower[i] = RtlDowncaseUnicodeChar(container_name[i]);
++
++    status = BCryptHash(BCRYPT_SHA256_ALG_HANDLE, NULL, 0, (UCHAR *)lower, len * sizeof(WCHAR),
++                        hash, sizeof(hash));
++    HeapFree(GetProcessHeap(), 0, lower);
++    if (status) return HRESULT_FROM_NT(status);
++
++    memcpy(sub, hash, sizeof(sub));
++    if (!AllocateAndInitializeSid(&authority, 8, SECURITY_APP_PACKAGE_BASE_RID,
++                                  sub[0], sub[1], sub[2], sub[3], sub[4], sub[5], sub[6], sid))
++        return HRESULT_FROM_WIN32(GetLastError());
++
++    return S_OK;
++}
+diff --git a/include/userenv.h b/include/userenv.h
+index a518de8..3d82168 100644
+--- a/include/userenv.h
++++ b/include/userenv.h
+@@ -80,6 +80,7 @@ extern "C" {
+ #endif
+ 
+ USERENVAPI BOOL WINAPI CreateEnvironmentBlock(LPVOID*,HANDLE,BOOL);
++USERENVAPI HRESULT WINAPI DeriveAppContainerSidFromAppContainerName(PCWSTR,PSID*);
+ USERENVAPI BOOL WINAPI DestroyEnvironmentBlock(LPVOID);
+ USERENVAPI HANDLE WINAPI EnterCriticalPolicySection(BOOL);
+ USERENVAPI BOOL WINAPI ExpandEnvironmentStringsForUserA(HANDLE,LPCSTR,LPSTR,DWORD);

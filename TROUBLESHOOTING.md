@@ -3,6 +3,27 @@
 Here are some common ailments we've seen, and how to fix them.
 
 
+## The installer does not finish after Live installs
+
+If an **Ableton USB Driver** window is in your taskbar, close it. The
+installer then continues by itself. If there is no such window, press
+Ctrl-C, then download
+[the latest installer](https://github.com/shibco/ableton-linux/releases/latest/download/install-ableton-latest.run)
+and run:
+
+```bash
+sh ~/Downloads/install-ableton-latest.run --update
+```
+
+An update that stops at `== [1/5] initialise prefix ==` has the same fix.
+The update keeps your Live installation, your license, and your projects.
+
+Ableton's own installer adds a small Windows helper program that Live does
+not need on Linux. The helper stays open, often without any window, and
+setup used to wait for it. Releases newer than 2026.08.04.1 stop the
+helper themselves and remove its autostart entry, so the wait clears after
+about half a minute and the stop does not come back.
+
 ## Live has no sound
 
 Open **Settings > Audio** and select:
@@ -60,6 +81,28 @@ on.
 If the setting is still greyed out on 2026.08.01.1 or newer,
 [open an issue](https://github.com/shibco/ableton-linux/issues) and
 include your graphics card model.
+
+## CPU spikes when moving your mouse
+
+Live keeps its current diagnostics in `~/.log/ableton-wine/live.log`,
+whether you start it from the desktop menu or a terminal. If Live's CPU
+use jumps while you move the mouse, run:
+
+```bash
+grep -i "sustained present-size mismatch:" ~/.log/ableton-wine/live.log
+```
+
+The beta launcher writes `live-beta.log` in the same directory; use that
+filename instead when testing Live 12 Beta.
+
+If that prints anything,
+[open an issue](https://github.com/shibco/ableton-linux/issues) and paste
+the whole line. It starts with `err:winediag:` and includes your desktop
+environment and window DPI.
+
+If nothing prints and Live's CPU use is still high, the cause is
+different. Open an issue and describe what you were doing when it
+happened.
 
 ## Live 11: Max for Live fails after the first launch
 
@@ -200,6 +243,30 @@ If fullscreen is still wrong after the update, launch once with
 `WINE_WIN32_FULLSCREEN_CLASS=off ableton-live`, then
 [open an issue](https://github.com/shibco/ableton-linux/issues) and include
 your desktop environment and whether that launch behaved differently.
+
+## GNOME handles a Live shortcut instead of Live
+
+GNOME uses Ctrl+Alt+Up and Ctrl+Alt+Down for workspace switching. These keys
+conflict with Live's **Adjust Note Selection Chance** shortcuts. GNOME also
+uses Ctrl+Alt+Delete for logout, which conflicts with **Delete Fades** in
+Live 11.
+
+Start Live with this command:
+
+```bash
+ABLETON_SHORTCUTS=take ableton-live
+```
+
+The launcher turns off only the exact Ctrl+Alt entries in conflict. It keeps
+other keys and modifiers in the same settings. It restores the saved entries
+after all Live sessions exit. It can also restore them after a crash. If you
+change a shortcut while Live runs, it keeps your change.
+
+The change applies to the complete GNOME session. The keys cannot switch a
+workspace or open the logout dialog in another application while Live runs.
+
+The default `ABLETON_SHORTCUTS=preserve` leaves every desktop shortcut
+unchanged. For another desktop, change its shortcut settings when necessary.
 
 ## Report a problem
 

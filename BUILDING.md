@@ -30,6 +30,28 @@ ableton-live
 `build.sh` creates the patched Wine runtime and `dist/ableton-linkd`.
 `install.sh` installs both under your home directory.
 
+## Shortcut test tools
+
+The repository includes the tools used to test shortcut support. Run the GNOME
+shortcut test with:
+
+```bash
+scripts/test-shortcut-hold.sh
+```
+
+Build the Wine menu test with all compiler warnings enabled. Then run its two
+modes:
+
+```bash
+winegcc -Wall -Wextra -Werror -o altnum-menu-repro tools/altnum-menu-repro.c
+./altnum-menu-repro.exe swallow
+./altnum-menu-repro.exe pass
+```
+
+The GNOME test uses temporary data and does not change the desktop settings.
+The Wine test sends keys to its own window. It needs a working Wine display.
+Each mode returns a non-zero status when a required result fails.
+
 Configure Ableton Link networking with:
 
 ```bash
@@ -65,6 +87,10 @@ make verify
   `~/works/plugs/studio`.
 - `ABLETON_LIVE_VERSION=11|12` selects a Live major version.
 - `ABLETON_LIVE_EXE` selects one exact Live executable.
+- `ABLETON_SHORTCUTS=take` temporarily turns off exact Ctrl+Alt+Up and
+  Ctrl+Alt+Down entries in the related GNOME settings. Live 11 also turns off
+  the exact Ctrl+Alt+Delete entry. The default value, `preserve`, does not
+  change desktop shortcuts.
 - `ABLETON_DPI_MODE=auto|preserve|100|fractional|dpi<N>|fractional<N>`
   overrides display-scale detection.
 - `ABLETON_THEME_MODE=auto|dark|light|preserve` controls desktop theme sync.

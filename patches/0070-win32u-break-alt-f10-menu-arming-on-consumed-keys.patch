@@ -1,0 +1,102 @@
+Subject: win32u: break Alt and F10 menu arming when the app consumes the key
+
+Live handles its Alt shortcuts (Alt+0 through Alt+8 focus a UI section,
+Alt+letter chords, Alt+drag gestures) inside its window procedure and never
+forwards them to DefWindowProc. Wine tracks "Alt was pressed and released
+without another key" in DefWindowProc-local statics, so the consumed chord
+key leaves menu_sys_key armed and the Alt release sends
+WM_SYSCOMMAND SC_KEYMENU: the menu bar enters keyboard mode and the next
+typed letter opens a main menu. On Windows the chord bookkeeping lives in
+the win32k input queue flags (QF_FMENUSTATUSBREAK), which an application
+cannot starve by consuming messages, so Alt+4 only moves focus there.
+Reported by Ableton for Alt+4 against the device chain; every consumed Alt
+chord is affected, in both release orders.
+
+Clear the arm state on the input retrieval path instead:
+process_keyboard_message runs for every removed hardware key message
+whether or not the window procedure later consumes it, and already carries
+this kind of side effect (F1 help, VK_APPS context menu, appcommand keys).
+A removed keydown other than Alt itself, or a removed button-down, breaks
+the pending activation, exactly as it already does when the message reaches
+DefWindowProc. Do this before keyboard/mouse hooks and the mouse capture
+fast path, since those may consume or return the removed message too.
+
+Behavior for applications that pass their keys through is unchanged: bare
+Alt press and release still arms the menu bar, Alt+letter mnemonics still
+open their menu through the WM_SYSCHAR path, and F10 keeps its existing
+handling. Verified with tools/altnum-menu-repro.c; audit and traces in
+notes/ABLETON-WINE-SHORTCUT-AUDIT.md.
+---
+ dlls/win32u/defwnd.c         | 12 ++++++++++++
+ dlls/win32u/message.c        | 15 +++++++++++++++
+ dlls/win32u/win32u_private.h |  1 +
+ 3 files changed, 28 insertions(+)
+
+diff --git a/dlls/win32u/defwnd.c b/dlls/win32u/defwnd.c
+index 62c6155..d26ba99 100644
+--- a/dlls/win32u/defwnd.c
++++ b/dlls/win32u/defwnd.c
+@@ -41,6 +41,18 @@ static const struct ratio no_dpi;
+ static short f10_key = 0;
+ static short menu_sys_key = 0;
+
++/* Cancel a pending Alt or F10 menu-bar activation.
++ *
++ * Called from the input retrieval path so a key or button the window
++ * procedure consumes without calling DefWindowProc still breaks the Alt
++ * chord, as the win32k queue flags (QF_FMENUSTATUSBREAK) do on Windows.
++ * Otherwise an application shortcut like Alt+4 leaves menu_sys_key armed
++ * and the Alt release activates the menu bar. */
++void cancel_menu_key_state(void)
++{
++    f10_key = menu_sys_key = 0;
++}
++
+ static BOOL has_dialog_frame( UINT style, UINT ex_style )
+ {
+     return (ex_style & WS_EX_DLGMODALFRAME) || ((style & WS_DLGFRAME) && !(style & WS_THICKFRAME));
+diff --git a/dlls/win32u/message.c b/dlls/win32u/message.c
+index c90ac89..f56399e 100644
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -2520,6 +2520,13 @@ static BOOL process_keyboard_message( MSG *msg, UINT hw_id, HWND hwnd_filter,
+
+     if (remove)
+     {
++        /* A consumed key breaks a pending Alt / F10 menu-bar activation even
++         * when the window procedure never passes it to DefWindowProc, as the
++         * win32k queue flags do on Windows. */
++        if ((msg->message == WM_KEYDOWN || msg->message == WM_SYSKEYDOWN) &&
++            msg->wParam != VK_MENU)
++            cancel_menu_key_state();
++
+         if((msg->message == WM_KEYDOWN) &&
+            (msg->hwnd != get_desktop_window()))
+         {
+@@ -2783,6 +2790,14 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
+
+     /* message is accepted now (but may still get dropped) */
+
++    /* A consumed click breaks a pending Alt / F10 menu-bar activation even
++     * when a mouse hook eats it or capture takes the fast path below. */
++    if (remove && (msg->message == WM_LBUTTONDOWN ||
++                   msg->message == WM_RBUTTONDOWN ||
++                   msg->message == WM_MBUTTONDOWN ||
++                   msg->message == WM_XBUTTONDOWN))
++        cancel_menu_key_state();
++
+     hook.pt           = msg->pt;
+     hook.hwnd         = msg->hwnd;
+     hook.wHitTestCode = hittest;
+diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
+index 80d6fdf..b7f37e4 100644
+--- a/dlls/win32u/win32u_private.h
++++ b/dlls/win32u/win32u_private.h
+@@ -64,6 +64,7 @@ extern void window_surface_set_layered( struct window_surface *surface, COLORREF
+
+ /* defwnd.c */
+ extern BOOL adjust_window_rect( RECT *rect, DWORD style, BOOL menu, DWORD ex_style, UINT dpi );
++extern void cancel_menu_key_state(void);
+ extern LRESULT default_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
+                                     BOOL ansi );
+ extern LRESULT desktop_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, BOOL ansi );

@@ -19,6 +19,21 @@
 - ableton-linkd rejects fractional `--linger` values instead of
   truncating them toward the never-exit setting.
 
+## 2026.08.08.1
+
+- Experimental ClearType-style subpixel rendering is now available to
+  DirectWrite, Direct2D and GDI text. Prefix setup enables it by default and
+  follows the desktop's RGB/BGR order; set `ABLETON_TEXT_SMOOTHING=grayscale`
+  for deliberate greyscale rendering or `preserve` to leave an existing
+  prefix policy untouched. An explicitly disabled `FontSmoothing=0` is never
+  overwritten by the launcher.
+- Added standalone DirectWrite, Direct2D and GDI probes for checking the text
+  path without launching Live. The ClearType texture probe uses an outline
+  size and compares each RGB coverage triple, so symmetric filtering no longer
+  produces a false greyscale verdict.
+- Added a downstream `DesktopUIFont` integration hook for changing Wine's
+  semantic desktop UI stock font without globally substituting Tahoma.
+
 ## 2026.08.04.1
 
 - Full Screen works (issue 42). Entering it no longer shifts Live's

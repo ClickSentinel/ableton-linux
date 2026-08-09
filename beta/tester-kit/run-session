@@ -255,11 +255,14 @@ if [[ ! -x "$WINESERVER_BIN" || ! -x "$WINEBOOT_BIN" ]]; then
     exit 69
 fi
 
-unset WINELOADER WINEDLLPATH WINEDLLOVERRIDES WINEARCH WINEESYNC WINEFSYNC WINE_FORCE_PORTAL
+unset WINELOADER WINEDLLPATH WINEDLLOVERRIDES WINEARCH WINEESYNC WINEFSYNC WINE_FORCE_PORTAL WINEDEBUG
 export WINEPREFIX="$PREFIX"
 export WINESERVER="$WINESERVER_BIN"
 export PATH="$WINE_ROOT/bin:$PATH"
-export WINEDEBUG=-all
+# Disable Wine debug logging; fixme spam from the D3D poll loop stalls Live's UI thread.
+# Keep the winediag channel on: it carries only rare one-line notices that a
+# person should read, such as the present-fallback warning from patch 0071.
+export WINEDEBUG="${WINEDEBUG:--all,+winediag}"
 
 WINDOWS_PROBES="$KIT_ROOT/probes/windows"
 NATIVE_SOURCES="$KIT_ROOT/probes/src"

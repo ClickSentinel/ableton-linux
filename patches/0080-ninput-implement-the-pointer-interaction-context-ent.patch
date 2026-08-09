@@ -1,0 +1,172 @@
+Subject: ninput: implement the pointer interaction context entry points
+
+An application that drives its pointer input through an interaction
+context calls ProcessPointerFramesInteractionContext once per frame
+while the mouse is over its interface. That export was a
+spec-file stub, so the first call raised EXCEPTION_WINE_STUB and ended
+the process:
+
+    Unhandled exception: unimplemented function
+    ninput.dll.ProcessPointerFramesInteractionContext
+
+Implement it, and the four sibling entry points an application that uses
+one is likely to call next, following the argument validation the
+implemented parts of this module already use. Add, Remove, Reset and
+Stop are included deliberately rather than waiting for each to crash in
+turn: they belong to the same lifecycle and a fix for one alone just
+moves the failure.
+
+No gestures are produced. The context reports nothing to its output
+callback, so an application gets the ordinary window messages it already
+receives, which is a missing feature rather than a dead process. Wine
+raising rather than returning is what makes an unimplemented function
+fatal here; returning leaves the application running without it.
+
+diff --git a/dlls/ninput/main.c b/dlls/ninput/main.c
+index 5e8c88a..c595518 100644
+--- a/dlls/ninput/main.c
++++ b/dlls/ninput/main.c
+@@ -242,6 +242,72 @@ HRESULT WINAPI RegisterOutputCallbackInteractionContext(HINTERACTIONCONTEXT hand
+     return S_OK;
+ }
+ 
++/* Adobe Lightroom Classic's ui.dll drives its pointer input through an
++ * interaction context and calls this on every frame. A spec-file stub raises
++ * EXCEPTION_WINE_STUB the first time it is reached, which ended the process,
++ * so these return instead. No gestures are produced: the context reports
++ * nothing to its output callback and the application keeps the ordinary window
++ * messages it already receives, which is a missing feature rather than a dead
++ * process. */
++HRESULT WINAPI ProcessPointerFramesInteractionContext(HINTERACTIONCONTEXT context,
++        UINT32 entries_count, UINT32 pointer_count, const POINTER_INFO *pointer_info)
++{
++    static unsigned int once;
++
++    if (!once++)
++        FIXME("context %p, entries_count %u, pointer_count %u, pointer_info %p: stub!\n",
++              context, entries_count, pointer_count, pointer_info);
++
++    if (!context)
++        return E_HANDLE;
++    if (!entries_count || !pointer_count)
++        return E_INVALIDARG;
++    if (!pointer_info)
++        return E_POINTER;
++
++    return S_OK;
++}
++
++HRESULT WINAPI AddPointerInteractionContext(HINTERACTIONCONTEXT context, UINT32 pointer_id)
++{
++    FIXME("context %p, pointer_id %u: stub!\n", context, pointer_id);
++
++    if (!context)
++        return E_HANDLE;
++
++    return S_OK;
++}
++
++HRESULT WINAPI RemovePointerInteractionContext(HINTERACTIONCONTEXT context, UINT32 pointer_id)
++{
++    FIXME("context %p, pointer_id %u: stub!\n", context, pointer_id);
++
++    if (!context)
++        return E_HANDLE;
++
++    return S_OK;
++}
++
++HRESULT WINAPI ResetInteractionContext(HINTERACTIONCONTEXT context)
++{
++    FIXME("context %p: stub!\n", context);
++
++    if (!context)
++        return E_HANDLE;
++
++    return S_OK;
++}
++
++HRESULT WINAPI StopInteractionContext(HINTERACTIONCONTEXT context)
++{
++    FIXME("context %p: stub!\n", context);
++
++    if (!context)
++        return E_HANDLE;
++
++    return S_OK;
++}
++
+ HRESULT WINAPI ProcessBufferedPacketsInteractionContext(HINTERACTIONCONTEXT context)
+ {
+     FIXME("context %p: stub!\n", context);
+diff --git a/dlls/ninput/ninput.spec b/dlls/ninput/ninput.spec
+index 34fbf2b..305cbee 100644
+--- a/dlls/ninput/ninput.spec
++++ b/dlls/ninput/ninput.spec
+@@ -1,5 +1,5 @@
+ 1 stub DefaultInputHandler
+-@ stub AddPointerInteractionContext
++@ stdcall AddPointerInteractionContext(ptr long)
+ @ stdcall BufferPointerPacketsInteractionContext(ptr long ptr)
+ @ stdcall CreateInteractionContext(ptr)
+ @ stdcall DestroyInteractionContext(ptr)
+@@ -11,17 +11,17 @@
+ @ stdcall GetStateInteractionContext(ptr ptr ptr)
+ @ stdcall ProcessBufferedPacketsInteractionContext(ptr)
+ @ stdcall ProcessInertiaInteractionContext(ptr)
+-@ stub ProcessPointerFramesInteractionContext
++@ stdcall ProcessPointerFramesInteractionContext(ptr long long ptr)
+ @ stdcall RegisterOutputCallbackInteractionContext(ptr ptr ptr)
+-@ stub RemovePointerInteractionContext
+-@ stub ResetInteractionContext
++@ stdcall RemovePointerInteractionContext(ptr long)
++@ stdcall ResetInteractionContext(ptr)
+ @ stub SetCrossSlideParametersInteractionContext
+ @ stub SetInertiaParameterInteractionContext
+ @ stdcall SetInteractionConfigurationInteractionContext(ptr long ptr)
+ @ stub SetMouseWheelParameterInteractionContext
+ @ stub SetPivotInteractionContext
+ @ stdcall SetPropertyInteractionContext(ptr long long)
+-@ stub StopInteractionContext
++@ stdcall StopInteractionContext(ptr)
+ 
+ 2500 stub @
+ 2501 stub @
+diff --git a/include/interactioncontext.h b/include/interactioncontext.h
+index 7d0c583..b8913a0 100644
+--- a/include/interactioncontext.h
++++ b/include/interactioncontext.h
+@@ -178,6 +178,8 @@ typedef struct INTERACTION_CONTEXT_OUTPUT
+ typedef void (CALLBACK *INTERACTION_CONTEXT_OUTPUT_CALLBACK)(void *data,
+         const INTERACTION_CONTEXT_OUTPUT *output);
+ 
++HRESULT WINAPI AddPointerInteractionContext(HINTERACTIONCONTEXT context, UINT32 pointer_id);
++
+ HRESULT WINAPI BufferPointerPacketsInteractionContext(HINTERACTIONCONTEXT context,
+         UINT32 entries_count, const POINTER_INFO *pointer_info);
+ 
+@@ -186,10 +188,15 @@ HRESULT WINAPI DestroyInteractionContext(HINTERACTIONCONTEXT context);
+ 
+ HRESULT WINAPI ProcessBufferedPacketsInteractionContext(HINTERACTIONCONTEXT context);
+ HRESULT WINAPI ProcessInertiaInteractionContext(HINTERACTIONCONTEXT context);
++HRESULT WINAPI ProcessPointerFramesInteractionContext(HINTERACTIONCONTEXT context,
++        UINT32 entries_count, UINT32 pointer_count, const POINTER_INFO *pointer_info);
+ 
+ HRESULT WINAPI RegisterOutputCallbackInteractionContext(HINTERACTIONCONTEXT context,
+         INTERACTION_CONTEXT_OUTPUT_CALLBACK callback, void *data);
+ 
++HRESULT WINAPI RemovePointerInteractionContext(HINTERACTIONCONTEXT context, UINT32 pointer_id);
++HRESULT WINAPI ResetInteractionContext(HINTERACTIONCONTEXT context);
++
+ HRESULT WINAPI GetInteractionConfigurationInteractionContext(HINTERACTIONCONTEXT context,
+         UINT32 count, INTERACTION_CONTEXT_CONFIGURATION *configuration);
+ HRESULT WINAPI SetInteractionConfigurationInteractionContext(HINTERACTIONCONTEXT context,
+@@ -203,6 +210,8 @@ HRESULT WINAPI SetPropertyInteractionContext(HINTERACTIONCONTEXT context,
+ HRESULT WINAPI GetStateInteractionContext(HINTERACTIONCONTEXT context,
+         const POINTER_INFO *pointer_info, INTERACTION_STATE *state);
+ 
++HRESULT WINAPI StopInteractionContext(HINTERACTIONCONTEXT context);
++
+ #ifdef __cplusplus
+ } /* extern "C" */
+ #endif /* defined(__cplusplus) */

@@ -16,7 +16,9 @@ unset WINELOADER WINEDLLPATH WINEDLLOVERRIDES WINEARCH WINEESYNC WINEFSYNC WINE_
 export WINEPREFIX="$prefix"
 export WINESERVER="$runtime/bin/wineserver"
 export PATH="$runtime/bin:$PATH"
-export WINEDEBUG="${WINEDEBUG:--all}"
+# -all silences Wine's debug spam; +winediag keeps the rare one-line user
+# notices, such as the present-fallback warning from patch 0071.
+export WINEDEBUG="${WINEDEBUG:--all,+winediag}"
 
 if [[ "${ABLETON_PORTAL_FORCE:-0}" == 1 ]]; then
     export WINE_FORCE_PORTAL=1

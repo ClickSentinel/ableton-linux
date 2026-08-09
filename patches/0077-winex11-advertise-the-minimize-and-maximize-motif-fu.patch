@@ -1,0 +1,56 @@
+Subject: winex11: advertise the minimize and maximize Motif functions for disabled windows
+
+Patch 0037 moved MWM_FUNC_CLOSE out of the WS_DISABLED gate. The
+minimize and maximize functions still vanish while a window is
+disabled, and WMs derive _NET_WM_ALLOWED_ACTIONS from the Motif
+functions, so hints computed while a startup modal holds the main
+window disabled make mutter refuse even the application's own
+programmatic SW_SHOWMAXIMIZED restore. An application that replays a
+saved maximized placement while its startup modal is up stays at the
+restored size instead: the measured trace shows functions 0x26 against
+decorations 0x7a.
+
+Windows keeps both buttons visible on a disabled window and refuses
+the interaction at the input layer. Advertise the functions
+unconditionally, for the same reason as the close function.
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 9208df5..c19a0ec 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1152,18 +1152,23 @@ static void set_mwm_hints( struct x11drv_win_data *data, UINT style, UINT ex_sty
+          * disabled, so the visible button is a no-op, same as on Windows. */
+         mwm_hints.functions = MWM_FUNC_MOVE | MWM_FUNC_CLOSE;
+         if (is_window_resizable( data, style )) mwm_hints.functions |= MWM_FUNC_RESIZE;
+-        if (!(style & WS_DISABLED))
+-        {
+-            if (style & WS_MINIMIZEBOX) mwm_hints.functions |= MWM_FUNC_MINIMIZE;
+-            if (style & WS_MAXIMIZEBOX) mwm_hints.functions |= MWM_FUNC_MAXIMIZE;
+-
+-            /* The window can be programmatically minimized even without
+-               a minimize box button. Allow the WM to restore it. */
+-            if (style & WS_MINIMIZE)    mwm_hints.functions |= MWM_FUNC_MINIMIZE | MWM_FUNC_MAXIMIZE;
+-            /* The window can be programmatically maximized even without
+-               a maximize box button. Allow the WM to maximize it. */
+-            if (style & WS_MAXIMIZE)    mwm_hints.functions |= MWM_FUNC_MAXIMIZE;
+-        }
++        /* Like MWM_FUNC_CLOSE above, the minimize and maximize functions must
++         * not depend on WS_DISABLED.  WMs derive _NET_WM_ALLOWED_ACTIONS from
++         * these hints, so hints computed while a startup modal holds the window
++         * disabled make mutter refuse even the application's own programmatic
++         * SW_SHOWMAXIMIZED restore (Lightroom Classic replays its saved
++         * maximized placement behind the modal and stays at the restored size).
++         * Windows keeps the buttons visible on a disabled window and refuses
++         * the interaction at the input layer instead. */
++        if (style & WS_MINIMIZEBOX) mwm_hints.functions |= MWM_FUNC_MINIMIZE;
++        if (style & WS_MAXIMIZEBOX) mwm_hints.functions |= MWM_FUNC_MAXIMIZE;
++
++        /* The window can be programmatically minimized even without
++           a minimize box button. Allow the WM to restore it. */
++        if (style & WS_MINIMIZE)    mwm_hints.functions |= MWM_FUNC_MINIMIZE | MWM_FUNC_MAXIMIZE;
++        /* The window can be programmatically maximized even without
++           a maximize box button. Allow the WM to maximize it. */
++        if (style & WS_MAXIMIZE)    mwm_hints.functions |= MWM_FUNC_MAXIMIZE;
+     }
+ 
+     mwm_hints.flags = MWM_HINTS_FUNCTIONS | MWM_HINTS_DECORATIONS;

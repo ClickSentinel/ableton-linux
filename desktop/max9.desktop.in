@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Max 9
-Comment=Visual programming for music and sound (Wine, patched d2d1-dcomp stack)
+Comment=Visual programming for music and sound
 Exec=@HOME@/.local/bin/max9 %f
 Type=Application
 StartupNotify=true
