@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-239 tests across 11 suites. See [README.md](README.md) for how to run
+257 tests across 11 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -19,10 +19,10 @@ for which run on a PR.
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/install-runs.bats](#install-runs) — 10 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 15 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 37 test(s)
-- [tests/unit/works-runtime.bats](#works-runtime) — 21 test(s)
-- [tests/unit/runtime-env.bats](#runtime-env) — 52 test(s)
+- [tests/unit/works-runtime.bats](#works-runtime) — 24 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 62 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 
 <a id="repo-hygiene"></a>
@@ -277,6 +277,11 @@ tree ships.
 | 8 | setup-prefix refuses while something runs from the runtime | `wineboot -u` rewriting the registry under a live wineserver |
 | 9 | setup-prefix refuses with no terminal too | the refusal must not depend on a terminal -- an unattended run is |
 | 10 | setup-prefix gets past the guard when nothing is running | the guard must not block the .run, where install.sh has already |
+| 11 | the channel stays a symlink across a second install | one dated copy per install, on the PATH, pruned by nothing — the |
+| 12 | a kit declares its channel and the installer promotes into it | — |
+| 13 | installing records the channel, so the updater follows it | — |
+| 14 | a kit with no channel marker is stable, as every older kit was | — |
+| 15 | uninstalling takes the recorded channel back | — |
 
 <a id="migrate-layout"></a>
 
@@ -375,6 +380,9 @@ resolve through it instead of naming a directory.
 | 19 | use with no argument refuses when there is no terminal | a script calling `use` with no argument must fail, not block forever |
 | 20 | list: a nightly id does not crowd the WINE column | the BUILD column was exactly as wide as a nightly id -- |
 | 21 | use accepts a nightly build by its full name | the id contains dots and a plus, so anything treating it as a pattern |
+| 22 | path answers on the store, with the build rather than the channel | — |
+| 23 | use retargets the channel | — |
+| 24 | use with no argument leaves the channel alone | — |
 
 <a id="runtime-env"></a>
 
@@ -443,6 +451,16 @@ sandbox, which is the whole reason they echo instead of assigning.
 | 50 | runtime id: the patch-stack fallback still works with a kind | every runtime installed anywhere today predates source-commit |
 | 51 | runtime id: a kind with a path separator is refused, not sanitised | build-kind becomes a directory name like everything else in the id |
 | 52 | tarball predicate: the nightly artifact name is accepted | — |
+| 53 | runtime root: resolves to the build, not to the channel link | someone with both set has already migrated and left the old one in a |
+| 54 | runtime root: a dangling channel falls back rather than resolving empty | a dangling channel must not resolve to nothing and strand the launcher |
+| 55 | channel: defaults to stable with nothing configured | — |
+| 56 | channel: reads the configured file | — |
+| 57 | channel: tolerates trailing whitespace | — |
+| 58 | channel: an unknown value falls back to stable and says so | — |
+| 59 | channel: the environment overrides the file | — |
+| 60 | runtime root: resolves through the configured channel | — |
+| 61 | retention never removes what a DIFFERENT channel points at | pruning on behalf of one channel must not strand another |
+| 62 | runtime id: dates order correctly across both channels | this is the whole point -- the directory name answers "when" |
 
 <a id="patch-stack"></a>
 
@@ -488,6 +506,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | ``wineboot -u` rewriting the registry under a live wineserver` | install-runs: setup-prefix refuses while something runs from the runtime |
 | `a bats on PATH used to beat the pin, so a checkout ran whatever the` | repo-hygiene: CI runs the bats tests/run.sh pins, not one of its own |
 | `a channel pointing at a pruned entry is a broken install produced by` | migrate-layout: retention leaves set-aside trees alone; they are not entries |
+| `a dangling channel must not resolve to nothing and strand the launcher` | runtime-env: runtime root: a dangling channel falls back rather than resolving empty |
 | `a debug tree rolled back by the selector bug has no dist-version at` | migrate-layout: a rollback that cannot be named moves aside instead of blocking |
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
 | `a label is a suffix on the release form, not a licence to accept any` | runtime-env: tarball predicate: a labelled debug tree is still refused |
@@ -521,6 +540,8 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `no released runtime carries source-commit` | runtime-env: a runtime without source-commit is named from its patch stack |
 | `nothing is left behind for an older .run to overwrite, and a migrated` | migrate-layout: nothing remains at the legacy path |
 | `observed during the first real migration` | runtime-env: live pids: a process that exits mid-scan is skipped, not an error |
+| `one dated copy per install, on the PATH, pruned by nothing` | install-runs: the channel stays a symlink across a second install |
+| `pruning on behalf of one channel must not strand another` | runtime-env: retention never removes what a DIFFERENT channel points at |
 | `renaming a prefix out from under a live wineserver corrupts its` | migrate-layout: plug: a prefix something is running from is not moved |
 | `scoping` | runtime-env: runtime pids: a process from another Wine install is ignored |
 | `scripts/ableton-live` | launcher-cli: a stale wineserver is killed and the session booted before registry writes<br>launcher: windowmetrics: a value wrapped across continuation lines is rejoined |
@@ -531,6 +552,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `scripts/setup-run-header.sh line 19` | repo-hygiene: the installer header survives being run by a real POSIX sh |
 | `set-aside trees are not builds you can choose, but their existence is` | works-runtime: list does not offer quarantined trees, but mentions them |
 | `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
+| `someone with both set has already migrated and left the old one in a` | runtime-env: runtime root: resolves to the build, not to the channel link |
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | runtime-env: the runtime wins over a debug tree sitting beside it |
 | `the BUILD column was exactly as wide as a nightly id --` | works-runtime: list: a nightly id does not crowd the WINE column |
 | `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
@@ -556,5 +578,6 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
 | `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
 | `this is the only runtime artifact the nightly channel publishes, so` | runtime-env: tarball predicate: a nightly label is accepted |
+| `this is the whole point -- the directory name answers "when"` | runtime-env: runtime id: dates order correctly across both channels |
 | `two installs of one build collapse to one entry, and the loser is set` | migrate-layout: two rollbacks holding one build keep one and set the rest aside |
 | `two prefixes can hold different Lives and different authorisations` | migrate-layout: plug: a prefix at both paths refuses, naming both |

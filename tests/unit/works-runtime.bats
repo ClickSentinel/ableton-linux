@@ -248,3 +248,24 @@ store() {
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [ "$(readlink "$C/stable")" = "2026.08.06.1+nightly.79d8960" ]
 }
+
+@test "path answers on the store, with the build rather than the channel" {
+    store
+    run RT path
+    [ "$status" -eq 0 ]
+    [ "$output" = "$C/2026.06.01.1+bbbbbbb" ]
+}
+
+@test "use retargets the channel" {
+    store
+    run RT use 2026.01.01.1+aaaaaaa
+    [ "$status" -eq 0 ]
+    [ "$(readlink "$C/stable")" = "2026.01.01.1+aaaaaaa" ]
+    [ "$(RT path)" = "$C/2026.01.01.1+aaaaaaa" ]
+}
+
+@test "use with no argument leaves the channel alone" {
+    store
+    setsid bash "$REPO/scripts/works-runtime" use || true
+    [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]
+}

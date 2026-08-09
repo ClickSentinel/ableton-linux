@@ -134,6 +134,16 @@ EOF
 install -m644 vendor/fonts/bitstream-vera/COPYRIGHT.TXT \
               "$kit/licenses/bitstream-vera-COPYRIGHT.txt"
 
+# The kit says which channel it belongs to. Without it install.sh promotes into
+# whatever channel the machine already followed, so installing a nightly while
+# configured for stable would point `stable` at a nightly build.
+#
+# One word rather than the manifest: the manifest carries the sealed kit's own
+# checksum and so cannot exist until after this is packed. They answer different
+# questions anyway - the manifest says what a channel currently points at, for
+# the updater; this says what this kit is, for the installer holding it.
+printf '%s\n' "${WORKS_CHANNEL_PUBLISH:-stable}" > "$kit/channel"
+
 echo "== [4/5] pack + seal =="
 payload="$stage/payload.tar"
 tar --sort=name --owner=0 --group=0 --numeric-owner \

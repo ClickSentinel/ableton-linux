@@ -101,13 +101,37 @@ works_legacy_root() {
 # And a caller that resolved once keeps the build it resolved. A channel switch
 # part-way through a session cannot move the runtime under a process already
 # executing from it.
+# Which channel this machine follows. One word, validated against an allowlist
+# rather than trusted: it selects a symlink name and, for the updater, part of a
+# URL - and configuration the build does not control must not shape a request.
+# That is the same constraint that ended the source-repo experiment.
+# Where the followed channel is recorded. One function, because a reader and a
+# writer that spell this differently disagree silently until an update goes to
+# the wrong channel.
+works_channel_file() {
+    printf '%s\n' "${WORKS_CHANNEL_FILE:-$(works_runtime_store)/.channel}"
+}
+
+works_channel() {
+    local _f _c
+    _f="$(works_channel_file)"
+    _c="${WORKS_CHANNEL:-}"
+    [ -n "$_c" ] || { [ -r "$_f" ] && _c="$(head -1 "$_f" 2>/dev/null | tr -d '[:space:]')"; }
+    case "$_c" in
+        stable|nightly) printf '%s\n' "$_c" ;;
+        "")             printf 'stable\n' ;;
+        *)              echo "!! unknown channel '$_c' in $_f; using stable" >&2
+                        printf 'stable\n' ;;
+    esac
+}
+
 works_runtime_path() {
     local _chan _target
     if [ -n "${WORKS_RUNTIME:-}" ]; then
         printf '%s\n' "$WORKS_RUNTIME"
         return
     fi
-    _chan="$(works_runtime_store)/stable"
+    _chan="$(works_runtime_store)/$(works_channel)"
     if [ -e "$_chan" ]; then
         _target="$(readlink -f "$_chan" 2>/dev/null || true)"
         if [ -n "$_target" ]; then
