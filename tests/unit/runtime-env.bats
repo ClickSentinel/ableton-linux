@@ -23,7 +23,7 @@ setup() {
 }
 
 @test "runtime root: an unmigrated install still resolves where it actually is" {
-    [ "$(works_runtime_path)" = "$HOME/works/wine-d2d1-nspa-11.13" ]
+    [ "$(works_runtime_path)" = "$HOME/.local/opt/wine-d2d1-nspa-11.13" ]
 }
 
 @test "runtime root: WORKS_RUNTIME wins, so a bisect or VM run can pin one" {
@@ -45,7 +45,7 @@ setup() {
     [ "$(works_plug_path)" = "$HOME/works/plugs/studio" ]
     unset WORKS_RUNTIME
     WORKS_PLUG=/tmp/altpfx
-    [ "$(works_runtime_path)" = "$HOME/works/wine-d2d1-nspa-11.13" ]
+    [ "$(works_runtime_path)" = "$HOME/.local/opt/wine-d2d1-nspa-11.13" ]
 }
 
 @test "the resolvers are pure: calling them exports and unsets nothing" {

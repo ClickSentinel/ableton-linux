@@ -76,10 +76,12 @@ works_runtime_store() {
     printf '%s\n' "$(works_home)/runtimes"
 }
 
-# The pre-container install path. Carries the Wine version, which is exactly why
-# it is being retired: a base bump moved every user's directory.
+# Where installs used to live. This is a fact about the past, not a path
+# derived from where things live now: derive it from works_home() and the
+# migration looks inside ~/works, finds nothing, and silently orphans every
+# existing install instead of moving it. It stays frozen when the store moves.
 works_legacy_root() {
-    printf '%s\n' "$HOME/works/$(works_runtime_name)"
+    printf '%s\n' "$HOME/.local/opt/$(works_runtime_name)"
 }
 
 # The installed runtime. WORKS_RUNTIME overrides it — the tests, the
@@ -417,6 +419,21 @@ works_all_pids() {
 }
 
 # What is holding it, for a refusal that can be acted on rather than puzzled at.
+# Every pid Works is running, from either direction. The two scans genuinely
+# differ: the runtime scan resolves /proc/PID/exe, so it cannot see a process
+# whose runtime directory has since been removed, and the Plug scan reads
+# WINEPREFIX out of the environment, so it finds exactly those orphans. Wine
+# leaves services.exe, rpcss.exe and friends behind under names no `pkill
+# wineserver` will ever match, and they hold the prefix until something asks.
+works_all_pids() {
+    local _p _d
+    works_runtime_pids 2>/dev/null || true
+    for _d in "$(works_home)"/plugs/*/ "$HOME/.wine-ableton"; do
+        [ -d "$_d" ] || continue
+        works_plug_holders "${_d%/}" 2>/dev/null | awk '{print $1}'
+    done
+}
+
 works_plug_holders() {
     local _plug _p _cmd
     _plug="${1:-$(works_plug_path)}"
