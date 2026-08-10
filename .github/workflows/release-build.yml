@@ -202,6 +202,15 @@ jobs:
           [ "$want" = "$got" ] || {
               echo "!! manifest checksum does not match the installer" >&2
               echo "   manifest $want" >&2; echo "   asset    $got" >&2; exit 1; }
+          # The runtime fields must name a tarball that is really here and
+          # really this content, or runtime-only installs refuse every build.
+          rtname="$(awk '$1 == "runtime:" {print $2}' dist/manifest.txt)"
+          [ -n "$rtname" ] && [ -f "dist/$rtname" ] || {
+              echo "!! the manifest's runtime tarball is not in dist/: $rtname" >&2; exit 1; }
+          want_rt="$(awk '$1 == "runtime-sha256:" {print $2}' dist/manifest.txt)"
+          got_rt="$(sha256sum "dist/$rtname" | cut -d' ' -f1)"
+          [ "$want_rt" = "$got_rt" ] || {
+              echo "!! manifest runtime-sha256 does not match dist/$rtname" >&2; exit 1; }
 
       # No kit publishes without installing: the kit's own installer, against a
       # throwaway HOME, runtime-only, and the installed wine must execute.

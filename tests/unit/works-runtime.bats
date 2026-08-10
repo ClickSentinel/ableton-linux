@@ -515,3 +515,89 @@ fake_live() {
     [[ "$output" == *"DOWNGRADE"* ]]
     [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]
 }
+
+# --- install from the web -------------------------------------------------------
+# The gesture is `works runtime install` with nothing after it: almost nobody has
+# a tarball, and the channel's manifest already says what is current. The network
+# work happens before anything is stopped or moved, so a machine is never
+# disturbed for a build that is absent, already installed, or unverifiable.
+#
+# The verb's own requirements of a build are a readable BUILD-INFO, an executable
+# bin/wine and the wine.inf the base guard reads - component checks are the
+# caller's voucher - so these fixtures are small by construction rather than by
+# stubbing.
+
+published() {   # commit, [runtime-name], [sha-override]
+    PUB="$BATS_TEST_TMPDIR/pub"; mkdir -p "$PUB"
+    export WORKS_MANIFEST_URL="file://$PUB/manifest.txt"
+    local name="${2:-wine-d2d1-nspa-11.13-2026.09.01.1.tar.zst}"
+    local t="$BATS_TEST_TMPDIR/build/$(works_runtime_name)"
+    rm -rf "$BATS_TEST_TMPDIR/build"; mkdir -p "$t/bin" "$t/share/wine"
+    printf '#!/bin/sh\necho wine-11.13\n' > "$t/bin/wine"; chmod +x "$t/bin/wine"
+    : > "$t/share/wine/wine.inf"; touch -d '@1700000000' "$t/share/wine/wine.inf"
+    printf 'dist-version: 2026.09.01.1\nsource-commit: %s\nwine:         wine-11.13\nbuilt-at:     2026-09-01T00:00:00Z\n' \
+        "$1" > "$t/ABLETON-WINE-BUILD-INFO.txt"
+    ( cd "$BATS_TEST_TMPDIR/build" && tar -I zstd -cf "$PUB/$name" . )
+    local sha="${3:-$(sha256sum "$PUB/$name" | cut -d' ' -f1)}"
+    { printf 'channel:        stable\ndist-version:   2026.09.01.1\n'
+      printf 'installer:      x.run\nsha256:         deadbeef\n'
+      printf 'runtime:        %s\nruntime-sha256: %s\n' "$name" "$sha"
+      printf 'source-commit:  %s\nbuilt-at:       2026-09-01T00:00:00Z\nwine:           wine-11.13\n' "$1"
+    } > "$PUB/manifest.txt"
+}
+
+@test "install with no tarball takes the channel's current build" {
+    setup_stubs; stub pgrep 1
+    published aaaaaaaa
+    run bash "$REPO/works/works-runtime" install
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [ -L "$C/stable" ]
+    [ "$(works_buildinfo_field "$C/$(readlink "$C/stable")/ABLETON-WINE-BUILD-INFO.txt" source-commit)" = aaaaaaaa ]
+    [[ "$output" == *"downloading"* ]]
+}
+
+# guards: the comparison happens before the stop, so an up-to-date machine is
+# never disturbed - not even to be told it was already current
+@test "install says so and stops when the build is already here" {
+    setup_stubs; stub pgrep 1
+    published aaaaaaaa
+    bash "$REPO/works/works-runtime" install >/dev/null 2>&1
+    run bash "$REPO/works/works-runtime" install
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"already have this build"* ]]
+    [[ "$output" != *"downloading"* ]]
+}
+
+# guards: manifests published before runtime-only installs name no tarball, and
+# guessing an asset name off the installer's would be inventing a URL
+@test "a manifest without runtime fields is refused, pointing at works update" {
+    setup_stubs; stub pgrep 1
+    published aaaaaaaa
+    grep -v '^runtime' "$PUB/manifest.txt" > "$PUB/m2" && mv "$PUB/m2" "$PUB/manifest.txt"
+    run bash "$REPO/works/works-runtime" install
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"predates runtime-only installs"* ]]
+    [[ "$output" == *"works update"* ]]
+    [ ! -e "$C/stable" ]
+}
+
+@test "a checksum mismatch refuses before anything is staged" {
+    setup_stubs; stub pgrep 1
+    published aaaaaaaa wine-d2d1-nspa-11.13-2026.09.01.1.tar.zst notthesha
+    run bash "$REPO/works/works-runtime" install
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"checksum mismatch"* ]]
+    [ ! -e "$C/stable" ]
+    [ -z "$(find "$C" -maxdepth 1 -mindepth 1 -type d 2>/dev/null)" ]
+}
+
+# guards: a named tarball is a deliberate local act - CI, a bisect, an offline
+# install - and must never reach for the network
+@test "a named tarball skips the web entirely" {
+    setup_stubs; stub pgrep 1; stub curl 1
+    published aaaaaaaa
+    run bash "$REPO/works/works-runtime" install "$PUB/wine-d2d1-nspa-11.13-2026.09.01.1.tar.zst"
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [[ "$output" != *"channel:"* ]]
+    [ -L "$C/stable" ]
+}

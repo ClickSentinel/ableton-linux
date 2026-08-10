@@ -187,3 +187,28 @@ setup() {
     [[ "$(works_manifest_url stable)"  == */releases/latest/download/* ]]
     [[ "$(works_manifest_url nightly)" == */releases/download/nightly/* ]]
 }
+
+# guards: runtime-only installs read these two fields and refuse without them,
+# so a publisher that omits them silently turns `works runtime install` off
+@test "the writer carries the runtime tarball when one is given" {
+    info="$BATS_TEST_TMPDIR/info.txt"
+    printf 'dist-version: 2026.09.01.1\nsource-commit: abcdef12\nbuilt-at:     2026-09-01T00:00:00Z\nwine:         wine-11.13\n' > "$info"
+    run bash -c '. "$0"; works_manifest_write stable "$1" x.run aa11 rt.tar.zst bb22' \
+        "$REPO/works/runtime-env.sh" "$info"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"runtime:        rt.tar.zst"* ]]
+    [[ "$output" == *"runtime-sha256: bb22"* ]]
+}
+
+@test "the writer omits the runtime fields when none is given" {
+    info="$BATS_TEST_TMPDIR/info.txt"
+    printf 'dist-version: 2026.09.01.1\nsource-commit: abcdef12\nbuilt-at:     2026-09-01T00:00:00Z\nwine:         wine-11.13\n' > "$info"
+    run bash -c '. "$0"; works_manifest_write stable "$1" x.run aa11' \
+        "$REPO/works/runtime-env.sh" "$info"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"runtime:"* ]]
+    # and it is still a valid manifest: the fields are optional by design
+    printf '%s\n' "$output" > "$BATS_TEST_TMPDIR/m.txt"
+    run bash -c '. "$0"; works_manifest_valid "$1"' "$REPO/works/runtime-env.sh" "$BATS_TEST_TMPDIR/m.txt"
+    [ "$status" -eq 0 ]
+}
