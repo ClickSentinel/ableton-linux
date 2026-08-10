@@ -112,7 +112,10 @@ cmd_list() {
     # true of a Plug.
     # Tenants get lines of their own under each Plug: real product names are
     # longer than any column, and a truncated name is worse than none.
-    printf '  %-20s %-5s %-40s %s\n' "PLUG" "APPS" "RUNTIME" "PATH"
+    # One row per Plug with its first application beside it; further
+    # applications continue down the APPS column on rows of their own, so the
+    # names stay aligned and whole.
+    printf '  %-20s %-26s %-40s %s\n' "PLUG" "APPS" "RUNTIME" "PATH"
     while read -r name; do
         [ -n "$name" ] || continue
         n=$((n+1))
@@ -120,9 +123,12 @@ cmd_list() {
         path="$plugs/$name"
         case "$path" in "$HOME"/*) path="~${path#"$HOME"}" ;; esac
         t="$(works_plug_tenants "$plugs/$name")"
-        printf '%s%-20.20s %-5s %-40.40s %s\n' "$mark" "$name" \
-            "$(printf '%s' "$t" | grep -c .)" "$(bound_to "$name")" "$path"
-        [ -z "$t" ] || printf '%s\n' "$t" | sed 's/^/        /'
+        first="${t%%$'\n'*}"; [ -n "$first" ] || first="-"
+        printf '%s%-20.20s %-26.26s %-40.40s %s\n' "$mark" "$name" \
+            "$first" "$(bound_to "$name")" "$path"
+        [ -z "$t" ] || printf '%s\n' "$t" | tail -n +2 | while IFS= read -r a; do
+            printf '  %-20s %-26.26s\n' "" "$a"
+        done
     done < <(works_plug_names)
     [ "$n" -gt 0 ] || echo "  (none)"
     # A default pointing at a Plug someone removed by hand resolves to nothing,

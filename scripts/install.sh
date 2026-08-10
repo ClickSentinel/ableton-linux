@@ -536,10 +536,12 @@ for _o in "$here/../origin" "$root/dist/origin"; do
     break
 done
 
-# Record the kit version so a later installer can tell what it is updating
-# (the kit and the repo both carry VERSION at the root).
-printf '%s\n' "$(cat "$root/VERSION" 2>/dev/null || echo unknown)" \
-    > "$HOME/works/apps/ableton-live/VERSION"
+# Record the application's version so a later installer can tell what it is
+# updating. The release version only: the kit label carries the runtime build
+# discriminator, and an application listing that shows a runtime id in its
+# VERSION column is reporting the wrong object's version.
+_v="$(cat "$root/VERSION" 2>/dev/null || echo unknown)"
+printf '%s\n' "${_v%%+*}" > "$HOME/works/apps/ableton-live/VERSION"
 
 echo "== install desktop entries -> $APPS =="
 mkdir -p "$APPS"
