@@ -99,7 +99,7 @@ bound_to() {
 }
 
 cmd_list() {
-    local sel name n=0 mark path
+    local sel name n=0 mark path t
     sel="$(works_plug_path)"
     if [ ! -d "$plugs" ]; then
         echo "No Plugs yet — this install predates them."
@@ -112,15 +112,17 @@ cmd_list() {
     # true of a Plug.
     # Tenants get lines of their own under each Plug: real product names are
     # longer than any column, and a truncated name is worse than none.
-    printf '  %-20s %-40s %s\n' "PLUG" "BOUND TO" "PATH"
+    printf '  %-20s %-5s %-40s %s\n' "PLUG" "APPS" "RUNTIME" "PATH"
     while read -r name; do
         [ -n "$name" ] || continue
         n=$((n+1))
         mark="  "; [ "$plugs/$name" = "${sel%/}" ] && mark="* "
         path="$plugs/$name"
         case "$path" in "$HOME"/*) path="~${path#"$HOME"}" ;; esac
-        printf '%s%-20.20s %-40.40s %s\n' "$mark" "$name" "$(bound_to "$name")" "$path"
-        works_plug_tenants "$plugs/$name" | sed 's/^/        /'
+        t="$(works_plug_tenants "$plugs/$name")"
+        printf '%s%-20.20s %-5s %-40.40s %s\n' "$mark" "$name" \
+            "$(printf '%s' "$t" | grep -c .)" "$(bound_to "$name")" "$path"
+        [ -z "$t" ] || printf '%s\n' "$t" | sed 's/^/        /'
     done < <(works_plug_names)
     [ "$n" -gt 0 ] || echo "  (none)"
     # A default pointing at a Plug someone removed by hand resolves to nothing,
