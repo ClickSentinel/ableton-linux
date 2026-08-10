@@ -270,3 +270,43 @@ all_shell_files() {
     done < <(grep -oE '\$\{WORKS_[A-Z_]+:-' scripts/container-build.sh | sed 's/^\${//; s/:-$//' | sort -u)
     [ -z "$missing" ] || { echo "container-build.sh reads these; build.sh passes none of them:$missing" >&2; false; }
 }
+
+# --- the works/ boundary --------------------------------------------------------
+# works/ is the future standalone repository, and its exit test was a comment
+# saying "grep for ableton and reach zero". A comment is not a gate: application
+# assumptions creep back into shared infrastructure exactly when nobody is
+# looking. This is the gate.
+#
+# Code only, deliberately: the de-Ableton inventory in runtime-env.sh names what
+# is still application-shaped and why each item is a migration rather than an
+# edit, so counting comments would make documenting the debt look like incurring
+# it. The allowance is a fixed list of lines, not a count - a new mention has to
+# be added here by hand, which is the moment to ask whether it belongs.
+@test "works/ carries no application knowledge beyond the inventory" {
+    cd "$REPO"
+    # Strip comments and the fenced temporary compat block, then look for the
+    # application's name in what is left.
+    found=""
+    while read -r f; do
+        [ -n "$f" ] || continue
+        hits="$(sed -e 's/[[:space:]]*#.*$//' "$f" \
+                | grep -niE 'ableton|wine-d2d1-nspa|shibco' \
+                | grep -vE 'ABLETON_WINE_ROOT|ABLETON_WINEPREFIX' || true)"
+        [ -z "$hits" ] || found="$found$f:"$'\n'"$hits"$'\n'
+    done < <(git ls-files 'works/*')
+    # A ratchet at the measured count, not a target: what remains is the
+    # inventory's own list - the artifact BUILD-INFO filename, the frozen
+    # legacy paths, the manifest URLs, the Live process scan and the legacy
+    # PATH cleanup. Each is a migration with an exit written down. The number
+    # may only go down; raising it means an application assumption entered
+    # shared infrastructure, which is the thing this exists to catch.
+    allowed=32
+    n="$(printf '%s' "$found" | grep -cE '^[0-9]+:' || true)"
+    [ "$n" -le "$allowed" ] || {
+        echo "works/ gained application knowledge ($n mentions, allowance $allowed)." >&2
+        echo "Each is a migration, not an edit - add it to the de-Ableton" >&2
+        echo "inventory in works/runtime-env.sh with its exit, or do not add it." >&2
+        printf '%s' "$found" >&2
+        false
+    }
+}

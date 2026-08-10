@@ -17,14 +17,17 @@
 # machine other applications may depend on. Unguarded, whichever kit ran last
 # would own ~/works/lib. The ABI range (see runtime-env.sh) arbitrates:
 #
-#   kit newer or equal, nobody stranded    install it        (the silent path)
+#   kit newer, nobody stranded             install it        (the silent path)
 #   kit newer, would strand an app         ask, naming them
-#   kit older, its app still supported     keep the newer infrastructure,
+#   kit older                              keep what is installed,
 #                                          exit 3 - the app installs alone
-#   kit older, its app below OLDEST        refuse: exit 1
+#   kit older AND its app below OLDEST     refuse: exit 1
 #
-# Equal generations install unconditionally: the contract is identical by
-# definition of the number, so last-writer-wins is safe exactly there.
+# "Newer" is two questions, not one. The ABI range answers whether an
+# application can consume the installed interface; WORKS_VERSION answers which
+# implementation is more recent. Compatibility alone left equal-ABI installs
+# last-writer-wins - two kits both speaking ABI 1 carry different libraries,
+# and the older one silently replaced the newer, taking its fixes with it.
 set -euo pipefail
 export LC_ALL=C.UTF-8
 
@@ -40,13 +43,28 @@ kit_abi="${WORKS_ABI:-1}"
 kit_oldest="${WORKS_ABI_OLDEST:-1}"
 inst_abi="$(works_abi_field "$installed_lib" WORKS_ABI 2>/dev/null || echo 0)"
 inst_oldest="$(works_abi_field "$installed_lib" WORKS_ABI_OLDEST 2>/dev/null || echo 1)"
+kit_version="${WORKS_VERSION:-0}"
+# A library predating WORKS_VERSION reports 0, so any kit carrying one is
+# newer - which is true: the field arrived with the fix for this comparison.
+inst_version="$(works_abi_field "$installed_lib" WORKS_VERSION 2>/dev/null || echo 0)"
 
 # 0 = install the infrastructure, 3 = keep the installed one. The refusal and
 # the prompt live in `check`; decide() prints nothing.
+#
+# Two comparisons, in this order, because they answer different questions.
+#
+# The interface never goes backward: an installed higher ABI is kept whatever
+# the versions say, since applications may declare a floor it satisfies and
+# this kit's does not - installing over it is the mirror of the stranding the
+# prompt below refuses.
+#
+# Within one interface, the newer implementation wins. That is the comparison
+# the ABI cannot make: two kits both speaking ABI 1 carry different libraries,
+# and without it the older silently replaced the newer.
 decide() {
-    if [ -r "$installed_lib" ] && [ "$inst_abi" -gt "$kit_abi" ]; then
-        return 3
-    fi
+    [ -r "$installed_lib" ] || return 0
+    [ "$inst_abi" -gt "$kit_abi" ] && return 3
+    [ "$inst_abi" -eq "$kit_abi" ] && [ "$inst_version" -gt "$kit_version" ] && return 3
     return 0
 }
 
@@ -97,8 +115,9 @@ cmd_check() {
         echo "   machine: use a current installer." >&2
         exit 1
     fi
-    echo "   works: keeping the installed infrastructure (generation $inst_abi;" \
-         "this kit carries $kit_abi)"
+    echo "   works: keeping the installed infrastructure (version $inst_version," \
+         "generation $inst_abi; this kit carries version $kit_version," \
+         "generation $kit_abi)"
     exit 3
 }
 

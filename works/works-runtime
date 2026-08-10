@@ -309,7 +309,7 @@ cmd_install() {
     [ -z "$validate" ] || [ -x "$validate" ] || {
         echo "!! --validate is not an executable: $validate" >&2; exit 2; }
 
-    local NAME WINE_ROOT WINE_ROOT_DIR STORE stamp stage backup replaced replaced_orig promoted migrated dltmp
+    local NAME WINE_ROOT WINE_ROOT_DIR STORE stamp stage backup replaced replaced_orig promoted migrated dltmp chan_was
     dltmp=""
 
     # No tarball names the web: the followed channel's manifest says what is
@@ -363,6 +363,7 @@ cmd_install() {
     WINE_ROOT_DIR="$(dirname "$WINE_ROOT")"
     stamp="$(date -u +%Y%m%dT%H%M%SZ)"
     stage=""; backup=""; replaced=""; replaced_orig=""; promoted=0; migrated=0
+    chan_was=""
 
     cleanup() {
         rc=$?
@@ -375,6 +376,15 @@ cmd_install() {
                 mv "$backup" "$WINE_ROOT" || true
             elif [ -n "$backup" ] && [ -e "$backup" ]; then
                 echo "!! $WINE_ROOT still present; backup left at $backup" >&2
+            fi
+            # The channel is retargeted mid-promote, and everything after it
+            # can still fail - retention, the version check, the caller's own
+            # work. Left alone, the channel points at a directory this cleanup
+            # has just renamed to .failed-*: a dangling channel, which is a
+            # machine that cannot launch. Restoring it is the difference
+            # between a failed install and a broken one.
+            if [ -n "$chan_was" ] && [ -n "$STORE" ]; then
+                ln -sfn "$chan_was" "$STORE/$chan" 2>/dev/null || true
             fi
             if [ -n "$replaced" ] && [ -d "$replaced" ] && [ -n "$replaced_orig" ]; then
                 # A store entry set aside to write over. Put it back, so a
@@ -589,6 +599,10 @@ cmd_install() {
         mv "$candidate" "$STORE/$id"
         promoted=1
         WINE_ROOT="$STORE/$id"
+        # Snapshot where the channel pointed, so a later failure can put it
+        # back. Empty when the channel is new, and cleanup then leaves it -
+        # a channel that did not exist before this run is not ours to invent.
+        chan_was="$(readlink "$STORE/$chan" 2>/dev/null || true)"
         ln -sfn "$id" "$STORE/$chan"
         [ -z "$replaced" ] || { rm -rf "$replaced"; replaced=""; replaced_orig=""; }
         echo "   $id  [$chan]"
