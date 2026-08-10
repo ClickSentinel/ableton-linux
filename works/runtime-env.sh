@@ -51,7 +51,7 @@ WORKS_ABI_OLDEST=1
 #   * works_legacy_root / works_legacy_plug frozen history; leaves when
 #                                           migration is install-time only
 #   * ABLETON-WINE-BUILD-INFO.txt           artifact format; compat-window rename
-#   * works_env_compat's ABLETON_* names    one release of promised compat
+#   * works_env_compat's two shipped names  one release of promised compat
 #   * works_manifest_url's URLs             per-app `origin`, once the updater
 #                                           takes an app argument
 #   * ableton_live_pids / "Ableton Live"    the app declares its process
@@ -59,29 +59,20 @@ WORKS_ABI_OLDEST=1
 #                                           Plug's RegisteredApplications name
 # New mentions outside this list are regressions.
 
-# Names this library answered to before the runtime was its own thing. They are
-# read for one release, with a single note, because the rename lands in the same
-# breath as a migration that moves every path a person or a script had learned -
-# breaking both at once turns one afternoon of adjustment into two.
-#
-# Only infrastructure is listed. ABLETON_DPI_MODE, ABLETON_LIVE_VERSION and the
-# rest configure Ableton Live and keep their names for good: the split is the
-# point, and a second application should be able to read the difference.
+# The two override names the released world documents: ABLETON_WINE_ROOT and
+# ABLETON_WINEPREFIX shipped, are in users' profiles and in ableton-vm-tools,
+# and are read for one release after the rename, with a single note. Only
+# infrastructure renames belong here - ABLETON_DPI_MODE and the rest configure
+# the application and keep their names.
 works_env_compat() {
     local _pair _old _new
     for _pair in \
         ABLETON_WINE_ROOT:WORKS_RUNTIME \
-        ABLETON_WINEPREFIX:WORKS_PLUG \
-        ABLETON_OPT_DIR:WORKS_HOME \
-        ABLETON_RUNTIME_KEEP:WORKS_RUNTIME_KEEP \
-        ABLETON_RUNTIME_TARBALL:WORKS_RUNTIME_TARBALL \
-        ABLETON_CHANNEL:WORKS_CHANNEL \
-        ABLETON_CHANNEL_FILE:WORKS_CHANNEL_FILE \
-        ABLETON_MANIFEST_URL:WORKS_MANIFEST_URL
+        ABLETON_WINEPREFIX:WORKS_PLUG
     do
         _old="${_pair%%:*}"; _new="${_pair##*:}"
-        # The new name always wins: someone setting both has migrated and left
-        # the old one in a shell profile.
+        # The new name is preferred: both set means the caller has migrated and
+        # left the old one in a shell profile.
         [ -n "${!_old:-}" ] && [ -z "${!_new:-}" ] || continue
         export "$_new=${!_old}"
         echo "   note: $_old is now $_new, and will stop being read after the next release" >&2
