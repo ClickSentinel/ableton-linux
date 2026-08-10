@@ -159,3 +159,14 @@ store() { a_build 2026.06.01.1+bbbbbbb; ln -sfn "2026.06.01.1+bbbbbbb" "$C/stabl
     [ "$status" -eq 0 ]
     [[ "$output" == *"APP"* ]]
 }
+
+# guards: the plural is what fingers type after `works app list` teaches the
+# pattern; each noun answers to both
+@test "the plural nouns alias to the singular" {
+    run bash "$REPO/works/works" plugs list
+    [ "$status" -eq 0 ]
+    run bash "$REPO/works/works" runtimes list
+    [ "$status" -eq 0 ]
+    run bash "$REPO/works/works" apps list
+    [ "$status" -eq 0 ]
+}

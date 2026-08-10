@@ -58,9 +58,9 @@ EOF
 
 cmd="${1:-}"; [ $# -gt 0 ] && shift
 case "$cmd" in
-    runtime)             exec "$verbs/works-runtime" "$@" ;;
-    plug)                exec "$verbs/works-plug" "$@" ;;
-    app)                 exec "$verbs/works-app" "$@" ;;
+    runtime|runtimes)    exec "$verbs/works-runtime" "$@" ;;
+    plug|plugs)          exec "$verbs/works-plug" "$@" ;;
+    app|apps)            exec "$verbs/works-app" "$@" ;;
     update)              exec "$verbs/works-update" "$@" ;;
     stop)                exec "$verbs/works-runtime" stop "$@" ;;
     "")                  short_usage ;;

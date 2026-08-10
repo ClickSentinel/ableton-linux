@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-448 tests across 18 suites. See [README.md](README.md) for how to run
+449 tests across 18 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -23,7 +23,7 @@ for which run on a PR.
 - [tests/unit/run-header.bats](#run-header) — 12 test(s)
 - [tests/unit/manifest.bats](#manifest) — 21 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 42 test(s)
-- [tests/unit/works.bats](#works) — 13 test(s)
+- [tests/unit/works.bats](#works) — 14 test(s)
 - [tests/unit/works-app.bats](#works-app) — 7 test(s)
 - [tests/unit/promote.bats](#promote) — 11 test(s)
 - [tests/unit/works-runtime.bats](#works-runtime) — 38 test(s)
@@ -473,6 +473,7 @@ beside it — and nothing exercised the installed shape until now.
 | 11 | the long form carries the detail the short form leaves out | — |
 | 12 | help names every command it dispatches | — |
 | 13 | app is reachable through the dispatcher | — |
+| 14 | the plural nouns alias to the singular | the plural is what fingers type after `works app list` teaches the |
 
 <a id="works-app"></a>
 
@@ -971,6 +972,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the other direction of the same promise` | install-runs: a kit below the installed OLDEST is refused whole |
 | `the path is what people copy into a script or a bug report, and it is` | works-plug: list shows each Plug's path, abbreviated under home |
 | `the path is what people copy into a script, a bug report or a `cd`,` | works-runtime: list shows each build's path, abbreviated under home |
+| `the plural is what fingers type after `works app list` teaches the` | works: the plural nouns alias to the singular |
 | `the prefix cannot be taken back, so this must not happen quietly` | works-runtime: use refuses a base change with no terminal to ask on |
 | `the prefix is the one thing here that cannot be re-downloaded` | migrate-layout: plug: the contents survive the move intact |
 | `the primary path ended in a bare `mv` while both sibling writers into` | migrate-layout: an id collision sets the old tree aside instead of nesting it in the entry |
