@@ -93,4 +93,4 @@ printf '%s\n' "$VERSION" > "$appdir/VERSION"
 ln -sfn "$appdir/$APP" "$BIN/$APP"
 
 echo
-echo "OK: Notepad++ $VERSION in the npp Plug. Launch: $APP"
+echo "OK: Notepad++ $VERSION in the ${plug##*/} Plug. Launch: $APP"
