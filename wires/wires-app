@@ -33,26 +33,134 @@ cmd_list() {
     [ "$n" -gt 0 ] || echo "  (none)"
 }
 
+# Where this application's executable sits inside a Plug, as its launcher
+# records it. Only launchers this verb generated carry the line; an application
+# with a hand-written launcher answers nothing, which is the honest answer -
+# guessing which registry entry belongs to it is how the wrong thing gets
+# uninstalled.
+app_rel_exe() {
+    sed -n 's#^EXE="\$WINEPREFIX/\(.*\)"$#\1#p' "$1" 2>/dev/null | head -1
+}
+
+# The Uninstall entry covering an executable in this Plug: the one whose
+# DisplayIcon is that file, or whose InstallLocation contains it. Matched by
+# path rather than by name because a DisplayName is a sentence and this has to
+# be exact - removing software is not a place for a fuzzy match.
+payload_entry() {
+    local plug="${1%/}" exe="$2" key disp icon ver loc rest
+    while IFS=$'\037' read -r key disp icon ver loc rest; do
+        [ -n "$key" ] || continue
+        if [ -n "$icon" ] && [ "$(wires_win_path "$plug" "$(wires_reg_unescape "$icon")")" = "$exe" ]; then
+            printf '%s\037%s\037%s\n' "$key" "$(wires_reg_unescape "$disp")" "$(wires_reg_unescape "$rest")"
+            return 0
+        fi
+        if [ -n "$loc" ]; then
+            local d; d="$(wires_win_path "$plug" "$(wires_reg_unescape "$loc")")"
+            case "$exe" in "${d%/}"/*)
+                printf '%s\037%s\037%s\n' "$key" "$(wires_reg_unescape "$disp")" "$(wires_reg_unescape "$rest")"
+                return 0 ;;
+            esac
+        fi
+    done < <(wires_plug_entries "$plug")
+    return 1
+}
+
+# Run what the application registered as its own removal. The string is a
+# Windows command line - a quoted path and switches - so it is split rather
+# than handed to a shell.
+#
+# The exit code is not the answer. NSIS and Inno uninstallers copy themselves
+# to a temporary directory and relaunch, so the process started here returns
+# immediately and successfully while the real work has not begun; wineserver -w
+# waits for the whole session, and whether the registry entry is gone
+# afterwards is the only honest check.
+run_uninstaller() {
+    local plug="${1%/}" cmdline="$2" rt="$3" exe args
+    case "$cmdline" in
+        \"*) exe="${cmdline#\"}"; exe="${exe%%\"*}"; args="${cmdline#*\" }" 
+             [ "$args" != "$cmdline" ] || args="" ;;
+        *)   exe="${cmdline%% *}"; args="${cmdline#* }"
+             [ "$args" != "$cmdline" ] || args="" ;;
+    esac
+    exe="$(wires_win_path "$plug" "$exe")"
+    [ -f "$exe" ] || { echo "!! the recorded uninstaller is not there: $exe" >&2; return 1; }
+    # shellcheck disable=SC2086  # switches are a word list by construction
+    WINEPREFIX="$plug" WINEDLLOVERRIDES="mscoree,mshtml,winemenubuilder.exe=" \
+        "$rt/bin/wine" "$exe" $args >/dev/null 2>&1 || true
+    WINEPREFIX="$plug" "$rt/bin/wineserver" -w
+}
+
 cmd_rm() {
-    local want yes parsed dir
-    parsed="$(wires_rm_args "$@")" || return $?
-    { IFS= read -r want; IFS= read -r yes; } <<<"$parsed"
-    [ -n "$want" ] || { echo "!! usage: wires app rm <name> [-y]" >&2; return 2; }
+    local want="" yes="" dir payload=0 plugname=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -y|--yes)   yes=1 ;;
+            --payload)  payload=1 ;;
+            --plug)     shift; plugname="${1:-}" ;;
+            --plug=*)   plugname="${1#--plug=}" ;;
+            -*)         echo "!! unknown option: $1" >&2; return 2 ;;
+            *)          [ -z "$want" ] || { echo "!! one name at a time: $1" >&2; return 2; }
+                        want="$1" ;;
+        esac
+        shift
+    done
+    [ -n "$want" ] || { echo "!! usage: wires app rm <name> [-y] [--payload [--plug N]]" >&2; return 2; }
     dir="$(wires_home)/apps/$want"
     [ -d "$dir" ] || {
         echo "!! no such application: $want" >&2
         echo "   installed:" >&2; wires_app_names | sed 's/^/     /' >&2
         return 1; }
 
+    # The payload is Plug-scoped and the record is not: the launcher resolves
+    # its executable through selection, so one record can front the same
+    # software installed in several Plugs. There is no right Plug to guess, so
+    # this takes the selected one unless told otherwise, and always names it.
+    local plug="" rel="" entry="" ekey="" edisp="" ecmd="" rt=""
+    if [ "$payload" -eq 1 ]; then
+        if [ -n "$plugname" ]; then plug="$(wires_plugs_dir)/$plugname"; else plug="$(wires_plug_path)"; fi
+        [ -d "$plug" ] || { echo "!! no such Plug: ${plugname:-$plug}" >&2; return 1; }
+        rel="$(app_rel_exe "$dir/$want")"
+        [ -n "$rel" ] || {
+            echo "!! $want's launcher does not record where its executable is, so there" >&2
+            echo "   is no way to tell which installed software is its own. Remove it" >&2
+            echo "   from inside the Plug, or drop --payload to remove the record only." >&2
+            return 1; }
+        entry="$(payload_entry "$plug" "${plug%/}/$rel")" || {
+            echo "!! nothing matching $want is registered in ${plug##*/}." >&2
+            echo "   Plugs holding it: wires plug list" >&2
+            return 1; }
+        IFS=$'\037' read -r ekey edisp ecmd <<<"$entry"
+        [ -n "$ecmd" ] || { echo "!! $edisp registered no way to uninstall itself" >&2; return 1; }
+        rt="$(wires_runtime_path)"
+        [ -x "$rt/bin/wine" ] || { echo "!! no runtime installed" >&2; return 1; }
+    fi
+
     if [ -z "$yes" ]; then
         echo "This removes the $want launcher and its files under $dir."
-        echo "Plugs and anything installed inside them are untouched."
+        if [ "$payload" -eq 1 ]; then
+            echo "It ALSO runs $edisp's own uninstaller inside the ${plug##*/} Plug,"
+            echo "which removes the software and anything it keeps beside it."
+            echo "Other Plugs holding it are untouched."
+        else
+            echo "Plugs and anything installed inside them are untouched."
+        fi
         wires_ask_tty "Remove it? [y/N] "
         case "$?" in
             0) ;;
             2) echo "!! no terminal to confirm on; pass -y if you mean it" >&2; return 1 ;;
             *) echo "cancelled"; return 1 ;;
         esac
+    fi
+
+    if [ "$payload" -eq 1 ]; then
+        echo "== removing $edisp from ${plug##*/} =="
+        run_uninstaller "$plug" "$ecmd" "$rt" || return 1
+        if wires_plug_entries "$plug" | cut -f1 | grep -qxF "$ekey"; then
+            echo "!! $edisp is still registered in ${plug##*/}; its uninstaller did not" >&2
+            echo "   finish. The application record is left in place." >&2
+            return 1
+        fi
+        echo "   gone"
     fi
 
     # Only the link this application owns: a same-named command from anywhere
@@ -215,7 +323,7 @@ cmd_install() {
         return 1; }
 
     local key disp icon ver loc rest exe n=0
-    while IFS=$'\t' read -r key disp icon ver loc rest; do
+    while IFS=$'\037' read -r key disp icon ver loc rest; do
         [ -n "$key" ] || continue
         printf '%s\n' "$fresh" | grep -qxF "$key" || continue
         disp="$(wires_reg_unescape "$disp")"
@@ -250,6 +358,7 @@ usage: wires app {list|rm}                 `wires app help` for detail
   wires app list                  every installed application
   wires app install <exe>         run a Windows installer, wire up the result
   wires app rm <name> [-y]        remove one; Plugs are untouched
+  wires app rm <name> --payload   ...and uninstall it from the Plug too
 EOF
 }
 
@@ -263,6 +372,11 @@ The applications installed on this machine.
                                   files under ~/wires/apps; anything it
                                   installed inside a Plug stays until the
                                   Plug goes
+      --payload [--plug N]        also run the application's own uninstaller
+                                  inside a Plug - the selected one unless
+                                  named. One record can front the same
+                                  software in several Plugs, so this only
+                                  ever removes it from one
 EOF
 }
 

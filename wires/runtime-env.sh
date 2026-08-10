@@ -570,10 +570,16 @@ wires_plug_tenants() {
 #   DisplayName      what to call it
 #   QuietUninstallString  how to remove it again
 #
-# One tab-separated line per entry: key, name, icon, version, location,
-# uninstall. Values stay as the registry spells them - doubled backslashes and
-# all - because unescaping is the caller's business and doing it in awk is how
-# a quote in a product name becomes a parse error.
+# One line per entry: key, name, icon, version, location, uninstall, separated
+# by US (\037) and NOT by a tab. A tab is IFS whitespace, so `IFS=$'\t' read`
+# collapses runs of them and an empty field - InstallLocation is empty more
+# often than not - takes every field after it one place to the left. That is
+# the second time that has bitten this codebase in a day; a non-whitespace
+# separator cannot do it, and US is the character the question was invented for.
+#
+# Values stay as the registry spells them - doubled backslashes and all -
+# because unescaping is the caller's business and doing it in awk is how a
+# quote in a product name becomes a parse error.
 wires_plug_entries() {
     local _p="${1:-}"; [ -n "$_p" ] || _p="$(wires_plug_path)"
     _p="${_p%/}"
@@ -583,8 +589,8 @@ wires_plug_entries() {
         awk '
             function emit() {
                 if (key != "" && sc == 0 && dn != "")
-                    printf "%s\t%s\t%s\t%s\t%s\t%s\n", key, dn, di, dv, il,
-                           (qus != "" ? qus : us)
+                    printf "%s%c%s%c%s%c%s%c%s%c%s\n", key, 31, dn, 31, di, 31,
+                           dv, 31, il, 31, (qus != "" ? qus : us)
             }
             /^\[/ {
                 emit()
