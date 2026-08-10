@@ -36,8 +36,8 @@ APP="ableton-live"
 # there an install here" test looked only at ~/works/plugs/studio and no
 # unmigrated machine - which is every existing user - was ever offered an
 # update. It hardcoded plugs/studio, so `works plug use` did not reach it. And
-# it honoured WORKS_PLUG but not ABLETON_WINEPREFIX, which install.sh does
-# honour, so on a machine setting the old name the two disagreed about which
+# it read WORKS_PLUG but not ABLETON_WINEPREFIX, which install.sh does read,
+# so on a machine setting the old name the two disagreed about which
 # prefix was being installed into.
 #
 # So there is no resolver here now. Exactly one fact has to be known before the
@@ -382,7 +382,7 @@ bash "$kit/scripts/install.sh"
 # It has to be read *after* install.sh, not before: the store may have just been
 # created and the migration may have just moved both the runtime and the Plug.
 #
-# works_plug_path, not a literal: it honours WORKS_PLUG, then the `default`
+# works_plug_path, not a literal: it resolves WORKS_PLUG, then the `default`
 # symlink `works plug use` writes, then studio. Hardcoding the last of those is
 # why Live's installer would run into studio on a machine whose selected Plug
 # was something else.

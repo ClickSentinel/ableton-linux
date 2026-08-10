@@ -11,16 +11,16 @@
 # and the directory install.sh is about to replace have to name the same tree,
 # or a runtime is swapped out from under running processes.
 #
-# The resolvers are pure: they echo and touch nothing, so a caller takes only
-# what it wants and they can be tested without a sandbox. Binding the current
-# shell to the runtime is opt-in, because only the launchers want it.
+# The resolvers are pure: they echo and touch nothing, so a caller uses only
+# the functions it needs, and they can be tested without a sandbox. Binding
+# the current shell to the runtime is opt-in; only the launchers need it.
 #
 #   . "$here/runtime-env.sh"
 #   WINE_ROOT="$(works_runtime_path)"           # just the path
 #   works_bind_runtime                       # the full launcher binding
 
-# The compatibility contract, as a range. WORKS_ABI is the generation this
-# library speaks; WORKS_ABI_OLDEST is the oldest it still honours; each
+# The compatibility contract, as a range. WORKS_ABI is the library's current
+# interface generation; WORKS_ABI_OLDEST is the oldest still supported; each
 # launcher declares the WORKS_ABI_MIN it was written against.
 #
 #   compatible  <=>  WORKS_ABI_OLDEST <= WORKS_ABI_MIN <= WORKS_ABI
@@ -60,7 +60,7 @@ WORKS_ABI_OLDEST=1
 # New mentions outside this list are regressions.
 
 # Names this library answered to before the runtime was its own thing. They are
-# honoured for one release and say so once, because the rename lands in the same
+# read for one release, with a single note, because the rename lands in the same
 # breath as a migration that moves every path a person or a script had learned -
 # breaking both at once turns one afternoon of adjustment into two.
 #
@@ -127,7 +127,7 @@ works_runtime_store() {
 works_legacy_root() {
     # Spelled out, never derived from works_runtime_name: that name grew a seam
     # (WORKS_RUNTIME_NAME), and a renamed artifact deriving this path would
-    # un-find every existing install. The past does not take overrides.
+    # un-find every existing install.
     printf '%s\n' "$HOME/.local/opt/wine-d2d1-nspa-11.13"
 }
 
@@ -182,7 +182,7 @@ works_runtime_store() {
 works_legacy_root() {
     # Spelled out, never derived from works_runtime_name: that name grew a seam
     # (WORKS_RUNTIME_NAME), and a renamed artifact deriving this path would
-    # un-find every existing install. The past does not take overrides.
+    # un-find every existing install.
     printf '%s\n' "$HOME/.local/opt/wine-d2d1-nspa-11.13"
 }
 
@@ -501,7 +501,7 @@ works_app_names() {
 # A WORKS_ABI* declaration read out of a file without sourcing it. Sourcing is
 # exactly wrong here: the reader usually holds one generation of this library in
 # scope already and is asking about another, and executing the other to ask it a
-# number would let the file being judged rewrite the judge. Digits only - a
+# number would execute the file under evaluation. Digits only - a
 # clever value is treated as no value.
 works_abi_field() {
     local _v
@@ -542,7 +542,7 @@ works_apps_below_min() {
 # Ableton and Cycling '74 living in the library every application sources, where
 # discovery depended on which kit had most recently written this file. Then a
 # per-application tenants.sh that each payload shipped, which fixed the ordering
-# but made every new application a new file and a new protocol to honour. Both
+# but made every new application a new file and a new protocol to implement. Both
 # were solving a problem Windows had already solved: the prefix is the database,
 # and this is the table.
 #

@@ -4,7 +4,7 @@
 # calls this and then installs its own payload.
 #
 #   install-works.sh check [--app-min N]    decide, refuse, or ask - writes nothing
-#   install-works.sh install                the write, honouring what check decided
+#   install-works.sh install                the write, applying what check decided
 #
 # Two entry points because the decision and the write belong at different
 # moments of an application install: check before anything is stopped or moved
@@ -42,7 +42,7 @@ inst_abi="$(works_abi_field "$installed_lib" WORKS_ABI 2>/dev/null || echo 0)"
 inst_oldest="$(works_abi_field "$installed_lib" WORKS_ABI_OLDEST 2>/dev/null || echo 1)"
 
 # 0 = install the infrastructure, 3 = keep the installed one. The refusal and
-# the prompt live in `check`; decide() itself never talks.
+# the prompt live in `check`; decide() prints nothing.
 decide() {
     if [ -r "$installed_lib" ] && [ "$inst_abi" -gt "$kit_abi" ]; then
         return 3
@@ -104,7 +104,7 @@ cmd_check() {
 
 cmd_install() {
     if ! decide; then
-        # check already said so; installing anyway is exactly the downgrade the
+        # check already reported this; installing anyway is exactly the downgrade the
         # gate exists to prevent. Exit 0: keeping the newer one is success.
         exit 0
     fi

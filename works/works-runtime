@@ -210,7 +210,7 @@ cmd_use() {
     # share/wine/wine.inf and runs wineboot --update when they differ. Forward it
     # does; back it does not support. So the question is not "do these two builds
     # carry different `wine:` strings" - it is "where does this build take each
-    # Plug that would run it", and only the Plug can answer that. A Plug pinned
+    # Plug that would run it" - answerable only from the Plug's own stamp. One pinned
     # while the channel moved on, and a clone carrying a binding but no history,
     # both go unasked by any comparison made between two runtimes.
     from="$(base_of "$(readlink "$channel" 2>/dev/null)")"

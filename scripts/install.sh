@@ -24,7 +24,7 @@ command -v works_runtime_path >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
 NAME="$(works_runtime_name)"
 # Where this install lands. scripts/ableton-live and scripts/setup-prefix.sh
-# already honour WORKS_RUNTIME; install.sh and uninstall.sh hardcoded it,
+# already respect WORKS_RUNTIME; install.sh and uninstall.sh hardcoded it,
 # which is the only reason two runtimes could not sit side by side. Staging,
 # the dated rollbacks, and — since PR #120 — the runtime pid scan and the
 # wineserver stop all follow the target, so an overridden root is guarded by
@@ -112,7 +112,7 @@ fi
 # the write, because the infrastructure is not this application's to version.
 # check runs here - before anything is stopped or moved, since two of its
 # outcomes are refusals and a refusal this early leaves the machine untouched -
-# and the write happens after the runtime lands, honouring the same decision.
+# and the write happens after the runtime lands, applying the same decision.
 #
 #   exit 0  install (or refresh) the infrastructure     the silent path
 #   exit 3  a newer one is installed; keep it, this kit adds only its app
