@@ -25,14 +25,13 @@ if [ "${WORKS_ABI_OLDEST:-1}" -gt "$WORKS_ABI_MIN" ]; then
     exit 1
 fi
 
-# This application's own Plug by default; WORKS_PLUG still overrides.
-export WORKS_PLUG="${WORKS_PLUG:-$(works_plugs_dir)/npp}"
 works_bind_runtime
 
 EXE="$WINEPREFIX/drive_c/Program Files/Notepad++/notepad++.exe"
 if [ ! -f "$EXE" ]; then
-    echo "notepad-plus-plus: not installed in $WINEPREFIX" >&2
-    echo "  install it: apps/notepad-plus-plus/install-notepad-plus-plus.sh" >&2
+    echo "notepad-plus-plus: not installed in the selected Plug ($WINEPREFIX)" >&2
+    echo "  another Plug may hold it: works plug list, then works plug use <name>" >&2
+    echo "  or point one launch at it: WORKS_PLUG=<path> notepad-plus-plus" >&2
     exit 1
 fi
 

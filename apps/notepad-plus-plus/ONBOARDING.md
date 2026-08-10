@@ -10,7 +10,7 @@ Notepad++ 8.9.7 (NSIS, ~7 MB, app-only kit) installed beside Ableton Live on a m
 | compat floor | `WORKS_ABI_MIN=1` in the launcher, sed-readable |
 | infrastructure handshake | its installer ran `install-works.sh check --app-min 1`, then `install` after its own payload landed |
 | a runtime | required one present and refused without it — an app-only kit ships none; the store deduplicates, so only runtime-bearing kits add builds |
-| a Plug | created `npp`, booted it (`wineboot -u` writes the registry and the base stamp), installed into it silently |
+| the selected Plug | resolved it (`works_plug_path`), created it only if absent, installed into it silently — one prefix holds many tenants, and per-project Plugs are the user's act, never an installer default |
 
 ## The optional tier — proven by omission
 
@@ -28,7 +28,7 @@ Prefix setup script, desktop entries and MIME, an update channel and `origin`, l
 1. **Tenant discovery misses unregistered applications — measured, and the indexes are disjoint.** Notepad++ wrote `Uninstall` (`"Notepad++ (64-bit x64)"`) and three `App Paths` entries, and no `RegisteredApplications`. Live is the exact mirror: `RegisteredApplications` only, its `Uninstall` keys holding nothing but VC++ redistributables, WebView2 and Wine Mono. A registration-only census lists the npp Plug empty. The candidate fix is the union of both indexes; the open decision is filtering infrastructure entries (redistributables, Mono) out of `Uninstall` without hardcoding vendor patterns — the smell the registry read was chosen to avoid.
 2. **The runtime requirement is hand-rolled.** An app-only kit needs "a runtime is present or refuse", and the probe wrote its own `[ -x bin/wine ]`. Wants a first-class predicate (`works_require_runtime`) with the refusal message owned by Works.
 3. **The standard locator assumes depth one.** `dirname/../works` resolves from `scripts/`; app directories sit at `apps/<name>/` and need `../../works`. Either the locator grows the depth or the installed-library path becomes the documented contract for apps.
-4. **Per-app default Plug has no seam.** The launcher exports `WORKS_PLUG` itself before binding. Works knows only the global `default` symlink; whether an app may declare "my Plug" (`apps/<name>/plug`?) is an open decision — the export works, but every app will repeat it.
+4. **Decided during the hands-on: applications install into the selected Plug.** The probe first gave the app its own Plug; that inverts the design — a Plug is a workspace holding many tenants, and instance separation belongs to the user. No per-app Plug seam is wanted; the launcher binds through selection like every other tenant.
 5. **Hygiene census doesn't cover `apps/`.** `all_shell_files` globs `scripts/` and `works/`; probe files are shellchecked by hand. Onboarding must either add each app to the census or the census learns `apps/*/`.
 6. Cosmetic: `works plug new` run from an installer prints its interactive hint ("Nothing is installed in it yet…") into install output.
 

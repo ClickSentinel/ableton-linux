@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Install Notepad++ as a Works application, or remove it again.
 #
-#   install-notepad-plus-plus.sh [install]     into its own Plug (npp)
+#   install-notepad-plus-plus.sh [install]     into the selected Plug
 #   install-notepad-plus-plus.sh uninstall     payload and launcher only; the
-#                                              Plug stays (works plug rm npp)
+#                                              Plug is untouched
 #
 # The second-application probe: an app-only kit. It ships no runtime and
 # requires one already installed - the store deduplicates by build, so only
@@ -30,7 +30,7 @@ appdir="$HOME/works/apps/$APP"
 if [ "${1:-install}" = uninstall ]; then
     rm -f "$BIN/$APP"
     rm -rf "$appdir"
-    echo "removed $APP; its Plug is kept (works plug rm npp)"
+    echo "removed $APP; the Plug and anything installed in it are untouched"
     exit 0
 fi
 
@@ -63,11 +63,16 @@ got="$(sha256sum "$payload" | cut -d' ' -f1)"
     echo "   got      $got" >&2
     exit 1; }
 
-# --- its own Plug -------------------------------------------------------------
-plug="$(works_plugs_dir)/npp"
+# --- the selected Plug --------------------------------------------------------
+# Applications install into the Plug that selection resolves to: one prefix
+# holds many tenants, and per-project Plugs are the user's act (works plug
+# new / use), never an installer's default. WORKS_PLUG overrides per run.
+plug="$(works_plug_path)"
 if [ ! -d "$plug" ]; then
-    "$root/works/works-plug" new npp || {
-        [ -d "$plug" ] || { echo "!! could not create the npp Plug" >&2; exit 1; }; }
+    if [ "$(dirname "$plug")" = "$(works_plugs_dir)" ]; then
+        "$root/works/works-plug" new "${plug##*/}" || true
+    fi
+    mkdir -p "$plug"
 fi
 # First boot writes the registry and the base stamp; idempotent afterwards.
 echo "== preparing the Plug =="
