@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# scripts/works-update — deciding whether to replace the runtime.
+# works/works-update — deciding whether to replace the runtime.
 #
 # Everything the updater does before it downloads is a refusal: same build,
 # unknown channel, incomplete manifest, a Wine base it cannot take a Plug back
@@ -16,7 +16,7 @@ bats_require_minimum_version 1.5.0
 
 load ../helpers/common
 
-UPD="$REPO/scripts/works-update"
+UPD="$REPO/works/works-update"
 
 setup() {
     # works_runtime_busy falls back to pgrep when the /proc scan finds nothing,
@@ -69,7 +69,7 @@ a_manifest() {   # channel, commit, built-at, wine, installer, sha
     local info="$BATS_TEST_TMPDIR/pub-info.txt"
     printf 'dist-version: 2026.08.04.1\nsource-commit: %s\nbuilt-at:     %s\nwine:         %s\n' \
         "$2" "$3" "$4" > "$info"
-    ( . "$REPO/scripts/runtime-env.sh"
+    ( . "$REPO/works/runtime-env.sh"
       works_manifest_write "$1" "$info" "$5" "$6" ) > "$PUB/manifest.txt"
 }
 

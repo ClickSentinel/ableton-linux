@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# scripts/works-plug — the prefixes applications are installed into.
+# works/works-plug — the prefixes applications are installed into.
 #
 # A Plug is a directory and one symlink: the name is the directory's name, the
 # tenants are whatever is in drive_c, and `.works-runtime` is the only recorded
@@ -14,7 +14,7 @@ bats_require_minimum_version 1.5.0
 
 load ../helpers/common
 
-PLUG() { bash "$REPO/scripts/works-plug" "$@"; }
+PLUG() { bash "$REPO/works/works-plug" "$@"; }
 
 setup() {
     HOME="$BATS_TEST_TMPDIR/home"
@@ -22,7 +22,7 @@ setup() {
     export WORKS_HOME="$BATS_TEST_TMPDIR/opt"
     unset WORKS_RUNTIME WORKS_PLUG WORKS_CHANNEL
     mkdir -p "$HOME" "$WORKS_HOME"
-    . "$REPO/scripts/runtime-env.sh"
+    . "$REPO/works/runtime-env.sh"
     C="$(works_runtime_store)"
     P="$(works_plugs_dir)"
 }
@@ -106,7 +106,7 @@ a_registered() {   # plug, display name
     store; a_plug studio 12
     a_registered studio "Ableton Live 12 Suite"
     a_registered studio "Max 9"
-    run bash -c '. "$0"; works_plug_tenants "$1"' "$REPO/scripts/runtime-env.sh" "$P/studio"
+    run bash -c '. "$0"; works_plug_tenants "$1"' "$REPO/works/runtime-env.sh" "$P/studio"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Ableton Live 12 Suite"* ]]
     [[ "$output" == *"Max 9"* ]]
@@ -197,7 +197,7 @@ a_registered() {   # plug, display name
 # the behaviour on one should not find the other refuses.
 @test "use with no argument refuses when there is no terminal, naming the Plugs" {
     store; a_plug studio 12; a_plug work 12
-    run setsid bash "$REPO/scripts/works-plug" use
+    run setsid bash "$REPO/works/works-plug" use
     [ "$status" -ne 0 ]
     [[ "$output" == *"no terminal"* ]]
     [[ "$output" == *"works plug use studio"* ]]
@@ -207,7 +207,7 @@ a_registered() {   # plug, display name
 @test "use with no argument leaves the default alone" {
     store; a_plug studio 12; a_plug work 12
     PLUG use work
-    setsid bash "$REPO/scripts/works-plug" use || true
+    setsid bash "$REPO/works/works-plug" use || true
     [ "$(readlink "$P/default")" = "work" ]
 }
 
@@ -395,7 +395,7 @@ a_registered() {   # plug, display name
 # content, so it must not proceed where nobody can answer for it
 @test "rm without -y and with no terminal refuses rather than assuming" {
     store; a_plug studio 12; a_plug work 12
-    run setsid bash "$REPO/scripts/works-plug" rm work
+    run setsid bash "$REPO/works/works-plug" rm work
     [ "$status" -ne 0 ]
     [[ "$output" == *"pass -y"* ]]
     [ -e "$P/work" ]
@@ -474,7 +474,7 @@ a_registered() {   # plug, display name
 
 @test "plug is reachable through the dispatcher" {
     store; a_plug studio 12
-    run bash "$REPO/scripts/works" plug list
+    run bash "$REPO/works/works" plug list
     [ "$status" -eq 0 ]
     [[ "$output" == *"studio"* ]]
 }

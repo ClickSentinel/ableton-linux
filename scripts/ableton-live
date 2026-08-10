@@ -42,8 +42,10 @@ fi
 WORKS_ABI_MIN=1
 
 # Clear inherited Wine variables so this launch uses only the patched build.
-# Runtime and prefix paths resolve in one place; see scripts/runtime-env.sh.
-for _l in "$(dirname "$0")/runtime-env.sh" "$HOME/works/lib/runtime-env.sh"; do
+# Runtime and prefix paths resolve in one place; see works/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" \
+          "$(dirname "$0")/../works/runtime-env.sh" \
+          "$HOME/works/lib/runtime-env.sh"; do
     [ -r "$_l" ] && . "$_l" && break
 done
 command -v works_runtime_path >/dev/null 2>&1 || {
@@ -62,6 +64,14 @@ if [ "${WORKS_ABI_OLDEST:-1}" -gt "$WORKS_ABI_MIN" ]; then
     exit 1
 fi
 works_bind_runtime
+# Where this launcher actually lives, symlink resolved: ~/.local/bin holds only
+# a link. The app toolkit (detect-scale, detect-theme, shortcut-hold) is
+# installed BESIDE the launcher - the application's directory contains the
+# application - and in a checkout the same sibling relation holds in scripts/.
+# The ~/works/lib fallbacks below cover machines installed before the toolkit
+# moved out of lib (2026-08-10); install.sh removes those stale copies on the
+# next update, and the fallbacks can go a release later.
+appdir="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # Disable Wine debug logging; fixme spam from the D3D poll loop stalls Live's UI thread.
 # Keep the winediag channel on: it carries only rare one-line notices that a
 # person should read, such as the present-fallback warning from patch 0071.
@@ -290,7 +300,8 @@ fi
 if ! pgrep -af "Ableton Live.*\.exe" 2>/dev/null | grep "ProgramData" >/dev/null; then
     dpi_mode="${ABLETON_DPI_MODE:-auto}"
     dpi_family=""; dpi_scale=""
-    dpi_lib="$HOME/works/lib/detect-scale.sh"
+    dpi_lib="$appdir/detect-scale.sh"
+    [ -r "$dpi_lib" ] || dpi_lib="$HOME/works/lib/detect-scale.sh"
     [ -r "$dpi_lib" ] && . "$dpi_lib"
     if ! declare -F ableton_dpi_block_values >/dev/null 2>&1; then
         # no (or an older) detect-scale.sh: the two legacy blocks still resolve inline
@@ -835,7 +846,8 @@ sync_ui_font() {
 if ! pgrep -af "Ableton Live.*\.exe" 2>/dev/null | grep "ProgramData" >/dev/null; then
     # Sourced outside the auto branch: the topbar color detection below wants the lib
     # even when ABLETON_THEME_MODE pins the scheme.
-    theme_lib="$HOME/works/lib/detect-theme.sh"
+    theme_lib="$appdir/detect-theme.sh"
+    [ -r "$theme_lib" ] || theme_lib="$HOME/works/lib/detect-theme.sh"
     [ -r "$theme_lib" ] && . "$theme_lib"
     theme_mode="${ABLETON_THEME_MODE:-auto}"
     if [ "$theme_mode" = auto ]; then
@@ -890,8 +902,8 @@ fi
 # edit made while Live runs.  Opt-in: the held keys are unavailable to every
 # other window until the last opted-in Live exits.  See the shortcut support note.
 shortcut_lib=""
-for f in "$HOME/works/lib/shortcut-hold.sh" \
-         "${BASH_SOURCE[0]%/*}/shortcut-hold.sh"; do
+for f in "$appdir/shortcut-hold.sh" \
+         "$HOME/works/lib/shortcut-hold.sh"; do
     if [ -r "$f" ]; then shortcut_lib="$f"; break; fi
 done
 ableton_shortcuts_active=0

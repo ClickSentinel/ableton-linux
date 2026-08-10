@@ -79,11 +79,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
-          name="$(bash -c '. scripts/runtime-env.sh; works_runtime_name')"
+          name="$(bash -c '. works/runtime-env.sh; works_runtime_name')"
           mkdir -p .fixture
           if gh release download --repo shibco/ableton-linux \
                  --pattern "${name}-*.tar.zst*" --dir .fixture 2>/dev/null; then
-              t="$(bash -c '. scripts/runtime-env.sh; works_pick_tarball .fixture')"
+              t="$(bash -c '. works/runtime-env.sh; works_pick_tarball .fixture')"
               if [ -n "$t" ]; then
                   ( cd .fixture && sha256sum -c "$(basename "$t").sha256" ) \
                       || { echo "!! the released tarball failed its own checksum" >&2; exit 1; }

@@ -33,11 +33,11 @@ while [ $# -gt 0 ]; do
 done
 
 # Runtime naming and the manifest writer resolve in one place; see
-# scripts/runtime-env.sh. Sourced rather than reimplemented so the manifest this
+# works/runtime-env.sh. Sourced rather than reimplemented so the manifest this
 # publishes is written by the same function the updater's reader round-trips
 # against, and so the runtime name is not spelled out a second time.
-# shellcheck source=scripts/runtime-env.sh
-. "$here/runtime-env.sh"
+# shellcheck source=works/runtime-env.sh
+. "$root/works/runtime-env.sh"
 NAME="$(works_runtime_name)"
 VERSION="$(cat VERSION)"
 TAG="v$VERSION"

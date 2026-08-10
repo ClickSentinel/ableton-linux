@@ -8,13 +8,16 @@ set -euo pipefail
 export LC_ALL=C.UTF-8
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
+# The Works files sit beside this script in a kit (the kit is flat) and in
+# works/ in a checkout. Resolved once; every stage below uses it.
+works_src="$here"; [ -f "$works_src/works" ] || works_src="$root/works"
 
 BIN="$HOME/.local/bin"
 APPS="$HOME/.local/share/applications"
 # Runtime naming, path resolution, tarball selection and the process scan all
-# resolve in one place; see scripts/runtime-env.sh.
-for _l in "$(dirname "$0")/runtime-env.sh" "$root/scripts/runtime-env.sh"; do
-    # shellcheck source=scripts/runtime-env.sh
+# resolve in one place; see works/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" "$root/works/runtime-env.sh"; do
+    # shellcheck source=works/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
 command -v works_runtime_path >/dev/null 2>&1 || {
@@ -509,10 +512,10 @@ ln -sfn "$HOME/works/apps/ableton-live/ableton-live" "$BIN/ableton-live"
 # infrastructure, this kit installs only its application and leaves ~/works/bin
 # and the verbs alone.
 if [ "$install_infra" = 1 ]; then
-    install -m755 "$here/works" "$HOME/works/bin/works"
-    install -m755 "$here/works-runtime" "$HOME/works/lib/works-runtime"
-    install -m755 "$here/works-update" "$HOME/works/lib/works-update"
-    install -m755 "$here/works-plug" "$HOME/works/lib/works-plug"
+    install -m755 "$works_src/works" "$HOME/works/bin/works"
+    install -m755 "$works_src/works-runtime" "$HOME/works/lib/works-runtime"
+    install -m755 "$works_src/works-update" "$HOME/works/lib/works-update"
+    install -m755 "$works_src/works-plug" "$HOME/works/lib/works-plug"
 fi
 ln -sfn "$HOME/works/bin/works" "$BIN/works"
 # The two commands this replaced, from an installer that predates it.
@@ -530,19 +533,26 @@ echo "== install the shared toolkit -> ~/works/lib =="
 # Two directories because they hold two different things: the toolkit any
 # application sources, and this application's own payload.
 mkdir -p "$HOME/works/lib" "$HOME/works/apps/ableton-live"
-# The launchers live in ~/.local/bin with no sibling lib, so the shared
-# resolver has to be here for them to source. Without it ableton-live exits
-# on its own first lines and Live never starts.
-#
-# The same gate as the command and its verbs: the library and the toolkit are
-# one generation and move together, or the verbs call functions the library
-# does not define.
+# The shared library is here for the launchers to source, and it is the whole
+# of lib: the same gate as the command and its verbs, because the library and
+# the verbs are one generation and move together, or the verbs call functions
+# the library does not define.
 if [ "$install_infra" = 1 ]; then
-    install -m644 "$here/runtime-env.sh" "$HOME/works/lib/runtime-env.sh"
-    install -m644 "$here/detect-scale.sh" "$HOME/works/lib/detect-scale.sh"
-    install -m644 "$here/detect-theme.sh" "$HOME/works/lib/detect-theme.sh"
-    install -m644 "$here/shortcut-hold.sh" "$HOME/works/lib/shortcut-hold.sh"
+    install -m644 "$works_src/runtime-env.sh" "$HOME/works/lib/runtime-env.sh"
 fi
+# The app toolkit lives with the app, not in lib. Two reasons, both earned: lib
+# is generation-locked by the infrastructure gate, and app payload behind the
+# Works gate is mis-tiered - a keep-newer-infrastructure install would skip the
+# app's OWN toolkit update; and the app's directory should contain the app,
+# which is the same sentence the launcher's placement is justified by above.
+# The launcher sources these as siblings. Review find, PR #33.
+install -m644 "$here/detect-scale.sh" "$HOME/works/apps/ableton-live/detect-scale.sh"
+install -m644 "$here/detect-theme.sh" "$HOME/works/apps/ableton-live/detect-theme.sh"
+install -m644 "$here/shortcut-hold.sh" "$HOME/works/apps/ableton-live/shortcut-hold.sh"
+# Stale lib copies from installs made before the move (2026-08-10), removed so
+# lib stays what the census and the gate say it is: Works, whole, nothing else.
+rm -f "$HOME/works/lib/detect-scale.sh" "$HOME/works/lib/detect-theme.sh" \
+      "$HOME/works/lib/shortcut-hold.sh" 2>/dev/null || true
 # setsyscolors.exe repaints the top bar mid-session when the Live theme changes;
 # without it the colors still apply on the next launch. Kit stages it next to
 # these scripts; a repo checkout carries it in tools/.

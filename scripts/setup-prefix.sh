@@ -53,8 +53,10 @@ case "${ABLETON_LIVE_VERSION:-12}" in
     *) echo "!! ABLETON_LIVE_VERSION must be 11 or 12 (got '$ABLETON_LIVE_VERSION')" >&2; exit 2 ;;
 esac
 
-# Runtime and prefix paths resolve in one place; see scripts/runtime-env.sh.
-for _l in "$(dirname "$0")/runtime-env.sh" "$HOME/works/lib/runtime-env.sh"; do
+# Runtime and prefix paths resolve in one place; see works/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" \
+          "$(dirname "$0")/../works/runtime-env.sh" \
+          "$HOME/works/lib/runtime-env.sh"; do
     [ -r "$_l" ] && . "$_l" && break
 done
 command -v works_runtime_path >/dev/null 2>&1 || {

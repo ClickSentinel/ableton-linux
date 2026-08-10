@@ -132,8 +132,10 @@ fi
 
 echo "== prefix checks =="
 
-# Runtime and prefix paths resolve in one place; see scripts/runtime-env.sh.
-for _l in "$(dirname "$0")/runtime-env.sh" "$HOME/works/lib/runtime-env.sh"; do
+# Runtime and prefix paths resolve in one place; see works/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" \
+          "$(dirname "$0")/../works/runtime-env.sh" \
+          "$HOME/works/lib/runtime-env.sh"; do
     [ -r "$_l" ] && . "$_l" && break
 done
 command -v works_runtime_path >/dev/null 2>&1 || {

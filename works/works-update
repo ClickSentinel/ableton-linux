@@ -16,8 +16,8 @@ set -uo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 for _l in "$here/runtime-env.sh" "$HOME/works/lib/runtime-env.sh" \
-          "$here/../scripts/runtime-env.sh"; do
-    # shellcheck source=scripts/runtime-env.sh
+          "$here/../works/runtime-env.sh"; do
+    # shellcheck source=works/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
 command -v works_manifest_url >/dev/null 2>&1 || {

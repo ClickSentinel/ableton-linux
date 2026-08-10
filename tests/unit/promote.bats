@@ -16,7 +16,7 @@ setup() {
     setup_stubs
     HOME="$BATS_TEST_TMPDIR/home"
     mkdir -p "$HOME"
-    . "$REPO/scripts/runtime-env.sh"
+    . "$REPO/works/runtime-env.sh"
     NAME="$(works_runtime_name)"
     export WORKS_PROMOTE_DEST="$BATS_TEST_TMPDIR/out"
 }

@@ -343,7 +343,7 @@ not what the decision runs.
 ## tests/unit/manifest.bats
 
 
-scripts/runtime-env.sh — the channel manifest.
+works/runtime-env.sh — the channel manifest.
 
 A channel publishes one document saying what it points at. Everything before
 this re-derived that by parsing artifact filenames, which is the single
@@ -384,7 +384,7 @@ round-trip them: a manifest this repo writes must be one this repo accepts.
 ## tests/unit/migrate-layout.bats
 
 
-scripts/runtime-env.sh — the flat-to-store migration.
+works/runtime-env.sh — the flat-to-store migration.
 
 This renames the directory an existing user's Wine runs from, so every row of
 the decision table gets a test, including the ones that must refuse. The rule
@@ -448,7 +448,7 @@ a throwaway tree.
 ## tests/unit/works.bats
 
 
-scripts/works — the dispatcher.
+works/works — the dispatcher.
 
 It does two things worth testing: it finds its verbs, and it refuses what is
 not a command. Finding them is the part with a trap in it — PATH holds a
@@ -504,7 +504,7 @@ naming changes. Every refusal is a state where that promise cannot hold.
 ## tests/unit/works-runtime.bats
 
 
-scripts/works-runtime — choosing which build is live.
+works/works-runtime — choosing which build is live.
 
 The store made rollback possible and nothing exposed it: switching meant
 `ln -sfn` against a name you had to look up. These cover the two things that
@@ -560,7 +560,7 @@ resolve through it instead of naming a directory.
 ## tests/unit/works-plug.bats
 
 
-scripts/works-plug — the prefixes applications are installed into.
+works/works-plug — the prefixes applications are installed into.
 
 A Plug is a directory and one symlink: the name is the directory's name, the
 tenants are whatever is in drive_c, and `.works-runtime` is the only recorded
@@ -620,7 +620,7 @@ destructive verbs refuse before they act rather than after.
 ## tests/unit/works-update.bats
 
 
-scripts/works-update — deciding whether to replace the runtime.
+works/works-update — deciding whether to replace the runtime.
 
 Everything the updater does before it downloads is a refusal: same build,
 unknown channel, incomplete manifest, a Wine base it cannot take a Plug back
@@ -677,7 +677,7 @@ file:// URL, which is the same code path a real channel takes.
 ## tests/unit/runtime-env.bats
 
 
-scripts/runtime-env.sh — the shared runtime and prefix resolution.
+works/runtime-env.sh — the shared runtime and prefix resolution.
 
 Seven scripts resolved these paths independently until this existed. The
 resolvers are pure so they can be tested here rather than through a launcher

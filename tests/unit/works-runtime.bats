@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# scripts/works-runtime — choosing which build is live.
+# works/works-runtime — choosing which build is live.
 #
 # The store made rollback possible and nothing exposed it: switching meant
 # `ln -sfn` against a name you had to look up. These cover the two things that
@@ -14,14 +14,14 @@ bats_require_minimum_version 1.5.0
 
 load ../helpers/common
 
-RT() { bash "$REPO/scripts/works-runtime" "$@"; }
+RT() { bash "$REPO/works/works-runtime" "$@"; }
 
 setup() {
     HOME="$BATS_TEST_TMPDIR/home"
     export WORKS_HOME="$BATS_TEST_TMPDIR/opt"
     unset WORKS_RUNTIME
     mkdir -p "$HOME" "$WORKS_HOME"
-    . "$REPO/scripts/runtime-env.sh"
+    . "$REPO/works/runtime-env.sh"
     C="$(works_runtime_store)"
     LEGACY="$(works_legacy_root)"
 }
@@ -240,7 +240,7 @@ store() {
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
     # setsid detaches the controlling terminal. Without it this inherits the
     # terminal of whoever ran the suite, takes the interactive branch, and blocks.
-    run setsid bash "$REPO/scripts/works-runtime" use 2026.07.01.1+ddddddd
+    run setsid bash "$REPO/works/works-runtime" use 2026.07.01.1+ddddddd
     [ "$status" -ne 0 ]
     [[ "$output" == *"different Wine base"* ]]
     [[ "$output" == *"--force"* ]]
@@ -263,7 +263,7 @@ store() {
     plant "$C/2026.01.01.1+aaaaaaa" 2026.01.01.1 aaaaaaaxxx 2026-01-01T00:00:00Z wine-11.13
     ln -s "2026.07.01.1+ddddddd" "$C/stable"
     a_plug studio wine-11.14
-    run setsid bash "$REPO/scripts/works-runtime" use 2026.01.01.1+aaaaaaa
+    run setsid bash "$REPO/works/works-runtime" use 2026.01.01.1+aaaaaaa
     [[ "$output" == *"DOWNGRADE"* ]]
     [[ "$output" == *"does not support"* ]]
     [[ "$output" == *"studio"* ]] \
@@ -279,7 +279,7 @@ store() {
     a_plug studio wine-11.13
     ln -sfn "../../runtimes/2026.06.01.1+bbbbbbb" "$(works_plugs_dir)/studio/.works-runtime"
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
-    run setsid bash "$REPO/scripts/works-runtime" use 2026.07.01.1+ddddddd
+    run setsid bash "$REPO/works/works-runtime" use 2026.07.01.1+ddddddd
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" != *"different Wine base"* ]]
     [ "$(readlink "$C/stable")" = "2026.07.01.1+ddddddd" ]
@@ -296,7 +296,7 @@ store() {
     printf 'WINE REGISTRY Version 2\n' > "$(works_plugs_dir)/studio/system.reg"
     rm -f "$(works_plugs_dir)/studio/.update-timestamp"
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
-    run setsid bash "$REPO/scripts/works-runtime" use 2026.07.01.1+ddddddd
+    run setsid bash "$REPO/works/works-runtime" use 2026.07.01.1+ddddddd
     [ "$status" -ne 0 ]
     [[ "$output" == *"will not say which Wine base"* ]]
     [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]
@@ -312,7 +312,7 @@ store() {
     : > "$(works_plugs_dir)/studio/system.reg"
     rm -f "$(works_plugs_dir)/studio/.update-timestamp"
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
-    run setsid bash "$REPO/scripts/works-runtime" use 2026.07.01.1+ddddddd
+    run setsid bash "$REPO/works/works-runtime" use 2026.07.01.1+ddddddd
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" != *"will not say"* ]]
     [ "$(readlink "$C/stable")" = "2026.07.01.1+ddddddd" ]
@@ -323,7 +323,7 @@ store() {
 # guards: a script calling `use` with no argument must fail, not block forever
 @test "use with no argument refuses when there is no terminal" {
     store
-    run setsid bash "$REPO/scripts/works-runtime" use
+    run setsid bash "$REPO/works/works-runtime" use
     [ "$status" -ne 0 ]
     [[ "$output" == *"no terminal"* ]]
     [[ "$output" == *"works runtime use 2026"* ]]
@@ -331,7 +331,7 @@ store() {
 
 @test "use with no argument leaves the channel alone" {
     store
-    setsid bash "$REPO/scripts/works-runtime" use || true
+    setsid bash "$REPO/works/works-runtime" use || true
     [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]
 }
 
@@ -398,7 +398,7 @@ fake_live() {
 @test "stop refuses a running Live with no terminal to confirm on" {
     store
     fake_live
-    run setsid bash "$REPO/scripts/works-runtime" stop
+    run setsid bash "$REPO/works/works-runtime" stop
     [ "$status" -ne 0 ]
     [[ "$output" == *"pass -y"* ]]
     kill -0 "$FAKE_LIVE"        # and it is still running
@@ -410,7 +410,7 @@ fake_live() {
 @test "stop -y stops a running Live without asking" {
     store
     fake_live
-    run setsid bash "$REPO/scripts/works-runtime" stop -y
+    run setsid bash "$REPO/works/works-runtime" stop -y
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" == *"Stopped."* ]]
     # wait reaps it too: a killed child is a zombie until then, and kill -0
@@ -424,7 +424,7 @@ fake_live() {
 @test "stop --yes is the same flag spelled out" {
     store
     fake_live
-    run setsid bash "$REPO/scripts/works-runtime" stop --yes
+    run setsid bash "$REPO/works/works-runtime" stop --yes
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     rc=0; wait "$FAKE_LIVE" 2>/dev/null || rc=$?
     [ "$rc" -gt 128 ]
@@ -435,7 +435,7 @@ fake_live() {
 @test "works stop -y reaches the flag through the top-level dispatcher" {
     store
     fake_live
-    run setsid bash "$REPO/scripts/works" stop -y
+    run setsid bash "$REPO/works/works" stop -y
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     rc=0; wait "$FAKE_LIVE" 2>/dev/null || rc=$?
     [ "$rc" -gt 128 ]
@@ -485,7 +485,7 @@ fake_live() {
     store
     a_plug studio wine-11.13
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.13 1501113500
-    run setsid bash "$REPO/scripts/works-runtime" use 2026.07.01.1+ddddddd
+    run setsid bash "$REPO/works/works-runtime" use 2026.07.01.1+ddddddd
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" != *"different Wine base"* ]]
     [[ "$output" != *"Continue"* ]]
@@ -497,7 +497,7 @@ fake_live() {
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.13 1501113500
     ln -sfn "2026.07.01.1+ddddddd" "$C/stable"
     a_plug studio wine-11.13 1501113500       # booted by the newer build
-    run setsid bash "$REPO/scripts/works-runtime" use 2026.06.01.1+bbbbbbb
+    run setsid bash "$REPO/works/works-runtime" use 2026.06.01.1+bbbbbbb
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" == *"older build of the same Wine base"* ]]
     [[ "$output" != *"DOWNGRADE"* ]]
@@ -510,7 +510,7 @@ fake_live() {
 @test "a rollback whose booting runtime is gone stays a refusal" {
     store
     a_plug studio wine-11.13 1501113999      # a stamp no store entry carries
-    run setsid bash "$REPO/scripts/works-runtime" use 2026.01.01.1+aaaaaaa
+    run setsid bash "$REPO/works/works-runtime" use 2026.01.01.1+aaaaaaa
     [ "$status" -ne 0 ]
     [[ "$output" == *"DOWNGRADE"* ]]
     [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]

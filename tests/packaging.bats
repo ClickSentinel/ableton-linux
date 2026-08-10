@@ -24,8 +24,8 @@ MK="scripts/make-installer.sh"
 # `install -m644 ... "$kit/scripts/NAME"` lines.
 kit_script_names() {
     cd "$REPO"
-    sed -n '/^cp -a scripts\//,/"\$kit\/scripts\/"/p' "$MK" \
-        | grep -oE '(scripts|tools)/[A-Za-z0-9_.-]+' | sed 's#.*/##'
+    sed -n '/^cp -a \(scripts\|works\)\//,/"\$kit\/scripts\/"/p' "$MK" \
+        | grep -oE '(scripts|works|tools)/[A-Za-z0-9_.-]+' | sed 's#.*/##'
     grep -oE 'install -m[0-9]+ [^ ]+ "\$kit/scripts/[A-Za-z0-9_.-]+"' "$MK" \
         | sed 's#.*/##; s#"$##'
 }
@@ -128,7 +128,7 @@ kit_script_names() {
     # configure prefix and the artifact name, which is the one place the Wine
     # version genuinely belongs. setup-run-header.sh keeps one because it runs
     # before anything is installed and cannot source the lib.
-    allowed="scripts/runtime-env.sh build.sh scripts/container-build.sh scripts/build-audit.sh scripts/release.sh scripts/setup-run-header.sh"
+    allowed="works/runtime-env.sh build.sh scripts/container-build.sh scripts/build-audit.sh scripts/release.sh scripts/setup-run-header.sh"
     offenders=""
     while read -r f; do
         case " $allowed " in *" $f "*) continue ;; esac
@@ -137,7 +137,7 @@ kit_script_names() {
     [ -z "$offenders" ] || {
         echo "these spell the runtime name instead of deriving it:$offenders" >&2; false; }
 
-    lib="$(grep -oE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' scripts/runtime-env.sh | head -1)"
+    lib="$(grep -oE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' works/runtime-env.sh | head -1)"
     bs="$(grep -oE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' build.sh | head -1)"
     [ "$lib" = "$bs" ] || {
         echo "lib says '$lib', build.sh says '$bs'" >&2; false; }
@@ -184,7 +184,7 @@ kit_script_names() {
     # do not (update-desktop-database, sha256sum, readelf). So an underscore word
     # in command position is a function call, and it has to resolve somewhere —
     # in the file itself or in a lib the file sources.
-    defined="$(grep -hoE '^[a-z][a-z0-9_]*\(\)' scripts/* 2>/dev/null | tr -d '()' | sort -u)"
+    defined="$(grep -hoE '^[a-z][a-z0-9_]*\(\)' scripts/* works/* 2>/dev/null | tr -d '()' | sort -u)"
     missing=""
     while read -r f; do
         # Drop comments, glob forms, and anything shaped like an assignment —
@@ -200,7 +200,7 @@ kit_script_names() {
             command -v "$fn" >/dev/null 2>&1 && continue   # a real external command
             missing="$missing$f: $fn"$'\n'
         done
-    done < <(git ls-files 'scripts/*')
+    done < <(git ls-files 'scripts/*' 'works/*')
     [ -z "$missing" ] || {
         echo "calls that resolve to no function or command:" >&2
         printf '%s' "$missing" >&2; false; }

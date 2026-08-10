@@ -22,9 +22,9 @@ root="$(cd "$here/.." && pwd)"
 cd "$root"
 
 # Runtime naming and the tarball predicate resolve in one place; see
-# scripts/runtime-env.sh.
-# shellcheck source=scripts/runtime-env.sh
-. "$here/runtime-env.sh"
+# works/runtime-env.sh.
+# shellcheck source=works/runtime-env.sh
+. "$root/works/runtime-env.sh"
 
 src="${1:?usage: promote-nightly.sh <nightly-tarball> [version]}"
 VERSION="${2:-$(cat "$root/VERSION")}"

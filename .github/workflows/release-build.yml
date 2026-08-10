@@ -132,7 +132,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get install -y --no-install-recommends zstd >/dev/null
-          name="$(bash -c '. scripts/runtime-env.sh; works_runtime_name')"
+          name="$(bash -c '. works/runtime-env.sh; works_runtime_name')"
           mkdir -p nightly-in
           gh release download nightly --repo "$GITHUB_REPOSITORY" --dir nightly-in \
               -p "${name}-*+nightly.*.tar.zst" -p "${name}-*+nightly.*.tar.zst.sha256" \
@@ -174,12 +174,12 @@ jobs:
 
       - name: Build audit (every patch verified in the shipped binaries)
         run: |
-          name="$(bash -c '. scripts/runtime-env.sh; works_runtime_name')"
+          name="$(bash -c '. works/runtime-env.sh; works_runtime_name')"
           ./scripts/build-audit.sh "dist/${name}-${{ steps.v.outputs.version }}.tar.zst"
 
       - name: Assemble the installer
         run: |
-          name="$(bash -c '. scripts/runtime-env.sh; works_runtime_name')"
+          name="$(bash -c '. works/runtime-env.sh; works_runtime_name')"
           ENGINE=docker \
           WORKS_RUNTIME_TARBALL="dist/${name}-${{ steps.v.outputs.version }}.tar.zst" \
           WORKS_PUBLISH_AS=install-ableton-latest.run \
@@ -228,7 +228,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ steps.v.outputs.version }}"
-          name="$(bash -c '. scripts/runtime-env.sh; works_runtime_name')"
+          name="$(bash -c '. works/runtime-env.sh; works_runtime_name')"
           run="dist/ableton-wine-setup-${VERSION}.run"
           tarball="dist/${name}-${VERSION}.tar.zst"
           {

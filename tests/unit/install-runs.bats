@@ -30,7 +30,7 @@ load ../helpers/install-sandbox
 
 setup() {
     install_sandbox
-    . "$REPO/scripts/runtime-env.sh"
+    . "$REPO/works/runtime-env.sh"
 }
 
 # guards: install.sh aborting on its own first lines, which no resolver test can

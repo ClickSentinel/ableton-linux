@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# scripts/runtime-env.sh — the shared runtime and prefix resolution.
+# works/runtime-env.sh — the shared runtime and prefix resolution.
 #
 # Seven scripts resolved these paths independently until this existed. The
 # resolvers are pure so they can be tested here rather than through a launcher
@@ -19,7 +19,7 @@ setup() {
     mkdir -p "$HOME"
     unset WORKS_RUNTIME WORKS_PLUG
     unset WINELOADER WINEDLLPATH WINEDLLOVERRIDES WINEARCH WINEESYNC WINEFSYNC
-    . "$REPO/scripts/runtime-env.sh"
+    . "$REPO/works/runtime-env.sh"
 }
 
 @test "runtime root: an unmigrated install still resolves where it actually is" {
@@ -642,7 +642,7 @@ id_of() {   # id_of <build-info lines...>
 
 @test "compat: an old infrastructure name is honoured, and says so once" {
     run env -u WORKS_PLUG ABLETON_WINEPREFIX=/tmp/oldpfx bash -c \
-        '. "$REPO/scripts/runtime-env.sh"; works_plug_path'
+        '. "$REPO/works/runtime-env.sh"; works_plug_path'
     [ "$status" -eq 0 ]
     [[ "$output" == *"/tmp/oldpfx"* ]]
     [[ "$stderr$output" == *"now WORKS_PLUG"* ]]
@@ -652,19 +652,19 @@ id_of() {   # id_of <build-info lines...>
 # shell profile — the new name is the deliberate one
 @test "compat: the new name wins when both are set" {
     run env ABLETON_WINEPREFIX=/tmp/oldpfx WORKS_PLUG=/tmp/newpfx bash -c \
-        '. "$REPO/scripts/runtime-env.sh"; works_plug_path'
+        '. "$REPO/works/runtime-env.sh"; works_plug_path'
     [ "$output" = "/tmp/newpfx" ] || [[ "$output" == *"/tmp/newpfx"* ]]
 }
 
 @test "compat: an application's own settings are not renamed" {
     run env ABLETON_DPI_MODE=dpi120 bash -c \
-        '. "$REPO/scripts/runtime-env.sh"; printf "%s|%s\n" "${ABLETON_DPI_MODE:-}" "${WORKS_DPI_MODE:-unset}"'
+        '. "$REPO/works/runtime-env.sh"; printf "%s|%s\n" "${ABLETON_DPI_MODE:-}" "${WORKS_DPI_MODE:-unset}"'
     [[ "$output" == *"dpi120|unset"* ]]
 }
 
 @test "compat: nothing is said when no old name is set" {
     run env -u ABLETON_WINEPREFIX -u ABLETON_WINE_ROOT bash -c \
-        '. "$REPO/scripts/runtime-env.sh"; works_plug_path >/dev/null'
+        '. "$REPO/works/runtime-env.sh"; works_plug_path >/dev/null'
     [ -z "$stderr" ] || [[ "$stderr" != *"will stop being read"* ]]
 }
 

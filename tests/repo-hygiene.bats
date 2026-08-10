@@ -10,18 +10,18 @@ bats_require_minimum_version 1.5.0
 load helpers/common
 
 # Files that are sourced, not executed, so they have no shebang of their own.
-SOURCED="scripts/detect-scale.sh scripts/detect-theme.sh scripts/ableton-profile.sh scripts/runtime-env.sh scripts/shortcut-hold.sh"
+SOURCED="scripts/detect-scale.sh scripts/detect-theme.sh scripts/ableton-profile.sh works/runtime-env.sh scripts/shortcut-hold.sh"
 # The single-file installer header declares #!/bin/sh and then re-execs itself
 # into bash on line 19; shellcheck reads the shebang and not the re-exec.
 BASH_DIALECT="scripts/setup-run-header.sh"
 
-# scripts/works* are shipped commands carrying no .sh, so the glob above never
+# works/works* are shipped commands carrying no .sh, so the glob above never
 # reached them: four executables that make-installer.sh packs into the kit went
 # both unchecked and unparsed, and a warning in one was found by hand instead.
 all_shell_files() {
     (cd "$REPO" && git ls-files \
         'build.sh' 'scripts/*.sh' 'scripts/ableton-live' 'scripts/max9' \
-        'scripts/works*' \
+        'works/*.sh' 'works/works*' \
         'bin/ableton-live-beta' 'bin/ableton-live-portal' \
         'bin/ableton-wine-portal' 'bin/set-file-portal-policy' \
         'tests/run.sh' 'tests/catalogue.sh')

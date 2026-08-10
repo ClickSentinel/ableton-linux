@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# scripts/runtime-env.sh — the channel manifest.
+# works/runtime-env.sh — the channel manifest.
 #
 # A channel publishes one document saying what it points at. Everything before
 # this re-derived that by parsing artifact filenames, which is the single
@@ -20,7 +20,7 @@ setup() {
     HOME="$BATS_TEST_TMPDIR/home"; mkdir -p "$HOME"
     export WORKS_CHANNEL_FILE="$BATS_TEST_TMPDIR/chan"
     unset WORKS_CHANNEL WORKS_MANIFEST_URL
-    . "$REPO/scripts/runtime-env.sh"
+    . "$REPO/works/runtime-env.sh"
     TREE="$BATS_TEST_TMPDIR/BUILD-INFO.txt"
     printf 'dist-version: 2026.08.04.1\nsource-commit: 0e72afb07072f7fa\nbuilt-at:     2026-08-06T13:49:38Z\nwine:         wine-11.13\n' \
         > "$TREE"

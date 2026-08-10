@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# scripts/works — the dispatcher.
+# works/works — the dispatcher.
 #
 # It does two things worth testing: it finds its verbs, and it refuses what is
 # not a command. Finding them is the part with a trap in it — PATH holds a
@@ -13,14 +13,14 @@ bats_require_minimum_version 1.5.0
 
 load ../helpers/common
 
-W() { bash "$REPO/scripts/works" "$@"; }
+W() { bash "$REPO/works/works" "$@"; }
 
 setup() {
     HOME="$BATS_TEST_TMPDIR/home"
     export WORKS_HOME="$BATS_TEST_TMPDIR/opt"
     unset WORKS_RUNTIME
     mkdir -p "$HOME" "$WORKS_HOME"
-    . "$REPO/scripts/runtime-env.sh"
+    . "$REPO/works/runtime-env.sh"
     C="$(works_runtime_store)"
 }
 
@@ -40,10 +40,10 @@ store() { a_build 2026.06.01.1+bbbbbbb; ln -sfn "2026.06.01.1+bbbbbbb" "$C/stabl
 # the *link*, which is ~/.local/lib and holds nothing.
 @test "works resolves its verbs through a symlink on PATH" {
     mkdir -p "$WORKS_HOME/bin" "$WORKS_HOME/lib" "$BATS_TEST_TMPDIR/pathdir"
-    install -m755 "$REPO/scripts/works"          "$WORKS_HOME/bin/works"
-    install -m755 "$REPO/scripts/works-runtime"  "$WORKS_HOME/lib/works-runtime"
-    install -m755 "$REPO/scripts/works-update"   "$WORKS_HOME/lib/works-update"
-    install -m644 "$REPO/scripts/runtime-env.sh" "$WORKS_HOME/lib/runtime-env.sh"
+    install -m755 "$REPO/works/works"          "$WORKS_HOME/bin/works"
+    install -m755 "$REPO/works/works-runtime"  "$WORKS_HOME/lib/works-runtime"
+    install -m755 "$REPO/works/works-update"   "$WORKS_HOME/lib/works-update"
+    install -m644 "$REPO/works/runtime-env.sh" "$WORKS_HOME/lib/runtime-env.sh"
     ln -sfn "$WORKS_HOME/bin/works" "$BATS_TEST_TMPDIR/pathdir/works"
     store
 
@@ -54,7 +54,7 @@ store() { a_build 2026.06.01.1+bbbbbbb; ln -sfn "2026.06.01.1+bbbbbbb" "$C/stabl
 
 @test "works says so when the verbs are missing rather than failing obscurely" {
     mkdir -p "$BATS_TEST_TMPDIR/alone"
-    install -m755 "$REPO/scripts/works" "$BATS_TEST_TMPDIR/alone/works"
+    install -m755 "$REPO/works/works" "$BATS_TEST_TMPDIR/alone/works"
     run "$BATS_TEST_TMPDIR/alone/works" runtime list
     [ "$status" -ne 0 ]
     [[ "$output" == *"cannot find its verbs"* ]]

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# scripts/runtime-env.sh — the flat-to-store migration.
+# works/runtime-env.sh — the flat-to-store migration.
 #
 # This renames the directory an existing user's Wine runs from, so every row of
 # the decision table gets a test, including the ones that must refuse. The rule
@@ -23,7 +23,7 @@ setup() {
     export WORKS_HOME="$BATS_TEST_TMPDIR/opt"
     unset WORKS_RUNTIME
     mkdir -p "$HOME" "$WORKS_HOME"
-    . "$REPO/scripts/runtime-env.sh"
+    . "$REPO/works/runtime-env.sh"
     # Derived, never spelled out: a literal here would be a second place the
     # runtime name lives, which repo-hygiene rightly refuses.
     LEGACY="$(works_legacy_root)"
@@ -318,14 +318,14 @@ plant_at() { plant "$1" "$2" "$3" "$4"; }
     target="$BATS_TEST_TMPDIR/not-a-runtime"
     mkdir -p "$target/documents"
     run env WORKS_RUNTIME="$target" bash -c \
-        ". '$REPO/scripts/runtime-env.sh'; works_remove_runtimes"
+        ". '$REPO/works/runtime-env.sh'; works_remove_runtimes"
     [ "$status" -ne 0 ]
     [ -d "$target/documents" ]
 }
 
 @test "removal refuses a pinned root of \$HOME" {
     run env WORKS_RUNTIME="$HOME" bash -c \
-        ". '$REPO/scripts/runtime-env.sh'; works_remove_runtimes"
+        ". '$REPO/works/runtime-env.sh'; works_remove_runtimes"
     [ "$status" -ne 0 ]
     [ -d "$HOME" ]
 }

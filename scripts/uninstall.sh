@@ -7,8 +7,8 @@ set -euo pipefail
 # `rm -rf` on whatever it resolves, so the two disagreeing is not a cosmetic
 # problem.
 for _l in "$(dirname "$0")/runtime-env.sh" \
-          "$(cd "$(dirname "$0")/.." && pwd)/scripts/runtime-env.sh"; do
-    # shellcheck source=scripts/runtime-env.sh
+          "$(cd "$(dirname "$0")/.." && pwd)/works/runtime-env.sh"; do
+    # shellcheck source=works/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
 command -v works_runtime_path >/dev/null 2>&1 || {

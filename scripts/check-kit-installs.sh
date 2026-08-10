@@ -33,7 +33,7 @@ env -i PATH="$PATH" HOME="$sb/home" \
     sh "$run" --runtime-only
 
 # The store, as the kit's own resolver sees it under the sandbox HOME.
-container="$(env HOME="$sb/home" bash -c '. "'"$here"'/runtime-env.sh"; works_runtime_store')"
+container="$(env HOME="$sb/home" bash -c '. "'"$root"'/works/runtime-env.sh"; works_runtime_store')"
 entries=()
 for d in "$container"/*/; do
     [ -L "${d%/}" ] && continue

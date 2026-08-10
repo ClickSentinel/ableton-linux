@@ -14,9 +14,10 @@ cd "$root"
 ENGINE="${ENGINE:-podman}"
 IMAGE="${IMAGE:-ableton-wine-build:22.04}"
 # Runtime naming and tarball selection resolve in one place; see
-# scripts/runtime-env.sh.
-for _l in "$(dirname "$0")/runtime-env.sh" "$here/runtime-env.sh"; do
-    # shellcheck source=scripts/runtime-env.sh
+# works/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" \
+          "$(dirname "$0")/../works/runtime-env.sh"; do
+    # shellcheck source=works/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
 command -v works_pick_tarball >/dev/null 2>&1 || {
@@ -101,7 +102,7 @@ mkdir -p "$kit/bin" "$kit/dist" "$kit/vendor"
 cp -a "$tarball" "$tarball.sha256" "$kit/dist/"
 cp -a "dist/BUILD-INFO-${VERSION}.txt" "$kit/" 2>/dev/null || true
 mkdir -p "$kit/scripts"
-cp -a scripts/runtime-env.sh scripts/works scripts/works-runtime scripts/works-update scripts/works-plug scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
+cp -a works/runtime-env.sh works/works works/works-runtime works/works-update works/works-plug scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
       scripts/ableton-live scripts/max9 scripts/detect-scale.sh \
       scripts/detect-theme.sh scripts/shortcut-hold.sh \
       scripts/check-live-audio.sh scripts/setup-link.sh \
