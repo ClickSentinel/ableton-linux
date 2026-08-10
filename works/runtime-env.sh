@@ -525,56 +525,50 @@ works_apps_below_min() {
     return 0
 }
 
-# What is installed in a Plug — asked of Windows, which already knows.
+# What is installed in a Plug - asked of Windows, which already holds two
+# disjoint answers. HKLM\Software\RegisteredApplications is the Default
+# Programs index: vendor-neutral, written by installers that register
+# (Ableton's does). The Uninstall keys are the Add/Remove index: written by
+# nearly every installer (NSIS and MSI included), and the only trace of an
+# application that never registers. Measured on real prefixes, an application
+# can appear in either index alone, so the census is the union.
 #
-# HKLM\Software\RegisteredApplications is the index the Default Programs schema
-# defines: one value per application, its name on the left and the path to its
-# Capabilities key on the right. Every installer that wants to appear in "Set
-# your default programs" writes it, Wine stores it in system.reg like any other
-# key, and it is completely vendor-neutral - there is nothing about Ableton in
-# the read below, and there would be nothing about the next application either.
-#
-# This replaced two worse answers in one day. First a pair of hardcoded globs for
-# Ableton and Cycling '74 living in the library every application sources, where
-# discovery depended on which kit had most recently written this file. Then a
-# per-application tenants.sh that each payload shipped, which fixed the ordering
-# but made every new application a new file and a new protocol to implement. Both
-# were solving a problem Windows had already solved: the prefix is the database,
-# and this is the table.
-#
-# Not the Uninstall keys, which would seem the obvious place and are not: in a
-# real Live 12 prefix they hold nine entries, all of them redistributables and
-# Wine's own Mono, and no Live. Checked before this was written.
+# Two subtractions, both bounded. Entries marked SystemComponent=1 use the
+# Windows convention for hidden support packages and are dropped. What remains
+# still includes platform runtime components with no structural marker -
+# Windows itself lists them in Apps & Features - so those are dropped by name.
+# That list is platform knowledge (the runtime's own support payloads), not
+# tenant knowledge: the smell being avoided is application vendors named in
+# shared code, and no application is named here.
 works_plug_tenants() {
-    local _p
+    local _p _f
     _p="${1:-}"; [ -n "$_p" ] || _p="$(works_plug_path)"
     _p="${_p%/}"
-    [ -r "$_p/system.reg" ] || return 0
-    # A section runs until the next line opening a key, so the header match is
-    # latched rather than the file being range-matched: a blank-line terminator
-    # would be a guess about formatting this does not need to make.
-    #
-    # One rule with ifs inside, rather than awk's natural pattern-action pairs: a
-    # bare `latched && /re/ {` starts a line with an identifier followed by more
-    # words, which packaging.bats's "every function a script calls is defined"
-    # scan reads as a shell call to an undefined function. That check earns its
-    # keep - it is what caught works_channel_file going missing - so the awk is
-    # written to suit it rather than the check taught to ignore this.
-    awk '
-        {
-            if ($0 ~ /^\[/) {
-                latched = ($0 ~ /^\[Software\\\\RegisteredApplications\]/)
-                next
-            }
-            if (latched && $0 ~ /^"[^"]*"="/) {
-                name = $0
-                sub(/^"/, "", name)
-                sub(/"=".*$/, "", name)
-                if (name != "") print name
-            }
-        }
-    ' "$_p/system.reg" 2>/dev/null \
-      | sort -u | awk 'NR>1{printf ", "} {printf "%s", $0} END{if (NR) print ""}'
+    {
+        for _f in system.reg user.reg; do
+            [ -r "$_p/$_f" ] || continue
+            awk '
+                {
+                    if ($0 ~ /^\[/) {
+                        if (dn != "" && sc == 0) print dn
+                        dn = ""; sc = 0
+                        ra = ($0 ~ /^\[Software\\\\RegisteredApplications\]/)
+                        un = ($0 ~ /CurrentVersion\\\\Uninstall\\\\/)
+                        next
+                    }
+                    if (ra && $0 ~ /^"[^"]*"="/) {
+                        nm = $0; sub(/^"/, "", nm); sub(/"=".*$/, "", nm)
+                        if (nm != "") print nm
+                    }
+                    if (un && $0 ~ /^"DisplayName"="/) {
+                        dn = $0; sub(/^"DisplayName"="/, "", dn); sub(/"$/, "", dn)
+                    }
+                    if (un && $0 ~ /^"SystemComponent"=dword:00000001/) sc = 1
+                }
+                END { if (dn != "" && sc == 0) print dn }
+            ' "$_p/$_f" 2>/dev/null
+        done
+    } | grep -vE '^(Wine Mono|Microsoft Visual C\+\+|Microsoft Edge WebView2|Microsoft \.NET)'       | sort -u | awk 'NR>1{printf ", "} {printf "%s", $0} END{if (NR) print ""}'
 }
 
 # Bind this shell to the runtime: drop inherited Wine settings that would reach

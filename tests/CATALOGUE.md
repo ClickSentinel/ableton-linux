@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-437 tests across 17 suites. See [README.md](README.md) for how to run
+440 tests across 17 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -26,7 +26,7 @@ for which run on a PR.
 - [tests/unit/works.bats](#works) — 12 test(s)
 - [tests/unit/promote.bats](#promote) — 11 test(s)
 - [tests/unit/works-runtime.bats](#works-runtime) — 38 test(s)
-- [tests/unit/works-plug.bats](#works-plug) — 42 test(s)
+- [tests/unit/works-plug.bats](#works-plug) — 45 test(s)
 - [tests/unit/works-update.bats](#works-update) — 37 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 75 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
@@ -575,45 +575,48 @@ destructive verbs refuse before they act rather than after.
 | 1 | list says so when there are no Plugs yet | — |
 | 2 | list names each Plug and what is installed in it | — |
 | 3 | a Plug that registers nothing lists without tenants | tenants come from the prefix's own RegisteredApplications index, not |
-| 4 | a Plug with two registered applications reports both | two applications in one Plug is the shape ~/.wine-ableton was already |
-| 5 | list marks the selected Plug, and use moves the mark | the selection is a symlink, and a list that does not say which one is |
-| 6 | list separates following a channel from being pinned to a build | a Plug bound to the channel link and a Plug pinned to a build resolve |
-| 7 | an unbound Plug is reported as following the channel | — |
-| 8 | a pre-store install is not reported as following a channel | found by hand. With no store there is no channel for a Plug to follow, |
-| 9 | list does not offer a directory that is not a prefix | a directory someone dropped under plugs/ is not a prefix, and offering |
-| 10 | a dangling default is called out rather than left to look deliberate | a default pointing at a removed Plug silently falls back to studio, so |
-| 11 | use retargets the default, relatively | — |
-| 12 | list shows each Plug's path, abbreviated under home | the path is what people copy into a script or a bug report, and it is |
-| 13 | use with no argument refuses when there is no terminal, naming the Plugs | `works runtime use` with no argument offers a numbered list, so this |
-| 14 | use with no argument leaves the default alone | — |
-| 15 | use refuses a Plug that is not there, and lists what is | — |
-| 16 | default is refused as a Plug name | `default` is the selection link itself, so a Plug by that name could |
-| 17 | a name that is not a plain directory name is refused | — |
-| 18 | new creates a Plug that follows the channel | — |
-| 19 | a Plug created but never booted is still listed | a Plug with no prefix in it yet still has to appear, or `new` produces |
-| 20 | new refuses a name already taken | — |
-| 21 | new --runtime pins the Plug to one build | — |
-| 22 | new --runtime refuses a build that is not in the store | — |
-| 23 | new --from clones the prefix and what is installed in it | — |
-| 24 | cloning keeps the prefix's symlinks as symlinks | dosdevices holds relative links back into the Plug and outward ones to |
-| 25 | a clone inherits the binding the source had | — |
-| 26 | new --from refuses a source that is not a Plug | — |
-| 27 | new says which kind of copy it is about to make | — |
-| 28 | the clone names the filesystem the mount table reports | `stat -f` reads statfs.f_type, and ext2, ext3 and ext4 all share magic |
-| 29 | new --from succeeds on a machine with no version store | found by hand on a pre-store machine. The clone landed, the *default* |
-| 30 | an explicit --runtime is refused before anything is cloned | an explicit --runtime is a different case from the default binding, and |
-| 31 | rm -y removes the Plug and everything in it | — |
-| 32 | rm refuses the default Plug while others exist, and names the successors | removing what default points at leaves the selection dangling and |
-| 33 | removing the last Plug takes the default link with it | the guard above cannot fire for the last Plug, and leaving the link |
-| 34 | rm without -y and with no terminal refuses rather than assuming | this deletes a prefix that can hold a licensed Live and tens of GB of |
-| 35 | rm refuses a Plug that is not there | — |
-| 36 | a Plug's binding decides the runtime a launch binds to | two Plugs running different builds is the whole point of the binding, |
-| 37 | an unbound Plug binds to whatever the channel resolves to | — |
-| 38 | WORKS_RUNTIME still overrides a Plug's binding | the VMs and anyone bisecting a build rely on WORKS_RUNTIME being the |
-| 39 | retention keeps a build a Plug is bound to | a Plug held deliberately on an older build is exactly what the count |
-| 40 | retention prunes that same build when no Plug is bound to it | — |
-| 41 | help ends on a command, not on prose | — |
-| 42 | plug is reachable through the dispatcher | — |
+| 4 | an application in Uninstall alone is a tenant | measured on real prefixes - the two indexes are disjoint. An NSIS |
+| 5 | support packages and platform runtimes are not tenants | SystemComponent=1 is the Windows convention for hidden support |
+| 6 | registered and unregistered tenants union in one Plug | — |
+| 7 | a Plug with two registered applications reports both | — |
+| 8 | list marks the selected Plug, and use moves the mark | the selection is a symlink, and a list that does not say which one is |
+| 9 | list separates following a channel from being pinned to a build | a Plug bound to the channel link and a Plug pinned to a build resolve |
+| 10 | an unbound Plug is reported as following the channel | — |
+| 11 | a pre-store install is not reported as following a channel | found by hand. With no store there is no channel for a Plug to follow, |
+| 12 | list does not offer a directory that is not a prefix | a directory someone dropped under plugs/ is not a prefix, and offering |
+| 13 | a dangling default is called out rather than left to look deliberate | a default pointing at a removed Plug silently falls back to studio, so |
+| 14 | use retargets the default, relatively | — |
+| 15 | list shows each Plug's path, abbreviated under home | the path is what people copy into a script or a bug report, and it is |
+| 16 | use with no argument refuses when there is no terminal, naming the Plugs | `works runtime use` with no argument offers a numbered list, so this |
+| 17 | use with no argument leaves the default alone | — |
+| 18 | use refuses a Plug that is not there, and lists what is | — |
+| 19 | default is refused as a Plug name | `default` is the selection link itself, so a Plug by that name could |
+| 20 | a name that is not a plain directory name is refused | — |
+| 21 | new creates a Plug that follows the channel | — |
+| 22 | a Plug created but never booted is still listed | a Plug with no prefix in it yet still has to appear, or `new` produces |
+| 23 | new refuses a name already taken | — |
+| 24 | new --runtime pins the Plug to one build | — |
+| 25 | new --runtime refuses a build that is not in the store | — |
+| 26 | new --from clones the prefix and what is installed in it | — |
+| 27 | cloning keeps the prefix's symlinks as symlinks | dosdevices holds relative links back into the Plug and outward ones to |
+| 28 | a clone inherits the binding the source had | — |
+| 29 | new --from refuses a source that is not a Plug | — |
+| 30 | new says which kind of copy it is about to make | — |
+| 31 | the clone names the filesystem the mount table reports | `stat -f` reads statfs.f_type, and ext2, ext3 and ext4 all share magic |
+| 32 | new --from succeeds on a machine with no version store | found by hand on a pre-store machine. The clone landed, the *default* |
+| 33 | an explicit --runtime is refused before anything is cloned | an explicit --runtime is a different case from the default binding, and |
+| 34 | rm -y removes the Plug and everything in it | — |
+| 35 | rm refuses the default Plug while others exist, and names the successors | removing what default points at leaves the selection dangling and |
+| 36 | removing the last Plug takes the default link with it | the guard above cannot fire for the last Plug, and leaving the link |
+| 37 | rm without -y and with no terminal refuses rather than assuming | this deletes a prefix that can hold a licensed Live and tens of GB of |
+| 38 | rm refuses a Plug that is not there | — |
+| 39 | a Plug's binding decides the runtime a launch binds to | two Plugs running different builds is the whole point of the binding, |
+| 40 | an unbound Plug binds to whatever the channel resolves to | — |
+| 41 | WORKS_RUNTIME still overrides a Plug's binding | the VMs and anyone bisecting a build rely on WORKS_RUNTIME being the |
+| 42 | retention keeps a build a Plug is bound to | a Plug held deliberately on an older build is exactly what the count |
+| 43 | retention prunes that same build when no Plug is bound to it | — |
+| 44 | help ends on a command, not on prose | — |
+| 45 | plug is reachable through the dispatcher | — |
 
 <a id="works-update"></a>
 
@@ -810,6 +813,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `/releases/latest/ excludes prereleases, which is what keeps the nightly` | manifest: stable resolves through latest, nightly through its own tag |
 | `11.11 and 11.14 trees coexist on the development machine and are not` | migrate-layout: runtimes from other Wine bases are left alone |
 | `2026.07.29.1 appears four times on the dev machine under two patch stacks` | runtime-env: two builds of one version under different patch stacks get different ids |
+| `SystemComponent=1 is the Windows convention for hidden support` | works-plug: support packages and platform runtimes are not tenants |
 | `THE defect. Every existing user is on the legacy layout on the day the` | run-header: an unmigrated machine is offered an update, not a fresh install |
 | `WORKS_RUNTIME is the outermost say in every resolver, and a pinned` | works-update: a pinned WORKS_RUNTIME is refused before any fetch |
 | ``default` is the selection link itself, so a Plug by that name could` | works-plug: default is refused as a Plug name |
@@ -880,6 +884,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `licence GPLv2+` | packaging: the kit ships the GPL source and licence Ableton Link requires |
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
 | `make-installer accepted WORKS_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
+| `measured on real prefixes - the two indexes are disjoint. An NSIS` | works-plug: an application in Uninstall alone is a tenant |
 | `moving a release must not strand the installer it names` | manifest: the installer URL is resolved beside the manifest |
 | `names tie across every nightly between two releases, so ordering on` | migrate-layout: retention orders by built-at, not by the name |
 | `names tie across nightlies, so ordering is by built-at` | works-runtime: list is newest first |
@@ -965,7 +970,6 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `this is the only runtime artifact the nightly channel publishes, so` | runtime-env: tarball predicate: a nightly label is accepted |
 | `this is the whole point -- the directory name answers "when"` | runtime-env: runtime id: dates order correctly across both channels |
 | `two Plugs running different builds is the whole point of the binding,` | works-plug: a Plug's binding decides the runtime a launch binds to |
-| `two applications in one Plug is the shape ~/.wine-ableton was already` | works-plug: a Plug with two registered applications reports both |
 | `two builds can share a timestamp -- the same build published on two` | works-update: a build with the same timestamp is not called older |
 | `two installs of one build collapse to one entry, and the loser is set` | migrate-layout: two rollbacks holding one build keep one and set the rest aside |
 | `two prefixes can hold different Lives and different authorisations` | migrate-layout: plug: a prefix at both paths refuses, naming both |
