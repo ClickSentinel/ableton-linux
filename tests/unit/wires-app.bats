@@ -94,3 +94,19 @@ an_app() {   # name, [version], [min]
     [ "$status" -eq 0 ]
     [[ "$output" == *"wires app rm"* ]]
 }
+
+# guards: found in review. An unknown option exited 1 from the app and Plug
+# verbs and 2 from the runtime verb, so a caller could not tell "that is not an
+# option" from "the command ran and refused" without reading the message.
+@test "a usage error exits 2, the same as it does from every other verb" {
+    run bash "$REPO/wires/wires" app rm --bogus
+    [ "$status" -eq 2 ]
+    run bash "$REPO/wires/wires" app rm one two
+    [ "$status" -eq 2 ]
+    run bash "$REPO/wires/wires" app rm
+    [ "$status" -eq 2 ]
+    run bash "$REPO/wires/wires" plug rm --bogus
+    [ "$status" -eq 2 ]
+    run bash "$REPO/wires/wires" runtime install --bogus
+    [ "$status" -eq 2 ]
+}

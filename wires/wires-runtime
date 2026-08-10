@@ -49,19 +49,6 @@ sorted() {
     done < <(entries) | sort -rV | cut -f2
 }
 
-# Ask a yes/no on the controlling terminal, or fail. Deliberately the pattern
-# install.sh already uses: `[ -t 0 ]` answers "is stdin a tty", which is not the
-# question - a test harness run from a terminal inherits one and takes the
-# interactive branch by accident. Opening /dev/tty is the honest test. The
-# timeout matches install.sh's: a prompt nobody answers must not wedge anything.
-ask_tty() {
-    local prompt="$1" ans=""
-    { : >/dev/tty; } 2>/dev/null || return 2      # 2 = no terminal to ask on
-    printf '%s' "$prompt" > /dev/tty
-    read -r -t 60 ans < /dev/tty || { printf '\n' > /dev/tty 2>/dev/null || true; return 1; }
-    case "$ans" in y|Y|yes|Yes|YES) return 0 ;; *) return 1 ;; esac
-}
-
 cmd_path() {
     local r; r="$(wires_runtime_path)"
     [ -n "$r" ] || { echo "!! no runtime resolved" >&2; return 1; }
@@ -77,7 +64,7 @@ cmd_path() {
 base_of() { wires_buildinfo_field "$container/$1/ABLETON-WINE-BUILD-INFO.txt" wine; }
 
 cmd_list() {
-    local live e at base path n=0
+    local live e at base path mark n=0
     live="$(readlink -f "$channel" 2>/dev/null || true)"
     if [ ! -d "$container" ]; then
         echo "No version store yet — this install predates it."
@@ -87,8 +74,6 @@ cmd_list() {
     # The path is spelled out per build rather than left implied by the store
     # root: it is the thing people copy - into a script, a bug report, a `cd` -
     # and reconstructing it by hand from a header and an id invites the typo.
-    # $HOME is abbreviated because these are always under it and the width is
-    # better spent on the build.
     printf '  %-32s %-12s %-22s %s\n' "BUILD" "WINE" "BUILT" "PATH"
     while read -r e; do
         [ -n "$e" ] || continue
@@ -96,9 +81,9 @@ cmd_list() {
         at="$(wires_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
         base="$(base_of "$e")"
         path="$container/$e"
-        case "$path" in "$HOME"/*) path="~${path#"$HOME"}" ;; esac
-        if [ "$container/$e" = "$live" ]; then printf '* %-32.32s %-12s %-22s %s\n' "$e" "${base:-?}" "${at:--}" "$path"
-        else                                   printf '  %-32.32s %-12s %-22s %s\n' "$e" "${base:-?}" "${at:--}" "$path"; fi
+        path="$(wires_abbrev_home "$path")"
+        mark="  "; [ "$container/$e" = "$live" ] && mark="* "
+        printf '%s%-32.32s %-12s %-22s %s\n' "$mark" "$e" "${base:-?}" "${at:--}" "$path"
     done < <(sorted)
     [ "$n" -gt 0 ] || echo "No installed builds found in $container"
     local aside e
@@ -126,16 +111,14 @@ cmd_stop() {
     # which have nothing to save. No terminal means nobody can answer, so stop
     # rather than assume; -y is how a script says it meant it.
     if [ -n "$(ableton_live_pids 2>/dev/null)" ] && [ "${1:-}" != "-y" ] && [ "${1:-}" != "--yes" ]; then
-        if { : >/dev/tty; } 2>/dev/null; then
-            echo "!! Ableton Live is running. Stopping it discards unsaved work." >&2
-            printf "Stop it anyway? [y/N] " > /dev/tty
-            ans=""
-            read -r ans < /dev/tty || true
-            case "$ans" in [yY]|[yY][eE][sS]) ;; *) echo "Nothing was stopped."; return 1 ;; esac
-        else
-            echo "!! Live is running and there is no terminal to confirm on; pass -y if you mean it" >&2
-            return 1
-        fi
+        echo "!! Ableton Live is running. Stopping it discards unsaved work." >&2
+        wires_ask_tty "Stop it anyway? [y/N] "
+        case "$?" in
+            0) ;;
+            2) echo "!! Live is running and there is no terminal to confirm on; pass -y if you mean it" >&2
+               return 1 ;;
+            *) echo "Nothing was stopped."; return 1 ;;
+        esac
     fi
     echo "Stopping $n process(es)."
     printf '%s\n' "$pids" | xargs -r kill 2>/dev/null || true
@@ -173,14 +156,9 @@ cmd_pick() {
         printf '  %2d) %-32s %-12s %s%s\n' "$i" "$e" "$(base_of "$e")" \
             "$(wires_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)" "$cur"
     done
-    local ans=""
-    printf 'Which build? [1-%d, or q to cancel] ' "${#names[@]}" > /dev/tty
-    read -r -t 120 ans < /dev/tty || ans=q
-    case "$ans" in
-        q|Q|"")      echo "cancelled"; return 0 ;;
-        *[!0-9]*)    echo "!! not a number: $ans" >&2; return 1 ;;
-    esac
-    [ "$ans" -ge 1 ] && [ "$ans" -le "${#names[@]}" ] || { echo "!! out of range: $ans" >&2; return 1; }
+    local ans
+    ans="$(wires_ask_choice "Which build? [1-${#names[@]}, or q to cancel] " "${#names[@]}")" || return 1
+    [ -n "$ans" ] || { echo "cancelled"; return 0; }
     cmd_use "${names[$((ans-1))]}"
 }
 
@@ -251,7 +229,7 @@ cmd_use() {
         if [ "$force" = "--force" ]; then
             echo "  (--force given)"
         else
-            ask_tty "  Continue? [y/N] "
+            wires_ask_tty "  Continue? [y/N] "
             case "$?" in
                 0) ;;
                 2) echo "!! refusing a base change without a terminal; pass --force if you mean it" >&2
@@ -310,60 +288,15 @@ cmd_install() {
         echo "!! --validate is not an executable: $validate" >&2; exit 2; }
 
     local NAME WINE_ROOT WINE_ROOT_DIR STORE stamp stage backup replaced replaced_orig promoted migrated dltmp chan_was
-    dltmp=""
-
-    # No tarball names the web: the followed channel's manifest says what is
-    # current, and the download happens here - before anything is stopped or
-    # moved, so a machine is never disturbed for a build that is not there,
-    # is already installed, or does not verify.
-    if [ -z "$tarball" ]; then
-        [ -n "$chan" ] || chan="$(wires_channel)"
-        local url want_commit have_commit rtname rtsha got
-        url="$(wires_manifest_url "$chan")" || { echo "!! no manifest URL for $chan" >&2; exit 1; }
-        dltmp="$(mktemp -d)"
-        echo "== channel: $chan =="
-        echo "   $url"
-        curl -fsSL --retry 2 --max-time 60 -o "$dltmp/manifest.txt" "$url" || {
-            echo "!! could not fetch the manifest. Offline, or the channel has published nothing yet." >&2
-            rm -rf "$dltmp"; exit 1; }
-        wires_manifest_valid "$dltmp/manifest.txt" || {
-            echo "!! the manifest is incomplete; refusing to act on it" >&2
-            rm -rf "$dltmp"; exit 1; }
-        rtname="$(wires_buildinfo_field "$dltmp/manifest.txt" runtime)"
-        rtsha="$(wires_buildinfo_field "$dltmp/manifest.txt" runtime-sha256)"
-        if [ -z "$rtname" ] || [ -z "$rtsha" ]; then
-            echo "!! this channel's manifest predates runtime-only installs." >&2
-            echo "   Use \`wires update\` for the full installer, or pass a tarball." >&2
-            rm -rf "$dltmp"; exit 1
-        fi
-        case "$rtname" in */*|*..*) echo "!! the manifest names an unusable runtime path" >&2; rm -rf "$dltmp"; exit 1 ;; esac
-        want_commit="$(wires_buildinfo_field "$dltmp/manifest.txt" source-commit)"
-        have_commit="$(wires_buildinfo_field "$(wires_runtime_path)/ABLETON-WINE-BUILD-INFO.txt" source-commit 2>/dev/null || true)"
-        if [ -n "$want_commit" ] && [ "$want_commit" = "$have_commit" ]; then
-            echo "You already have this build."
-            rm -rf "$dltmp"; exit 0
-        fi
-        echo "== downloading $rtname =="
-        local progress="-sS"; [ -t 2 ] && progress="--progress-bar"
-        curl -fL --retry 2 $progress -o "$dltmp/$rtname" \
-            "$(wires_manifest_installer_url "$url" "$rtname")" || {
-            echo "!! download failed" >&2; rm -rf "$dltmp"; exit 1; }
-        got="$(sha256sum "$dltmp/$rtname" | cut -d' ' -f1)"
-        [ "$got" = "$rtsha" ] || {
-            echo "!! checksum mismatch - refusing to install" >&2
-            echo "   expected $rtsha" >&2
-            echo "   got      $got" >&2
-            rm -rf "$dltmp"; exit 1; }
-        echo "   ok"
-        tarball="$dltmp/$rtname"
-    fi
-    [ -n "$chan" ] || chan=stable
-    NAME="$(wires_runtime_name)"
-    WINE_ROOT="$(wires_runtime_path)"
-    WINE_ROOT_DIR="$(dirname "$WINE_ROOT")"
+    # Every variable the trap reads, given a value before the trap is armed.
+    # Under set -u a `local` with no value is unset rather than empty, so a
+    # rollback that read one would fail inside the rollback. STORE is the one
+    # that showed it: nothing but the chan_was test in front of it kept it
+    # from being read on the paths that exit before the store is chosen.
+    NAME=""; WINE_ROOT=""; WINE_ROOT_DIR=""; STORE=""
+    stage=""; backup=""; replaced=""; replaced_orig=""
+    promoted=0; migrated=0; dltmp=""; chan_was=""
     stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-    stage=""; backup=""; replaced=""; replaced_orig=""; promoted=0; migrated=0
-    chan_was=""
 
     cleanup() {
         rc=$?
@@ -416,6 +349,61 @@ cmd_install() {
     trap 'exit 130' INT
     trap 'exit 143' TERM
 
+    # No tarball names the web: the followed channel's manifest says what is
+    # current, and the download happens here - before anything is stopped or
+    # moved, so a machine is never disturbed for a build that is not there,
+    # is already installed, or does not verify.
+    #
+    # Under the trap, not before it. The trap removes $dltmp, so each failure
+    # below used to carry its own `rm -rf` - eight of them, and the next one
+    # added would have been the one that leaked.
+    if [ -z "$tarball" ]; then
+        [ -n "$chan" ] || chan="$(wires_channel)"
+        local url want_commit have_commit rtname rtsha got
+        url="$(wires_manifest_url "$chan")" || { echo "!! no manifest URL for $chan" >&2; exit 1; }
+        dltmp="$(mktemp -d)"
+        echo "== channel: $chan =="
+        echo "   $url"
+        curl -fsSL --retry 2 --max-time 60 -o "$dltmp/manifest.txt" "$url" || {
+            echo "!! could not fetch the manifest. Offline, or the channel has published nothing yet." >&2
+            exit 1; }
+        wires_manifest_valid "$dltmp/manifest.txt" || {
+            echo "!! the manifest is incomplete; refusing to act on it" >&2
+            exit 1; }
+        rtname="$(wires_buildinfo_field "$dltmp/manifest.txt" runtime)"
+        rtsha="$(wires_buildinfo_field "$dltmp/manifest.txt" runtime-sha256)"
+        if [ -z "$rtname" ] || [ -z "$rtsha" ]; then
+            echo "!! this channel's manifest predates runtime-only installs." >&2
+            echo "   Use \`wires update\` for the full installer, or pass a tarball." >&2
+            exit 1
+        fi
+        case "$rtname" in */*|*..*) echo "!! the manifest names an unusable runtime path" >&2; exit 1 ;; esac
+        want_commit="$(wires_buildinfo_field "$dltmp/manifest.txt" source-commit)"
+        have_commit="$(wires_buildinfo_field "$(wires_runtime_path)/ABLETON-WINE-BUILD-INFO.txt" source-commit 2>/dev/null || true)"
+        if [ -n "$want_commit" ] && [ "$want_commit" = "$have_commit" ]; then
+            echo "You already have this build."
+            exit 0
+        fi
+        echo "== downloading $rtname =="
+        local progress="-sS"; [ -t 2 ] && progress="--progress-bar"
+        curl -fL --retry 2 $progress -o "$dltmp/$rtname" \
+            "$(wires_manifest_installer_url "$url" "$rtname")" || {
+            echo "!! download failed" >&2; exit 1; }
+        got="$(sha256sum "$dltmp/$rtname" | cut -d' ' -f1)"
+        [ "$got" = "$rtsha" ] || {
+            echo "!! checksum mismatch - refusing to install" >&2
+            echo "   expected $rtsha" >&2
+            echo "   got      $got" >&2
+            exit 1; }
+        echo "   ok"
+        tarball="$dltmp/$rtname"
+    fi
+    [ -n "$chan" ] || chan=stable
+    NAME="$(wires_runtime_name)"
+    WINE_ROOT="$(wires_runtime_path)"
+    WINE_ROOT_DIR="$(dirname "$WINE_ROOT")"
+
+
     # Anything still running from the installed runtime holds the old files
     # open. Stop it all instead of refusing: ask the prefix's wineserver to
     # take the whole session down, and signal processes directly only when
@@ -437,19 +425,14 @@ cmd_install() {
         # consented. Leftover wineserver and winedevice.exe without Live have
         # nothing to save and never reach this.
         if [ "$live_up" -eq 1 ]; then
-            if { : >/dev/tty; } 2>/dev/null; then
-                echo "!! Live is running. Updating will force-close it. Save your work before continuing." >&2
-                printf "Force-close Live? [y/N] " > /dev/tty
-                ans=""
-                read -r -t 60 ans < /dev/tty || printf '\n' > /dev/tty 2>/dev/null || true
-                case "$ans" in
-                    y|Y|yes|Yes|YES) ;;
-                    *) exit 1 ;;
-                esac
-            else
-                echo "!! Live is running; no terminal to confirm on. Close Live, or rerun from a terminal." >&2
-                exit 1
-            fi
+            echo "!! Live is running. Updating will force-close it. Save your work before continuing." >&2
+            wires_ask_tty "Force-close Live? [y/N] "
+            case "$?" in
+                0) ;;
+                2) echo "!! Live is running; no terminal to confirm on. Close Live, or rerun from a terminal." >&2
+                   exit 1 ;;
+                *) exit 1 ;;
+            esac
         fi
         if [ -x "$WINE_ROOT/bin/wineserver" ]; then
             # The prefix as it is now, not where the migration below will put
@@ -569,14 +552,12 @@ cmd_install() {
         if [ -n "$fwd" ] && [ "${WIRES_ALLOW_BASE_CHANGE:-0}" != 1 ]; then
             echo "== this build changes the Wine base =="
             echo "   Re-bootstrapped on next launch, and not reversible:$fwd"
-            if { : >/dev/tty; } 2>/dev/null; then
-                printf 'Continue? [Y/n] ' > /dev/tty
-                ans=""
-                read -r -t 60 ans < /dev/tty || printf '\n' > /dev/tty 2>/dev/null || true
-                case "$ans" in [Nn]*) echo "cancelled"; exit 1 ;; esac
-            else
-                echo "   (no terminal to ask on; continuing)"
-            fi
+            wires_ask_tty 'Continue? [Y/n] ' y
+            case "$?" in
+                0) ;;
+                2) echo "   (no terminal to ask on; continuing)" ;;
+                *) echo "cancelled"; exit 1 ;;
+            esac
         fi
     fi
 

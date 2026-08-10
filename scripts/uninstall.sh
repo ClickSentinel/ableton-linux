@@ -47,9 +47,7 @@ if [ -z "$remaining" ]; then
     # the rest orphaned behind a dangling channel.
     wires_remove_runtimes
     # The commands themselves live in wires/bin; ~/.local/bin holds only links.
-    rm -f  "$HOME/wires/bin/wires" "$HOME/wires/lib/wires-runtime" \
-           "$HOME/wires/lib/wires-update" "$HOME/wires/lib/wires-plug" \
-           "$HOME/wires/lib/wires-app"
+    rm -f  "$HOME/wires/bin/wires" "$HOME"/wires/lib/wires-*
     rmdir  "$HOME/wires/bin" 2>/dev/null || true
     rm -f  "$HOME/.local/bin/wires"
     rm -rf "$HOME/wires/lib" "$HOME/wires/apps" 2>/dev/null || true

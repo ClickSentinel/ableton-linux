@@ -43,7 +43,7 @@
 # LINK_SETUP_VERSION shape: a variable inside the file it describes.
 #
 # shellcheck disable=SC2034  # read from outside; nothing here consumes them
-WIRES_VERSION=1
+WIRES_VERSION=2
 # shellcheck disable=SC2034
 WIRES_ABI=1
 # Policy: stays 1. Stranding an application is a breaking release, taken
@@ -380,7 +380,10 @@ wires_plug_base_runtime() {
         [ -d "$_e" ] && [ ! -L "$_e" ] || continue
         wires_is_quarantine "$_e" && continue
         _rb="$(wires_runtime_base "$_e" 2>/dev/null)" || continue
-        [ "$_rb" = "$_pb" ] || continue
+        # Numeric, as in wires_base_move: these are mtimes, and comparing the
+        # same value as text in one function and as a number in the other is
+        # how the two drift apart.
+        [ "$_rb" -eq "$_pb" ] || continue
         printf '%s\n' "$_e"
         return 0
     done
@@ -477,10 +480,18 @@ wires_app_names() {
 # scope already and is asking about another, and executing the other to ask it a
 # number would execute the file under evaluation. Digits only - a
 # clever value is treated as no value.
+#
+# The whole value has to be digits, and a value that is not is refused rather
+# than reduced to the digits inside it. Stripping non-digits reads 1.0 as ten
+# and "1 # note 2" as twelve, and a generation ten reported by a library that
+# means one freezes the gate: every real kit then looks older than what is
+# installed, so decide() keeps the installed infrastructure for good and says
+# so in the words it uses when nothing is wrong.
 wires_abi_field() {
     local _v
-    _v="$(sed -n "s/^${2}=//p" "$1" 2>/dev/null | head -1 | tr -cd '0-9')"
-    [ -n "$_v" ] || return 1
+    _v="$(sed -n "s/^${2}=//p" "$1" 2>/dev/null | head -1)"
+    _v="${_v%"${_v##*[![:space:]]}"}"          # trailing space only; the rest must be digits
+    case "$_v" in ''|*[!0-9]*) return 1 ;; esac
     printf '%s\n' "$_v"
 }
 
@@ -627,6 +638,103 @@ wires_pick_tarball() {
     [ "${#_found[@]}" -gt 0 ] || _found=("${_labelled[@]}")
     [ "${#_found[@]}" -gt 0 ] || return 0
     printf '%s\n' "${_found[@]}" | sort -V | tail -1
+}
+
+# --- asking, and saying where things are -------------------------------------
+#
+# These two are the commands' rather than the resolvers', and they live here
+# for the reason everything else does: every verb already sources this file, so
+# this is the shared place. A second shared file would be a second thing to
+# version, to install, and to name in the ABI gate.
+
+# Consent, or the absence of it. Opening /dev/tty is the only honest terminal
+# test - a redirected stdin is not the caller, and stdin may be the very thing
+# being read.
+#
+#   wires_ask_tty <prompt> [default]     default is n unless given as y
+#
+#   0  yes            2  no terminal to ask on
+#   1  no
+#
+# The caller separates 1 from 2 because they are different sentences: one
+# person declined, the other was never asked, and the second wants telling
+# which flag says it in advance.
+#
+# The default carries the silences - a bare Enter, a timeout, an EOF - and it
+# is a parameter because the two answers are both right somewhere. Anything
+# that discards work defaults to no. A Wine base change during an install
+# defaults to yes, because refusing would break every scripted install the
+# first time a base moves and there is no unsaved work at stake. Written as
+# one function with a default rather than two nearly-identical ones, so the
+# 60-second timeout and the accepted spellings cannot drift apart.
+wires_ask_tty() {
+    local _prompt="$1" _default="${2:-n}" _ans=""
+    { : >/dev/tty; } 2>/dev/null || return 2
+    printf '%s' "$_prompt" > /dev/tty
+    read -r -t 60 _ans < /dev/tty || { printf '\n' > /dev/tty 2>/dev/null || true; _ans=""; }
+    [ -n "$_ans" ] || _ans="$_default"
+    case "$_ans" in [yY]|[yY][eE][sS]) return 0 ;; *) return 1 ;; esac
+}
+
+# A path as a person would write it. Everything these commands list is under
+# $HOME, and the width is better spent on the part that differs.
+wires_abbrev_home() {
+    case "$1" in "$HOME"/*) printf '~%s\n' "${1#"$HOME"}" ;; *) printf '%s\n' "$1" ;; esac
+}
+
+# A numbered choice, read from a menu the caller has already printed. The menu
+# itself is not shared - a build and a Plug have nothing in common to show -
+# but the reading of the answer is, down to the 120-second timeout and what
+# counts as cancelling.
+#
+# Prints the chosen number. Prints nothing and returns 0 when the answer was a
+# cancellation, so the caller can tell "nobody chose" from "the choice was
+# refused" without a second exit code:
+#
+#   n="$(wires_ask_choice "$prompt" "${#names[@]}")" || return 1
+#   [ -n "$n" ] || { echo "cancelled"; return 0; }
+wires_ask_choice() {
+    local _prompt="$1" _count="$2" _ans=""
+    printf '%s' "$_prompt" > /dev/tty
+    read -r -t 120 _ans < /dev/tty || _ans=q
+    case "$_ans" in
+        q|Q|"")   return 0 ;;
+        *[!0-9]*) echo "!! not a number: $_ans" >&2; return 1 ;;
+    esac
+    [ "$_ans" -ge 1 ] && [ "$_ans" -le "$_count" ] || {
+        echo "!! out of range: $_ans" >&2; return 1; }
+    printf '%s\n' "$_ans"
+}
+
+# The arguments every `rm` verb takes: one name, and -y for consent given in
+# advance. Prints the name on the first line and `1` on the second when -y was
+# given, either possibly empty:
+#
+#   parsed="$(wires_rm_args "$@")" || return $?
+#   { IFS= read -r want; IFS= read -r yes; } <<<"$parsed"
+#
+# Two lines rather than two tab-separated fields: a tab is IFS whitespace, so
+# `IFS=$'\t' read -r a b` skips a leading empty field and shifts the rest left -
+# an unnamed Plug arrived as a name of "1". And a printed value rather than two
+# variables set by side effect, because a caller reading a value it cannot see
+# assigned is what shellcheck objects to, rightly.
+#
+# Returns 2 on a usage error, which is the convention across every verb: 2 is
+# "you asked for something that is not a command", separate from 1, which is
+# "the command ran and refused".
+wires_rm_args() {
+    local _name="" _yes=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -y|--yes) _yes=1 ;;
+            -*)       echo "!! unknown option: $1" >&2; return 2 ;;
+            *)        [ -z "$_name" ] || {
+                          echo "!! one name at a time: $1" >&2; return 2; }
+                      _name="$1" ;;
+        esac
+        shift
+    done
+    printf '%s\n%s\n' "$_name" "$_yes"
 }
 
 # --- what is running from the runtime ----------------------------------------
@@ -1078,14 +1186,27 @@ wires_prune_runtimes() {
         _live="$(readlink -f "$_e" 2>/dev/null || true)"
         [ -n "$_live" ] && _pinned+=("$_live")
     done
-    # And every build a Plug is bound to. A Plug held deliberately on an older
-    # build is precisely what the count prunes first, and removing it breaks that
-    # Plug rather than tidying anything. The binding is a symlink, so this is the
+    # And, per Plug, two builds rather than one.
+    #
+    # The build it is bound to. A Plug held deliberately on an older build is
+    # precisely what the count prunes first, and removing it breaks that Plug
+    # rather than tidying anything. The binding is a symlink, so this is the
     # same readlink the channels above get.
-    local _pl
+    #
+    # And the build that last booted it, which the base guard recovers to tell
+    # a same-base refresh from a base change. That recovery is a search of this
+    # store for the build whose wine.inf matches the prefix's stamp, so pruning
+    # the answer turns the guard's severity question unanswerable and a routine
+    # update reports itself as an irreversible base change. Nothing above pins
+    # it: the case is a Plug that follows a channel - no binding at all - and
+    # goes unlaunched while the channel moves on past the retention count.
+    local _pl _plug
     while read -r _pl; do
         [ -n "$_pl" ] || continue
-        _live="$(wires_plug_runtime "$(wires_plugs_dir)/$_pl" 2>/dev/null || true)"
+        _plug="$(wires_plugs_dir)/$_pl"
+        _live="$(wires_plug_runtime "$_plug" 2>/dev/null || true)"
+        [ -n "$_live" ] && _pinned+=("$_live")
+        _live="$(wires_plug_base_runtime "$_plug" 2>/dev/null || true)"
         [ -n "$_live" ] && _pinned+=("$_live")
     done < <(wires_plug_names)
 
@@ -1105,11 +1226,17 @@ wires_prune_runtimes() {
         done | sort -V | head -n -"$_keep"
     )
 
-    local _p _keepit
+    # Compared through readlink on both sides: the channel pins arrive already
+    # resolved and the victims do not, so a symlink anywhere above the store -
+    # a symlinked home is the ordinary one - would make a pinned entry fail to
+    # match itself and be pruned.
+    local _p _keepit _er
     for _e in ${_victims+"${_victims[@]}"}; do
         _keepit=""
+        _er="$(readlink -f "$_e" 2>/dev/null || printf '%s' "$_e")"
         for _p in ${_pinned+"${_pinned[@]}"}; do
-            [ "$_e" = "$_p" ] && { _keepit=1; break; }
+            [ "$_er" = "$(readlink -f "$_p" 2>/dev/null || printf '%s' "$_p")" ] \
+                && { _keepit=1; break; }
         done
         [ -z "$_keepit" ] || continue
         rm -rf "$_e" && echo "   pruned $(basename "$_e")"

@@ -31,7 +31,7 @@
 set -euo pipefail
 export LC_ALL=C.UTF-8
 
-# The Works files sit beside this script - in wires/ in a checkout, flat in a
+# The Wires files sit beside this script - in wires/ in a checkout, flat in a
 # kit - which is what lets one script serve both layouts with no path table.
 here="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=wires/runtime-env.sh
@@ -78,7 +78,13 @@ cmd_check() {
         esac
         shift
     done
-    case "$app_min" in ''|*[!0-9]*) app_min=1 ;; esac
+    # Refused, not defaulted. 1 is the most permissive floor there is, so a
+    # mistyped --app-min would quietly turn the gate down rather than trip it,
+    # and this argument comes from an installer rather than from a person.
+    case "$app_min" in ''|*[!0-9]*)
+        echo "!! install-wires check: --app-min takes a number, not '$app_min'" >&2
+        exit 2 ;;
+    esac
 
     if decide; then
         # Installing (or refreshing) this generation. The one question left is
@@ -91,15 +97,13 @@ cmd_check() {
             echo "   declare an older floor:" >&2
             printf '%s\n' "$stranded" | sed 's/^/     /' >&2
             echo "   They would stop launching until each is updated with its own installer." >&2
-            if { : >/dev/tty; } 2>/dev/null; then
-                printf 'Continue anyway? [y/N] ' > /dev/tty
-                local ans=""
-                read -r -t 60 ans < /dev/tty || printf '\n' > /dev/tty 2>/dev/null || true
-                case "$ans" in y|Y|yes|Yes|YES) ;; *) exit 1 ;; esac
-            else
-                echo "   No terminal to ask on; set WIRES_ALLOW_ABI_BREAK=1 if you mean it." >&2
-                exit 1
-            fi
+            wires_ask_tty 'Continue anyway? [y/N] '
+            case "$?" in
+                0) ;;
+                2) echo "   No terminal to ask on; set WIRES_ALLOW_ABI_BREAK=1 if you mean it." >&2
+                   exit 1 ;;
+                *) exit 1 ;;
+            esac
         fi
         exit 0
     fi
@@ -133,10 +137,14 @@ cmd_install() {
     # beside the shared library: they implement the command, they are not
     # commands themselves.
     install -m755 "$here/wires" "$HOME/wires/bin/wires"
-    install -m755 "$here/wires-runtime" "$HOME/wires/lib/wires-runtime"
-    install -m755 "$here/wires-update" "$HOME/wires/lib/wires-update"
-    install -m755 "$here/wires-plug" "$HOME/wires/lib/wires-plug"
-    install -m755 "$here/wires-app" "$HOME/wires/lib/wires-app"
+    # The verbs by glob, not by name: a list here is a list that can disagree
+    # with what the kit carries, and the failure is a verb that installs but
+    # cannot be reached.
+    local _v
+    for _v in "$here"/wires-*; do
+        [ -f "$_v" ] || continue
+        install -m755 "$_v" "$HOME/wires/lib/${_v##*/}"
+    done
     install -m644 "$here/runtime-env.sh" "$HOME/wires/lib/runtime-env.sh"
     ln -sfn "$HOME/wires/bin/wires" "$BIN/wires"
     # Legacy PATH commands from before `wires`, and app-toolkit copies from

@@ -215,3 +215,23 @@ kit_script_names() {
         echo "make-installer.sh no longer checks the tarball it packs against the selector" >&2
         false; }
 }
+
+# guards: the other direction of the staging list. Everything staged is checked
+# to exist, so a name that drifts is caught - but a file added to wires/ and
+# never staged is not, and it fails as a verb the dispatcher can reach and the
+# kit does not carry. install-wires.sh installs the verbs by glob for the same
+# reason; this is the half of it a glob cannot cover, because a kit's manifest
+# is a list by nature.
+@test "every file in wires/ is staged into the kit" {
+    cd "$REPO"
+    staged="$(kit_script_names)"
+    missing=""
+    for f in wires/*; do
+        [ -f "$f" ] || continue
+        printf '%s\n' "$staged" | grep -qxF "${f##*/}" || missing="$missing ${f##*/}"
+    done
+    [ -z "$missing" ] || {
+        echo "in wires/ but never staged into the kit:$missing" >&2
+        echo "Add it to make-installer.sh's copy list." >&2
+        false; }
+}

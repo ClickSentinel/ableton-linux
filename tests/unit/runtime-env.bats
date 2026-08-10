@@ -592,6 +592,42 @@ make_tree() {
 }
 
 
+# guards: found in review. Retention protected what a channel points at and what
+# a Plug is bound to, but not the build that last booted a Plug - which is what
+# wires_base_move recovers to tell a same-base refresh from a base change. A
+# Plug that follows a channel has no binding, so nothing pinned its booter;
+# pruned, the guard loses the comparison and reports a routine update as an
+# irreversible base change. That is the severity bug arriving by a second door.
+@test "retention never removes the build a Plug was last booted by" {
+    export WIRES_HOME="$BATS_TEST_TMPDIR/opt"
+    C="$WIRES_HOME/runtimes"
+    for v in 2026.01.01.1 2026.02.01.1 2026.03.01.1; do
+        mkdir -p "$C/$v+aaaaaaa/share/wine"
+        printf 'dist-version: %s\npatch-stack:  aaaaaaaxx\nbuilt-at:     %sT00:00:00Z\n' \
+            "$v" "${v//./-}" > "$C/$v+aaaaaaa/ABLETON-WINE-BUILD-INFO.txt"
+        : > "$C/$v+aaaaaaa/share/wine/wine.inf"
+        # A distinct base per build: wires_runtime_base is wine.inf's mtime, and
+        # three files touched in the same instant are one base, not three.
+        d="${v%.*}"; touch -d "${d//./-}T00:00:00Z" "$C/$v+aaaaaaa/share/wine/wine.inf"
+    done
+    ln -s "2026.03.01.1+aaaaaaa" "$C/stable"
+
+    # The Plug follows the channel - no .wires-runtime at all - and was booted
+    # by the oldest build, which the count would otherwise take first.
+    mkdir -p "$WIRES_HOME/plugs/studio"
+    : > "$WIRES_HOME/plugs/studio/system.reg"
+    stat -c %Y "$C/2026.01.01.1+aaaaaaa/share/wine/wine.inf" \
+        > "$WIRES_HOME/plugs/studio/.update-timestamp"
+    [ "$(wires_plug_base_runtime "$WIRES_HOME/plugs/studio")" \
+        = "$C/2026.01.01.1+aaaaaaa" ] || { echo "fixture does not resolve a booter" >&2; false; }
+
+    WIRES_RUNTIME_KEEP=1 wires_prune_runtimes
+    [ -d "$C/2026.01.01.1+aaaaaaa" ] || {
+        echo "the build that booted the Plug was pruned; the base guard is now blind" >&2; false; }
+    [ -d "$C/2026.03.01.1+aaaaaaa" ]      # the channel target stays, as before
+    [ ! -e "$C/2026.02.01.1+aaaaaaa" ]    # and the one nothing needs still goes
+}
+
 # --- how a nightly is named ---------------------------------------------------
 # dist-version is the date the build happened, for every build. `nightly` rides
 # in the discriminator, so the date is written once and the id keeps its single
@@ -691,6 +727,24 @@ id_of() {   # id_of <build-info lines...>
     [ "$status" -ne 0 ]
     run wires_abi_field "$BATS_TEST_TMPDIR/absent" WIRES_ABI
     [ "$status" -ne 0 ]
+}
+
+# guards: found in review. The reader stripped non-digits rather than refusing a
+# value that had any, so a version-shaped 1.0 read as generation TEN. Every real
+# kit then looks older than what is installed, decide() keeps the installed
+# library for good, and it says so in the words it uses when nothing is wrong -
+# a gate that has turned itself off and reports success.
+@test "abi field: a value that is not all digits is refused, not reduced to its digits" {
+    f="$BATS_TEST_TMPDIR/lib.sh"
+    for bad in '1.0' '2.5' 'v3' '1abc' '1 # note 2' '0x10'; do
+        printf 'WIRES_ABI=%s\n' "$bad" > "$f"
+        run wires_abi_field "$f" WIRES_ABI
+        [ "$status" -ne 0 ] || {
+            echo "'$bad' was accepted as '$output'" >&2; false; }
+    done
+    # and a plain number still reads, with trailing space tolerated
+    printf 'WIRES_ABI=7  \n' > "$f"
+    [ "$(wires_abi_field "$f" WIRES_ABI)" = 7 ]
 }
 
 # guards: raising OLDEST is the one act that can strand an application, and this

@@ -525,3 +525,15 @@ setup() {
     [[ "$output" == *"preserving existing"*"ableton-live.desktop"* ]]
     grep -qF 'Exec=/usr/bin/true' "$HOME/.local/share/applications/ableton-live.desktop"
 }
+
+# guards: found in review. --app-min silently became 1 when it was not a number,
+# and 1 is the most permissive floor there is - so a mistyped floor turned the
+# stranding gate down instead of tripping it. This argument comes from an
+# installer, not a person, and a wrong one is a bug to surface.
+@test "install-wires refuses an --app-min that is not a number" {
+    run bash "$REPO/wires/install-wires.sh" check --app-min abc
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"takes a number"* ]]
+    run bash "$REPO/wires/install-wires.sh" check --app-min 2
+    [ "$status" -ne 2 ]
+}

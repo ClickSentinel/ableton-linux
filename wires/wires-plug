@@ -30,16 +30,6 @@ command -v wires_plug_path >/dev/null 2>&1 || {
 plugs="$(wires_plugs_dir)"
 store="$(wires_runtime_store)"
 
-# Same honest test as the other verbs: `[ -t 0 ]` answers "is stdin a tty",
-# which a harness inherits by accident. 2 = there is no terminal to ask on.
-ask_tty() {
-    local prompt="$1" ans=""
-    { : >/dev/tty; } 2>/dev/null || return 2
-    printf '%s' "$prompt" > /dev/tty
-    read -r -t 60 ans < /dev/tty || { printf '\n' > /dev/tty 2>/dev/null || true; return 1; }
-    case "$ans" in y|Y|yes|Yes|YES) return 0 ;; *) return 1 ;; esac
-}
-
 # The name becomes a directory under plugs/ and a symlink target, so it has to
 # be a plain name. `default` is refused because it is the selection link itself:
 # a Plug by that name would be shadowed by it and could never be selected.
@@ -121,7 +111,7 @@ cmd_list() {
         n=$((n+1))
         mark="  "; [ "$plugs/$name" = "${sel%/}" ] && mark="* "
         path="$plugs/$name"
-        case "$path" in "$HOME"/*) path="~${path#"$HOME"}" ;; esac
+        path="$(wires_abbrev_home "$path")"
         t="$(wires_plug_tenants "$plugs/$name")"
         first="${t%%$'\n'*}"; [ -n "$first" ] || first="-"
         printf '%s%-20.20s %-26.26s %-40.40s %s\n' "$mark" "$name" \
@@ -163,14 +153,9 @@ cmd_pick() {
         printf '  %2d) %-20s %-10s %s%s\n' "$i" "$name" \
             "$t app(s)" "$(bound_to "$name")" "$cur"
     done
-    local ans=""
-    printf 'Which Plug? [1-%d, or q to cancel] ' "${#names[@]}" > /dev/tty
-    read -r -t 120 ans < /dev/tty || ans=q
-    case "$ans" in
-        q|Q|"")   echo "cancelled"; return 0 ;;
-        *[!0-9]*) echo "!! not a number: $ans" >&2; return 1 ;;
-    esac
-    [ "$ans" -ge 1 ] && [ "$ans" -le "${#names[@]}" ] || { echo "!! out of range: $ans" >&2; return 1; }
+    local ans
+    ans="$(wires_ask_choice "Which Plug? [1-${#names[@]}, or q to cancel] " "${#names[@]}")" || return 1
+    [ -n "$ans" ] || { echo "cancelled"; return 0; }
     cmd_use "${names[$((ans-1))]}"
 }
 
@@ -360,16 +345,9 @@ cmd_setup() {
 }
 
 cmd_rm() {
-    local want="" yes=""
-    while [ $# -gt 0 ]; do
-        case "$1" in
-            -y|--yes) yes=1 ;;
-            -*)       echo "!! unknown option: $1" >&2; return 1 ;;
-            *)        [ -z "$want" ] || { echo "!! one name at a time: $1" >&2; return 1; }
-                      want="$1" ;;
-        esac
-        shift
-    done
+    local want yes parsed
+    parsed="$(wires_rm_args "$@")" || return $?
+    { IFS= read -r want; IFS= read -r yes; } <<<"$parsed"
     valid_name "$want" || return 1
     exists "$want" || { echo "!! no such Plug: $want" >&2; return 1; }
 
@@ -394,7 +372,7 @@ cmd_rm() {
     if [ -z "$yes" ]; then
         echo "This deletes $plugs/$want and everything installed in it" \
              "($(wires_plug_tenants "$plugs/$want" 2>/dev/null | paste -sd ', ' -))."
-        ask_tty "Remove it? [y/N] "
+        wires_ask_tty "Remove it? [y/N] "
         case "$?" in
             0) ;;
             2) echo "!! no terminal to confirm on; pass -y if you mean it" >&2; return 1 ;;

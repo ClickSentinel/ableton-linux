@@ -261,7 +261,9 @@ fi
 hand_made_desktop() {
     [ -s "$1" ] || return 1
     grep -q '^Exec=' "$1" || return 1
-    ! grep -qF "$2" "$1"
+    # The Exec line, not the file: a Comment or TryExec that happens to name
+    # the launcher would otherwise read as ours and be overwritten.
+    ! grep '^Exec=' "$1" | grep -qF "$2"
 }
 
 # The visible launcher entry: an entry whose Exec does not route through the

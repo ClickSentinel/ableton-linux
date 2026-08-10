@@ -7,29 +7,29 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-464 tests across 18 suites. See [README.md](README.md) for how to run
+469 tests across 18 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
 ## Contents
 
 - [tests/repo-hygiene.bats](#repo-hygiene) — 18 test(s)
-- [tests/packaging.bats](#packaging) — 10 test(s)
+- [tests/packaging.bats](#packaging) — 11 test(s)
 - [tests/launcher-cli.bats](#launcher-cli) — 22 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/install-runs.bats](#install-runs) — 31 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 32 test(s)
 - [tests/unit/run-header.bats](#run-header) — 12 test(s)
 - [tests/unit/manifest.bats](#manifest) — 23 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 42 test(s)
 - [tests/unit/wires.bats](#wires) — 14 test(s)
-- [tests/unit/wires-app.bats](#wires-app) — 7 test(s)
+- [tests/unit/wires-app.bats](#wires-app) — 8 test(s)
 - [tests/unit/promote.bats](#promote) — 11 test(s)
 - [tests/unit/wires-runtime.bats](#wires-runtime) — 43 test(s)
 - [tests/unit/wires-plug.bats](#wires-plug) — 45 test(s)
 - [tests/unit/wires-update.bats](#wires-update) — 37 test(s)
-- [tests/unit/runtime-env.bats](#runtime-env) — 75 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 77 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 
 <a id="repo-hygiene"></a>
@@ -93,6 +93,7 @@ staging list and checks it against what the kit's own scripts reference.
 | 8 | release.yml's asset list matches what make-installer.sh actually produces | — |
 | 9 | every shell function a script calls is actually defined | lifting runtime_pids into the lib renamed it, and a replace that only |
 | 10 | make-installer refuses a tarball the kit's installer cannot select | make-installer accepted WIRES_RUNTIME_TARBALL with only an -f check, |
+| 11 | every file in wires/ is staged into the kit | the other direction of the staging list. Everything staged is checked |
 
 <a id="launcher-cli"></a>
 
@@ -310,6 +311,7 @@ tree ships.
 | 29 | a higher installed ABI is kept even against a newer implementation | the interface must never go backward even when the kit is newer by |
 | 30 | an empty desktop entry is replaced, not mistaken for a hand-made one | found on the fedora rig. The preserve rule asked only whether a file |
 | 31 | a hand-made desktop entry is still preserved | the other half of the same rule - the protection it exists for must |
+| 32 | install-wires refuses an --app-min that is not a number | found in review. --app-min silently became 1 when it was not a number, |
 
 <a id="run-header"></a>
 
@@ -507,6 +509,7 @@ installed into a prefix stays until the Plug goes.
 | 5 | rm refuses an unknown application and lists what is installed | — |
 | 6 | rm without a terminal refuses unless -y | with no terminal nobody consented; -y is how a script says it meant it |
 | 7 | help ends on a command, not on prose | — |
+| 8 | a usage error exits 2, the same as it does from every other verb | found in review. An unknown option exited 1 from the app and Plug |
 
 <a id="promote"></a>
 
@@ -793,19 +796,21 @@ sandbox, which is the whole reason they echo instead of assigning.
 | 60 | channel: the environment overrides the file | — |
 | 61 | runtime root: resolves through the configured channel | — |
 | 62 | retention never removes what a DIFFERENT channel points at | pruning on behalf of one channel must not strand another |
-| 63 | runtime id: a nightly says so, once, after the date | — |
-| 64 | runtime id: a release carries no kind at all | — |
-| 65 | runtime id: the patch-stack fallback still works with a kind | every runtime installed anywhere today predates source-commit |
-| 66 | runtime id: a kind with a path separator is refused, not sanitised | build-kind becomes a directory name like everything else in the id |
-| 67 | runtime id: dates order correctly across both channels | this is the whole point -- the directory name answers "when" |
-| 68 | tarball predicate: the nightly artifact name is accepted | — |
-| 69 | compat: an old infrastructure name is honoured, and says so once | — |
-| 70 | compat: the new name wins when both are set | someone with both set has already migrated and left the old one in a |
-| 71 | compat: an application's own settings are not renamed | — |
-| 72 | compat: nothing is said when no old name is set | — |
-| 73 | abi field: reads a declaration without sourcing the file | — |
-| 74 | abi field: a missing or non-numeric declaration is no value, not zero | — |
-| 75 | apps below min: names exactly the applications an OLDEST would strand | raising OLDEST is the one act that can strand an application, and this |
+| 63 | retention never removes the build a Plug was last booted by | found in review. Retention protected what a channel points at and what |
+| 64 | runtime id: a nightly says so, once, after the date | — |
+| 65 | runtime id: a release carries no kind at all | — |
+| 66 | runtime id: the patch-stack fallback still works with a kind | every runtime installed anywhere today predates source-commit |
+| 67 | runtime id: a kind with a path separator is refused, not sanitised | build-kind becomes a directory name like everything else in the id |
+| 68 | runtime id: dates order correctly across both channels | this is the whole point -- the directory name answers "when" |
+| 69 | tarball predicate: the nightly artifact name is accepted | — |
+| 70 | compat: an old infrastructure name is honoured, and says so once | — |
+| 71 | compat: the new name wins when both are set | someone with both set has already migrated and left the old one in a |
+| 72 | compat: an application's own settings are not renamed | — |
+| 73 | compat: nothing is said when no old name is set | — |
+| 74 | abi field: reads a declaration without sourcing the file | — |
+| 75 | abi field: a missing or non-numeric declaration is no value, not zero | — |
+| 76 | abi field: a value that is not all digits is refused, not reduced to its digits | found in review. The reader stripped non-digits rather than refusing a |
+| 77 | apps below min: names exactly the applications an OLDEST would strand | raising OLDEST is the one act that can strand an application, and this |
 
 <a id="patch-stack"></a>
 
@@ -913,9 +918,13 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `found by hand on a pre-store machine. The clone landed, the *default*` | wires-plug: new --from succeeds on a machine with no version store |
 | `found by hand. With no store there is no channel for a Plug to follow,` | wires-plug: a pre-store install is not reported as following a channel |
 | `found by installing. The migration harness fabricates a legacy prefix` | wires-runtime: a Plug with an empty system.reg and no stamp is fresh, not a refusal |
+| `found in review. --app-min silently became 1 when it was not a number,` | install-runs: install-wires refuses an --app-min that is not a number |
+| `found in review. An unknown option exited 1 from the app and Plug` | wires-app: a usage error exits 2, the same as it does from every other verb |
 | `found in review. Commit b77d349 rewrote the launcher's header and` | launcher-cli: the upstream window-class overrides are still exported |
+| `found in review. Retention protected what a channel points at and what` | runtime-env: retention never removes the build a Plug was last booted by |
 | `found in review. The "already in the store, just retarget" branch ran` | wires-update: a base change that takes a Plug backward is refused from the store |
 | `found in review. The ABI answers compatibility, not recency - two kits` | install-runs: an older implementation at the same ABI does not replace a newer one |
+| `found in review. The reader stripped non-digits rather than refusing a` | runtime-env: abi field: a value that is not all digits is refused, not reduced to its digits |
 | `found in review. install.sh hands this to `wineserver -k` *before*` | runtime-env: live prefix: names the legacy path while the destination is absent |
 | `found in review. wires-update guards its Wine-base refusal on the field` | manifest: a manifest with no wine field is refused |
 | `found on a VM after a fix that did not work. The architecture is` | runtime-env: a 32-bit prefix declared only in user.reg is not mistaken for unfinished |
@@ -992,6 +1001,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the marker says an application has been installed here. It does NOT say` | run-header: a runtime with no prefix takes the full install, not the update |
 | `the old guard compared two runtimes and applied the answer to a machine` | wires-update: with no Plug, a base change from the store is not obstructed |
 | `the other direction of the same promise` | install-runs: a kit below the installed OLDEST is refused whole |
+| `the other direction of the staging list. Everything staged is checked` | packaging: every file in wires/ is staged into the kit |
 | `the other half of the same rule - the protection it exists for must` | install-runs: a hand-made desktop entry is still preserved |
 | `the path is what people copy into a script or a bug report, and it is` | wires-plug: list shows each Plug's path, abbreviated under home |
 | `the path is what people copy into a script, a bug report or a `cd`,` | wires-runtime: list shows each build's path, abbreviated under home |

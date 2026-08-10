@@ -197,14 +197,13 @@ for e in "$container"/*; do
     fi
     if [ -n "$fwd" ] && [ "$ASSUME_YES" -eq 0 ] && [ "${WIRES_ALLOW_BASE_CHANGE:-0}" != 1 ]; then
         echo "   Re-bootstrapped on next launch, and not reversible:$fwd"
-        if { : >/dev/tty; } 2>/dev/null; then
-            printf 'Continue? [y/N] ' > /dev/tty
-            ans=""; read -r -t 60 ans < /dev/tty || ans=n
-            case "$ans" in y|Y|yes|Yes|YES) ;; *) echo "cancelled"; exit 0 ;; esac
-        else
-            echo "!! no terminal to confirm a base change on; pass --yes if you mean it" >&2
-            exit 1
-        fi
+        wires_ask_tty 'Continue? [y/N] '
+        case "$?" in
+            0) ;;
+            2) echo "!! no terminal to confirm a base change on; pass --yes if you mean it" >&2
+               exit 1 ;;
+            *) echo "cancelled"; exit 0 ;;
+        esac
     fi
     # Asked before the retarget, not after: the resolver follows the channel, so
     # once it has moved this would be asking whether anything runs from the build
@@ -235,14 +234,13 @@ if wires_runtime_busy; then
 fi
 
 if [ "$ASSUME_YES" -eq 0 ]; then
-    if { : >/dev/tty; } 2>/dev/null; then
-        printf '\nDownload and install it? [y/N] ' > /dev/tty
-        read -r -t 60 ans < /dev/tty || ans=n
-        case "$ans" in y|Y|yes|Yes|YES) ;; *) echo "cancelled"; exit 0 ;; esac
-    else
-        echo; echo "!! no terminal to confirm on; pass --yes if you mean it" >&2
-        exit 1
-    fi
+    wires_ask_tty $'\nDownload and install it? [y/N] '
+    case "$?" in
+        0) ;;
+        2) echo; echo "!! no terminal to confirm on; pass --yes if you mean it" >&2
+           exit 1 ;;
+        *) echo "cancelled"; exit 0 ;;
+    esac
 fi
 
 echo
