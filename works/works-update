@@ -247,7 +247,10 @@ fi
 
 echo
 echo "== downloading $installer =="
-curl -fL --retry 2 --progress-bar -o "$tmp/$installer" \
+# The bar only when someone is watching: through a pipe it is 70 columns of
+# hash marks per redraw in whatever is capturing the output.
+progress="-sS"; [ -t 2 ] && progress="--progress-bar"
+curl -fL --retry 2 $progress -o "$tmp/$installer" \
     "$(works_manifest_installer_url "$url" "$installer")" || {
         echo "!! download failed" >&2; exit 1; }
 

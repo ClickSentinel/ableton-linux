@@ -8,7 +8,7 @@ trap 'rm -rf "$work"' EXIT
 export XDG_RUNTIME_DIR="$work/runtime"
 export XDG_STATE_HOME="$work/state-home"
 mkdir -m 700 -- "$XDG_RUNTIME_DIR" "$XDG_STATE_HOME"
-. "$here/shortcut-hold.sh"
+. "$here/../scripts/shortcut-hold.sh"
 
 declare -A values writable fail_set
 gsettings()

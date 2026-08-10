@@ -24,7 +24,7 @@ all_shell_files() {
         'works/*.sh' 'works/works*' \
         'bin/ableton-live-beta' 'bin/ableton-live-portal' \
         'bin/ableton-wine-portal' 'bin/set-file-portal-policy' \
-        'tests/run.sh' 'tests/catalogue.sh')
+        'tests/run.sh' 'tests/catalogue.sh' 'tests/test-shortcut-hold.sh')
 }
 
 # --- shellcheck ---------------------------------------------------------------

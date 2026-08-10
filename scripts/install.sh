@@ -110,73 +110,25 @@ else
 fi
 
 # --- the infrastructure gate --------------------------------------------------
-# Every application's kit carries its own copy of the Works infrastructure - the
-# shared library, the works command, its verbs - because one self-sufficient
-# installer is the distribution model: run one file, get a working system, no
-# bootstrap in front of it. The cost of that model is that every install is also
-# an infrastructure write onto a machine other applications may already depend
-# on, and unguarded, whichever kit ran last would own ~/works/lib - silently
-# downgrading everyone else.
+# Decided by Works itself: works/install-works.sh owns both the arbitration and
+# the write, because the infrastructure is not this application's to version.
+# check runs here - before anything is stopped or moved, since two of its
+# outcomes are refusals and a refusal this early leaves the machine untouched -
+# and the write happens after the runtime lands, honouring the same decision.
 #
-# So the write is arbitrated by the ABI range (see runtime-env.sh). Decided here,
-# before anything is stopped or moved, because two of the outcomes are refusals
-# and a refusal this early leaves the machine untouched:
+#   exit 0  install (or refresh) the infrastructure     the silent path
+#   exit 3  a newer one is installed; keep it, this kit adds only its app
+#   exit 1  refused - stranding, or this kit is too old for this machine
 #
-#   kit newer or equal, nobody stranded    install it        (the silent path)
-#   kit newer, would strand an app         ask, naming them
-#   kit older, its app still supported     keep the newer infrastructure,
-#                                          install only the application
-#   kit older, its app below OLDEST        refuse the whole install
-#
-# Equal generations install unconditionally: the contract is identical by
-# definition of the number, so last-writer-wins is safe exactly there - which is
-# the ordinary re-install and needs no arbitration.
-kit_abi="${WORKS_ABI:-1}"
-kit_oldest="${WORKS_ABI_OLDEST:-1}"
-installed_lib="$HOME/works/lib/runtime-env.sh"
-inst_abi="$(works_abi_field "$installed_lib" WORKS_ABI 2>/dev/null || echo 0)"
-inst_oldest="$(works_abi_field "$installed_lib" WORKS_ABI_OLDEST 2>/dev/null || echo 1)"
-install_infra=1
-if [ -r "$installed_lib" ] && [ "$inst_abi" -gt "$kit_abi" ]; then
-    # A newer infrastructure is already here. Never downgrade it - but this
-    # kit's application is about to run under it, so the promise has to hold in
-    # the other direction too: the installed OLDEST must still cover the floor
-    # this kit's launcher declares.
-    install_infra=0
-    kit_app_min="$(works_abi_field "$here/ableton-live" WORKS_ABI_MIN 2>/dev/null || echo 1)"
-    if [ "$inst_oldest" -gt "$kit_app_min" ]; then
-        echo "!! This kit's Ableton Live is written against Works generation $kit_app_min," >&2
-        echo "   and the installed infrastructure (generation $inst_abi) supports" >&2
-        echo "   generation $inst_oldest at the oldest. This kit is too old for this" >&2
-        echo "   machine: use a current installer." >&2
-        exit 1
-    fi
-    echo "   works: keeping the installed infrastructure (generation $inst_abi;" \
-         "this kit carries $kit_abi)"
-elif [ "$kit_abi" -gt "$inst_abi" ]; then
-    stranded="$(works_apps_below_min "$kit_oldest")"
-    if [ -n "$stranded" ] && [ "${WORKS_ALLOW_ABI_BREAK:-0}" != 1 ]; then
-        echo "!! Upgrading the Works infrastructure to generation $kit_abi drops support" >&2
-        echo "   for generations before $kit_oldest, and these installed applications" >&2
-        echo "   declare an older floor:" >&2
-        printf '%s\n' "$stranded" | sed 's/^/     /' >&2
-        echo "   They would stop launching until each is updated with its own installer." >&2
-        if { : >/dev/tty; } 2>/dev/null; then
-            printf 'Continue anyway? [y/N] ' > /dev/tty
-            ans=""
-            read -r -t 60 ans < /dev/tty || printf '\n' > /dev/tty 2>/dev/null || true
-            # The cleanup trap says "nothing was changed", which at this point
-            # is true.
-            case "$ans" in
-                y|Y|yes|Yes|YES) ;;
-                *) exit 1 ;;
-            esac
-        else
-            echo "   No terminal to ask on; set WORKS_ALLOW_ABI_BREAK=1 if you mean it." >&2
-            exit 1
-        fi
-    fi
-fi
+# The floor this kit's application declares is read from its own launcher and
+# passed in: which generation the app needs is app knowledge, and the gate
+# should not know where any application keeps it.
+kit_app_min="$(works_abi_field "$here/ableton-live" WORKS_ABI_MIN 2>/dev/null || echo 1)"
+gate_rc=0
+"$works_src/install-works.sh" check --app-min "$kit_app_min" || gate_rc=$?
+# 3 (keep the newer infrastructure) proceeds like 0: the write step re-derives
+# the same decision and keeps it, so nothing here needs to remember which.
+case "$gate_rc" in 0|3) ;; *) exit 1 ;; esac
 
 # Anything still running from the installed runtime holds the old files
 # open. Stop it all instead of refusing: ask the prefix's wineserver to
@@ -504,22 +456,10 @@ mkdir -p "$BIN" "$HOME/works/apps/ableton-live" "$HOME/works/bin" "$HOME/works/l
 install -m755 "$here/ableton-live" "$HOME/works/apps/ableton-live/ableton-live"
 ln -sfn "$HOME/works/apps/ableton-live/ableton-live" "$BIN/ableton-live"
 
-# `works` acts on the runtime and the store, which no application owns, so it
-# sits in works/bin rather than in any app's directory. Its verbs go beside the
-# shared library: they implement the command, they are not commands themselves.
-#
-# Behind the gate decided up top: when the machine already carries a newer
-# infrastructure, this kit installs only its application and leaves ~/works/bin
-# and the verbs alone.
-if [ "$install_infra" = 1 ]; then
-    install -m755 "$works_src/works" "$HOME/works/bin/works"
-    install -m755 "$works_src/works-runtime" "$HOME/works/lib/works-runtime"
-    install -m755 "$works_src/works-update" "$HOME/works/lib/works-update"
-    install -m755 "$works_src/works-plug" "$HOME/works/lib/works-plug"
-fi
-ln -sfn "$HOME/works/bin/works" "$BIN/works"
-# The two commands this replaced, from an installer that predates it.
-rm -f "$BIN/ableton-runtime" "$BIN/ableton-update" "$BIN/works-runtime" "$BIN/works-update" 2>/dev/null || true
+# The infrastructure write, exactly as `check` decided it up top: the command,
+# the verbs, the shared library, the PATH link, and the legacy cleanup all live
+# in works/install-works.sh, because none of it is this application's.
+"$works_src/install-works.sh" install
 
 # Dated copies of the launcher accumulated here on every install, one per run,
 # with nothing to prune them - the same defect the version store exists to end,
@@ -533,13 +473,6 @@ echo "== install the shared toolkit -> ~/works/lib =="
 # Two directories because they hold two different things: the toolkit any
 # application sources, and this application's own payload.
 mkdir -p "$HOME/works/lib" "$HOME/works/apps/ableton-live"
-# The shared library is here for the launchers to source, and it is the whole
-# of lib: the same gate as the command and its verbs, because the library and
-# the verbs are one generation and move together, or the verbs call functions
-# the library does not define.
-if [ "$install_infra" = 1 ]; then
-    install -m644 "$works_src/runtime-env.sh" "$HOME/works/lib/runtime-env.sh"
-fi
 # The app toolkit lives with the app, not in lib. Two reasons, both earned: lib
 # is generation-locked by the infrastructure gate, and app payload behind the
 # Works gate is mis-tiered - a keep-newer-infrastructure install would skip the
@@ -549,10 +482,6 @@ fi
 install -m644 "$here/detect-scale.sh" "$HOME/works/apps/ableton-live/detect-scale.sh"
 install -m644 "$here/detect-theme.sh" "$HOME/works/apps/ableton-live/detect-theme.sh"
 install -m644 "$here/shortcut-hold.sh" "$HOME/works/apps/ableton-live/shortcut-hold.sh"
-# Stale lib copies from installs made before the move (2026-08-10), removed so
-# lib stays what the census and the gate say it is: Works, whole, nothing else.
-rm -f "$HOME/works/lib/detect-scale.sh" "$HOME/works/lib/detect-theme.sh" \
-      "$HOME/works/lib/shortcut-hold.sh" 2>/dev/null || true
 # setsyscolors.exe repaints the top bar mid-session when the Live theme changes;
 # without it the colors still apply on the next launch. Kit stages it next to
 # these scripts; a repo checkout carries it in tools/.
@@ -756,5 +685,11 @@ trap - EXIT
 rm -rf "$stage"
 
 echo
-echo "OK. Runtime rollback: ${backup:-none (fresh install)}"
+# The store path never sets $backup - rollback there is the store itself - so
+# the old line claimed "fresh install" at the end of every update.
+if [ -n "$STORE" ]; then
+    echo "OK. Previous builds stay in the store: works runtime list"
+else
+    echo "OK. Runtime rollback: ${backup:-none (fresh install)}"
+fi
 echo "Next: ./scripts/setup-prefix.sh"

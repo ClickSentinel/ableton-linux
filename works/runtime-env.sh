@@ -53,8 +53,30 @@
 # library consumes them, and that is the point - a number this file could read
 # for itself would not be a contract.
 WORKS_ABI=1
+# POLICY (Lucas, 2026-08-10): this stays 1. It should be impossible to strand
+# an application going forward; raising OLDEST is a breaking release, taken
+# deliberately or not at all - and the strand prompt in install-works.sh exists
+# to name the casualties if this line ever changes over an objection.
 # shellcheck disable=SC2034
 WORKS_ABI_OLDEST=1
+
+# --- de-Ableton inventory ------------------------------------------------------
+# works/ is the future standalone repository, and the exit test for that is
+# `grep -ci ableton works/runtime-env.sh` reaching zero. What remains, and why
+# each is still here rather than fixed tonight:
+#   * the default in works_runtime_name - the app should pass its artifact name;
+#     the seam exists, the one shipped app still leans on the default.
+#   * works_legacy_root / works_legacy_plug - frozen facts about where THIS
+#     app's installs used to live. The migration owns them until the app
+#     declares its own legacy paths; moving that declaration is a migration of
+#     the migration, which wants daylight and its own review.
+#   * ABLETON-WINE-BUILD-INFO.txt - the artifact format's own filename; renaming
+#     it is a compat-window migration across every installed store entry.
+#   * the ABLETON_* names in works_env_compat - one release of promised compat.
+#   * the shibco URLs in works_manifest_url - replaced by per-app `origin` when
+#     the updater grows an app argument.
+# Nothing else in this file should mention the application, and new mentions
+# are regressions.
 
 # Names this library answered to before the runtime was its own thing. They are
 # honoured for one release and say so once, because the rename lands in the same
@@ -91,10 +113,11 @@ works_home() {
     printf '%s\n' "${WORKS_HOME:-$HOME/works}"
 }
 
-# The runtime's build name. It carries the Wine version because the artifact
-# does: a tarball identifies which build it is.
+# The runtime's build name - the application's to declare, because the artifact
+# is the application's. WORKS_RUNTIME_NAME is the seam; the default is the one
+# application this repository ships, and is on the de-Ableton inventory below.
 works_runtime_name() {
-    printf '%s\n' "wine-d2d1-nspa-11.13"
+    printf '%s\n' "${WORKS_RUNTIME_NAME:-wine-d2d1-nspa-11.13}"
 }
 
 
@@ -121,7 +144,10 @@ works_runtime_store() {
 # migration looks inside ~/works, finds nothing, and silently orphans every
 # existing install instead of moving it. It stays frozen when the store moves.
 works_legacy_root() {
-    printf '%s\n' "$HOME/.local/opt/$(works_runtime_name)"
+    # Spelled out, never derived from works_runtime_name: that name grew a seam
+    # (WORKS_RUNTIME_NAME), and a renamed artifact deriving this path would
+    # un-find every existing install. The past does not take overrides.
+    printf '%s\n' "$HOME/.local/opt/wine-d2d1-nspa-11.13"
 }
 
 # The installed runtime. WORKS_RUNTIME overrides it — the tests, the
@@ -173,7 +199,10 @@ works_runtime_store() {
 # The pre-container install path. Carries the Wine version, which is exactly why
 # it is being retired: a base bump moved every user's directory.
 works_legacy_root() {
-    printf '%s\n' "$HOME/.local/opt/$(works_runtime_name)"
+    # Spelled out, never derived from works_runtime_name: that name grew a seam
+    # (WORKS_RUNTIME_NAME), and a renamed artifact deriving this path would
+    # un-find every existing install. The past does not take overrides.
+    printf '%s\n' "$HOME/.local/opt/wine-d2d1-nspa-11.13"
 }
 
 # The installed runtime. WORKS_RUNTIME overrides it — the tests, the

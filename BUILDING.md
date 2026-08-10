@@ -36,7 +36,7 @@ The repository includes the tools used to test shortcut support. Run the GNOME
 shortcut test with:
 
 ```bash
-scripts/test-shortcut-hold.sh
+tests/test-shortcut-hold.sh
 ```
 
 Build the Wine menu test with all compiler warnings enabled. Then run its two
