@@ -7,19 +7,19 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-459 tests across 18 suites. See [README.md](README.md) for how to run
+462 tests across 18 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
 ## Contents
 
-- [tests/repo-hygiene.bats](#repo-hygiene) — 17 test(s)
+- [tests/repo-hygiene.bats](#repo-hygiene) — 18 test(s)
 - [tests/packaging.bats](#packaging) — 10 test(s)
 - [tests/launcher-cli.bats](#launcher-cli) — 22 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/install-runs.bats](#install-runs) — 27 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 29 test(s)
 - [tests/unit/run-header.bats](#run-header) — 12 test(s)
 - [tests/unit/manifest.bats](#manifest) — 23 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 42 test(s)
@@ -61,6 +61,7 @@ that should run on *every* push, unfiltered by paths.
 | 15 | CI runs the bats tests/run.sh pins, not one of its own | a bats on PATH used to beat the pin, so a checkout ran whatever the |
 | 16 | the vendored bats clone is ignored | .bats-core is a full clone of another project; run.sh's comment said it |
 | 17 | build.sh forwards every variable container-build.sh reads from its environment | the container sees only what build.sh passes with -e, and an unset |
+| 18 | works/ carries no application knowledge beyond the inventory | — |
 
 <a id="packaging"></a>
 
@@ -305,6 +306,8 @@ tree ships.
 | 25 | the verb installs into the store and honours --channel | — |
 | 26 | a refusing validator stops the verb before anything is promoted | the voucher runs before promote, and its refusal aborts with the |
 | 27 | the verb honours a pinned WORKS_RUNTIME with a dated rollback | — |
+| 28 | an older implementation at the same ABI does not replace a newer one | found in review. The ABI answers compatibility, not recency - two kits |
+| 29 | a higher installed ABI is kept even against a newer implementation | the interface must never go backward even when the kit is newer by |
 
 <a id="run-header"></a>
 
@@ -910,6 +913,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `found by installing. The migration harness fabricates a legacy prefix` | works-runtime: a Plug with an empty system.reg and no stamp is fresh, not a refusal |
 | `found in review. Commit b77d349 rewrote the launcher's header and` | launcher-cli: the upstream window-class overrides are still exported |
 | `found in review. The "already in the store, just retarget" branch ran` | works-update: a base change that takes a Plug backward is refused from the store |
+| `found in review. The ABI answers compatibility, not recency - two kits` | install-runs: an older implementation at the same ABI does not replace a newer one |
 | `found in review. install.sh hands this to `wineserver -k` *before*` | runtime-env: live prefix: names the legacy path while the destination is absent |
 | `found in review. works-update guards its Wine-base refusal on the field` | manifest: a manifest with no wine field is refused |
 | `found on a VM after a fix that did not work. The architecture is` | runtime-env: a 32-bit prefix declared only in user.reg is not mistaken for unfinished |
@@ -978,6 +982,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the id contains dots and a plus, so anything treating it as a pattern` | works-runtime: use accepts a nightly build by its full name |
 | `the installed shape is a symlink on PATH pointing into works/bin, with` | works: works resolves its verbs through a symlink on PATH |
 | `the installer name becomes both a URL component and a filename` | manifest: an installer name containing a path is refused |
+| `the interface must never go backward even when the kit is newer by` | install-runs: a higher installed ABI is kept even against a newer implementation |
 | `the label comparison needs the runtime that booted the Plug, and that` | works-runtime: a rollback whose booting runtime is gone stays a refusal |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
 | `the manifest describes a build that is not on disk yet, so the base` | works-update: a Wine base change on the download path is announced, not refused |

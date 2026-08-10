@@ -458,3 +458,38 @@ setup() {
     [ "$(find "$(dirname "$root")" -maxdepth 1 -name "$(basename "$root")-rollback-*" | wc -l)" -eq 1 ]
     [ ! -e "$HOME/works/runtimes/stable" ]
 }
+
+# guards: found in review. The ABI answers compatibility, not recency - two kits
+# both speaking ABI 1 carry different libraries, and comparing only the ABI made
+# equal-ABI installs last-writer-wins, so an older kit silently replaced a newer
+# library and took its fixes with it. WORKS_VERSION orders implementations
+# within one interface.
+@test "an older implementation at the same ABI does not replace a newer one" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    mkdir -p "$HOME/works/lib"
+    printf '# SENTINEL-NEWER-IMPLEMENTATION\nWORKS_VERSION=99\nWORKS_ABI=1\nWORKS_ABI_OLDEST=1\n' \
+        > "$HOME/works/lib/runtime-env.sh"
+
+    run env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [[ "$output" == *"keeping the installed infrastructure"* ]]
+    grep -q 'SENTINEL-NEWER-IMPLEMENTATION' "$HOME/works/lib/runtime-env.sh" \
+        || { echo "an older implementation overwrote a newer one at equal ABI" >&2; false; }
+    # and the application still installed, which is the point of keeping going
+    [ -x "$HOME/works/apps/ableton-live/ableton-live" ]
+}
+
+# guards: the interface must never go backward even when the kit is newer by
+# version - applications may declare a floor the installed ABI satisfies and
+# this kit's does not
+@test "a higher installed ABI is kept even against a newer implementation" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    mkdir -p "$HOME/works/lib"
+    printf '# SENTINEL-HIGHER-ABI\nWORKS_VERSION=0\nWORKS_ABI=99\nWORKS_ABI_OLDEST=1\n' \
+        > "$HOME/works/lib/runtime-env.sh"
+    run env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    grep -q 'SENTINEL-HIGHER-ABI' "$HOME/works/lib/runtime-env.sh"
+}

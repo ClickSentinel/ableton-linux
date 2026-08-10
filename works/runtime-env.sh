@@ -32,10 +32,19 @@
 # Bumped when the surface changes, never for a release: the kit VERSION is a
 # date, and dates would raise every app's floor for nothing.
 #
+# The ABI answers compatibility and nothing else: two files can speak the same
+# interface and be different implementations of it, one carrying fixes the
+# other does not. WORKS_VERSION orders them - a monotonic counter bumped on
+# every change to this directory, so the gate can tell a newer implementation
+# from an older one at equal ABI. Without it, equal-ABI installs were
+# last-writer-wins, and an older kit silently replaced a newer library.
+#
 # Read with sed, never sourced, by the gate and the launchers - the
 # LINK_SETUP_VERSION shape: a variable inside the file it describes.
 #
 # shellcheck disable=SC2034  # read from outside; nothing here consumes them
+WORKS_VERSION=1
+# shellcheck disable=SC2034
 WORKS_ABI=1
 # Policy: stays 1. Stranding an application is a breaking release, taken
 # deliberately or not at all; the strand prompt in install-works.sh names the
@@ -166,20 +175,6 @@ works_channel() {
         *)              echo "!! unknown channel '$_c' in $_f; using stable" >&2
                         printf 'stable\n' ;;
     esac
-}
-
-# The directory holding every installed runtime, one per build.
-works_runtime_store() {
-    printf '%s\n' "$(works_home)/runtimes"
-}
-
-# The pre-container install path. Carries the Wine version, which is exactly why
-# it is being retired: a base bump moved every user's directory.
-works_legacy_root() {
-    # Spelled out, never derived from works_runtime_name: that name grew a seam
-    # (WORKS_RUNTIME_NAME), and a renamed artifact deriving this path would
-    # un-find every existing install.
-    printf '%s\n' "$HOME/.local/opt/wine-d2d1-nspa-11.13"
 }
 
 # The installed runtime. WORKS_RUNTIME overrides it — the tests, the
