@@ -302,10 +302,10 @@ store() {
     [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]
 }
 
-# guards: found live on the arch rig. The migration harness fabricates a legacy
-# prefix as `: > system.reg` with no stamp — a prefix nothing ever booted — and
-# reading that as "booted but will not say" aborted a legacy machine's first
-# install. Empty means wineboot never started, and fresh is the honest answer.
+# guards: found by installing. The migration harness fabricates a legacy prefix
+# as `: > system.reg` with no stamp — never booted — and reading that as
+# "booted but will not say" aborted a legacy machine's first install. Empty
+# means wineboot never started; fresh is the honest answer.
 @test "a Plug with an empty system.reg and no stamp is fresh, not a refusal" {
     store
     a_plug studio wine-11.13

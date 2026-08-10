@@ -65,12 +65,10 @@ if [ "${WORKS_ABI_OLDEST:-1}" -gt "$WORKS_ABI_MIN" ]; then
 fi
 works_bind_runtime
 # Where this launcher actually lives, symlink resolved: ~/.local/bin holds only
-# a link. The app toolkit (detect-scale, detect-theme, shortcut-hold) is
-# installed BESIDE the launcher - the application's directory contains the
-# application - and in a checkout the same sibling relation holds in scripts/.
-# The ~/works/lib fallbacks below cover machines installed before the toolkit
-# moved out of lib (2026-08-10); install.sh removes those stale copies on the
-# next update, and the fallbacks can go a release later.
+# a link. The app toolkit is installed beside the launcher - the application's
+# directory contains the application - and the same sibling relation holds in
+# a checkout. The ~/works/lib fallbacks cover installs that predate the
+# toolkit living here; they can go a release later.
 appdir="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # Disable Wine debug logging; fixme spam from the D3D poll loop stalls Live's UI thread.
 # Keep the winediag channel on: it carries only rare one-line notices that a

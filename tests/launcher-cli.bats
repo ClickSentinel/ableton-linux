@@ -275,11 +275,9 @@ LIB
         || { echo "the check fired on a generation-1 library" >&2; false; }
 }
 
-# guards: found in review (PR #33). The works stack's resolver consolidation
-# (b77d349) rewrote the launcher's header and silently dropped upstream PR 153's
-# WINE_WIN32_RESIZABLE_CLASS export - the functional line, shipped missing in
-# three nightlies before a human reading the diff caught it. No test asserted
-# launcher exports; this one pins the loss mode: the export lines themselves.
+# guards: found in review. Commit b77d349 rewrote the launcher's header and
+# silently dropped the WINE_WIN32_RESIZABLE_CLASS export - nothing asserted the
+# export lines, so a consolidation could lose one. This pins that loss mode.
 @test "the upstream window-class overrides are still exported" {
     for v in WINE_WIN32_FULLSCREEN_CLASS WINE_WIN32_RESIZABLE_CLASS WINE_X11_FORCE_OFFSCREEN_CLASS; do
         grep -q "^export $v=" "$REPO/scripts/ableton-live" \

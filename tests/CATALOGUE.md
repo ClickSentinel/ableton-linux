@@ -131,7 +131,7 @@ was covered by anything before.
 | 19 | the launcher never leaves the fake runtime for the host's wine | — |
 | 20 | a launcher below the infrastructure's OLDEST refuses as a version conflict | — |
 | 21 | a launcher runs under a library that predates the contract | the check must not fire on the infrastructure everyone actually has — |
-| 22 | the upstream window-class overrides are still exported | found in review (PR #33). The works stack's resolver consolidation |
+| 22 | the upstream window-class overrides are still exported | found in review. Commit b77d349 rewrote the launcher's header and |
 
 <a id="detect-scale"></a>
 
@@ -538,7 +538,7 @@ resolve through it instead of naming a directory.
 | 20 | a downgrade is named as a downgrade | forward Wine supports, backward it does not - the wording has to differ |
 | 21 | a Plug pinned to a build is not warned about | a Plug pinned to a build does not follow the channel, so a retarget |
 | 22 | a booted Plug that cannot name its base is a refusal, not a skip | a booted prefix that cannot say what booted it is the case the old |
-| 23 | a Plug with an empty system.reg and no stamp is fresh, not a refusal | found live on the arch rig. The migration harness fabricates a legacy |
+| 23 | a Plug with an empty system.reg and no stamp is fresh, not a refusal | found by installing. The migration harness fabricates a legacy prefix |
 | 24 | use with no argument refuses when there is no terminal | a script calling `use` with no argument must fail, not block forever |
 | 25 | use with no argument leaves the channel alone | — |
 | 26 | list: a nightly id does not crowd the WINE column | the BUILD column was exactly as wide as a nightly id -- |
@@ -865,11 +865,11 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `forward is supported and irreversible, so it takes consent rather than` | works-update: a base change that moves a Plug forward is refused with no terminal |
 | `found by hand on a pre-store machine. The clone landed, the *default*` | works-plug: new --from succeeds on a machine with no version store |
 | `found by hand. With no store there is no channel for a Plug to follow,` | works-plug: a pre-store install is not reported as following a channel |
-| `found in review (PR #33). The works stack's resolver consolidation` | launcher-cli: the upstream window-class overrides are still exported |
+| `found by installing. The migration harness fabricates a legacy prefix` | works-runtime: a Plug with an empty system.reg and no stamp is fresh, not a refusal |
+| `found in review. Commit b77d349 rewrote the launcher's header and` | launcher-cli: the upstream window-class overrides are still exported |
 | `found in review. The "already in the store, just retarget" branch ran` | works-update: a base change that takes a Plug backward is refused from the store |
 | `found in review. install.sh hands this to `wineserver -k` *before*` | runtime-env: live prefix: names the legacy path while the destination is absent |
 | `found in review. works-update guards its Wine-base refusal on the field` | manifest: a manifest with no wine field is refused |
-| `found live on the arch rig. The migration harness fabricates a legacy` | works-runtime: a Plug with an empty system.reg and no stamp is fresh, not a refusal |
 | `found on a VM after a fix that did not work. The architecture is` | runtime-env: a 32-bit prefix declared only in user.reg is not mistaken for unfinished |
 | `install.sh aborting on its own first lines, which no resolver test can` | install-runs: install.sh gets past its own initialisation |
 | `install.sh writes the channel file, so "removed everything install.sh` | install-runs: uninstalling takes the recorded channel back |

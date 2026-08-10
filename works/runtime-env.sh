@@ -19,70 +19,45 @@
 #   WINE_ROOT="$(works_runtime_path)"           # just the path
 #   works_bind_runtime                       # the full launcher binding
 
-# The contract this library offers the applications that source it, as a range.
-# WORKS_ABI is the generation this file speaks; WORKS_ABI_OLDEST is the oldest
-# generation it still honours. Each application's launcher declares the
-# WORKS_ABI_MIN it was written against, and the three make both promises this
-# project ships on checkable with integer comparisons:
+# The compatibility contract, as a range. WORKS_ABI is the generation this
+# library speaks; WORKS_ABI_OLDEST is the oldest it still honours; each
+# launcher declares the WORKS_ABI_MIN it was written against.
 #
-#   an application is FORWARD compatible: built against MIN, it keeps working
-#   under every later infrastructure whose OLDEST has not risen past MIN;
+#   compatible  <=>  WORKS_ABI_OLDEST <= WORKS_ABI_MIN <= WORKS_ABI
 #
-#   the infrastructure is BACKWARD compatible: it carries every application
-#   from OLDEST up, and drops one only by raising OLDEST - a visible,
-#   deliberate act in this file's history, never a side effect of a release.
+# Applications are forward compatible and the infrastructure backward: an app
+# built against MIN keeps working until OLDEST rises past it, and raising
+# OLDEST is the only way to drop one. A single integer does not survive
+# separate release cadences - libtool's current/age idea, for the same reason.
+# Bumped when the surface changes, never for a release: the kit VERSION is a
+# date, and dates would raise every app's floor for nothing.
 #
-# compatible  <=>  WORKS_ABI_OLDEST <= app's WORKS_ABI_MIN <= WORKS_ABI
+# Read with sed, never sourced, by the gate and the launchers - the
+# LINK_SETUP_VERSION shape: a variable inside the file it describes.
 #
-# A single integer instead of a range was the first design here and does not
-# survive separate release cadences: if a higher number always means
-# incompatible, the infrastructure can never move without every application
-# updating in the same breath. The range is libtool's current/age idea, which
-# exists for exactly this.
-#
-# Bumped only when the surface changes - a function renamed, removed, or given
-# different semantics - never for a release. Deliberately not the kit's VERSION:
-# that is a date, and keying compatibility on it would raise every application's
-# floor for reasons unrelated to whether anything it calls actually moved.
-#
-# Read with sed by install.sh's infrastructure gate and by the launchers, the
-# same shape as LINK_SETUP_VERSION in setup-link.sh: a variable inside the file
-# that implements the thing, never a file beside it that can drift from it.
-#
-# shellcheck disable=SC2034  # read with sed from outside; nothing in this
-# library consumes them, and that is the point - a number this file could read
-# for itself would not be a contract.
+# shellcheck disable=SC2034  # read from outside; nothing here consumes them
 WORKS_ABI=1
-# POLICY (Lucas, 2026-08-10): this stays 1. It should be impossible to strand
-# an application going forward; raising OLDEST is a breaking release, taken
-# deliberately or not at all - and the strand prompt in install-works.sh exists
-# to name the casualties if this line ever changes over an objection.
+# Policy: stays 1. Stranding an application is a breaking release, taken
+# deliberately or not at all; the strand prompt in install-works.sh names the
+# casualties if this line ever moves.
 # shellcheck disable=SC2034
 WORKS_ABI_OLDEST=1
 
 # --- de-Ableton inventory ------------------------------------------------------
-# works/ is the future standalone repository, and the exit test for that is
-# `grep -ci ableton works/runtime-env.sh` reaching zero. What remains, and why
-# each is still here rather than fixed tonight:
-#   * the default in works_runtime_name - the app should pass its artifact name;
-#     the seam exists, the one shipped app still leans on the default.
-#   * works_legacy_root / works_legacy_plug - frozen facts about where THIS
-#     app's installs used to live. The migration owns them until the app
-#     declares its own legacy paths; moving that declaration is a migration of
-#     the migration, which wants daylight and its own review.
-#   * ABLETON-WINE-BUILD-INFO.txt - the artifact format's own filename; renaming
-#     it is a compat-window migration across every installed store entry.
-#   * the ABLETON_* names in works_env_compat - one release of promised compat.
-#   * the shibco URLs in works_manifest_url - replaced by per-app `origin` when
-#     the updater grows an app argument.
-#   * ableton_live_pids and the "Ableton Live"*.exe match - the one entry this
-#     inventory originally missed. The mechanism (scan /proc by exe and by
-#     WINEPREFIX) is already generic; what is the app's is "which of those
-#     processes holds unsaved work", and the exit is the app declaring its
-#     process signature the way its launcher declares WORKS_ABI_MIN - or
-#     deriving it from the Plug's own RegisteredApplications name.
-# Nothing else in this file should mention the application, and new mentions
-# are regressions.
+# works/ is the future standalone repository; the exit test is `grep -ci
+# ableton` over it reaching zero, counting code rather than this list. What
+# remains, and its exit - each a migration or an expiry, never a plain edit:
+#   * works_runtime_name's default          the app passes WORKS_RUNTIME_NAME
+#   * works_legacy_root / works_legacy_plug frozen history; leaves when
+#                                           migration is install-time only
+#   * ABLETON-WINE-BUILD-INFO.txt           artifact format; compat-window rename
+#   * works_env_compat's ABLETON_* names    one release of promised compat
+#   * works_manifest_url's URLs             per-app `origin`, once the updater
+#                                           takes an app argument
+#   * ableton_live_pids / "Ableton Live"    the app declares its process
+#                                           signature, or it derives from the
+#                                           Plug's RegisteredApplications name
+# New mentions outside this list are regressions.
 
 # Names this library answered to before the runtime was its own thing. They are
 # honoured for one release and say so once, because the rename lands in the same
@@ -405,9 +380,9 @@ works_runtime_base() {
 # warn people away from a switch that cannot reach them. Unbound follows the
 # channel, because that is what unbound means.
 #
-# Here rather than in works-runtime because install-runtime.sh needs the same
-# set: the guard that used to live only in the commands has to hold for every
-# door, and two copies of this predicate is how the doors drift apart again.
+# Here rather than in works-runtime because install.sh needs the same set: the
+# guard holds at every door, and two copies of this predicate is how the doors
+# drift apart.
 works_plugs_following() {
     local _chan="${1:-}" _n _b
     [ -n "$_chan" ] || _chan="$(works_channel)"
@@ -452,8 +427,8 @@ works_plug_base_runtime() {
 #   forward   a newer base, or one that cannot be identified: one-way door
 #   backward  an older base, or unidentifiable: Wine does not support it
 #
-# The stamp alone cannot say which of those a move is. Measured on two tarballs
-# of this project's own builds: wine.inf's mtime is stamped at build time, so
+# The stamp alone cannot say which of those a move is: wine.inf's mtime is
+# stamped at build time (measured on real tarballs), so
 # two builds of the same wine-11.13 base carry different stamps, and by stamp
 # alone every routine update would read as a base change - and rolling back to
 # yesterday's nightly would read as the unsupported case and be refused. So the
@@ -470,15 +445,12 @@ works_base_move() {
     _p="${_p%/}"
     _rb="$(works_runtime_base "$_r")" || return 1
     if ! _pb="$(works_plug_base "$_p")"; then
-        # No stamp. Which of the two that is turns on whether wineboot has ever
-        # actually run here - and -s, not -e: wineboot writes registry content
-        # in its first moments, so an EMPTY system.reg means it never got
-        # started, and fresh is the honest answer. Found live on the arch rig:
-        # the migration harness fabricates exactly this shape (`: > system.reg`),
-        # and -e read it as "booted but will not say", aborting a legacy
-        # machine's first install over a prefix nothing had ever booted. A
-        # NON-empty system.reg with no stamp remains the tampered case and a
-        # refusal - that is the strictness defect 7 was about.
+        # No stamp: fresh or tampered, told apart by -s, not -e. wineboot
+        # writes registry content in its first moments, so an empty system.reg
+        # means it never started, and fresh is the honest answer; content
+        # without a stamp stays a refusal. -e read the migration harness's
+        # `: > system.reg` fixture as unanswerable and aborted a legacy
+        # machine's first install.
         [ -s "$_p/system.reg" ] && return 1
         printf 'fresh\n'; return 0
     fi

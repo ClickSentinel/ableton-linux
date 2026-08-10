@@ -70,11 +70,9 @@ cleanup()
             echo "!! install failed; previous runtime restored" >&2
         elif [ "$migrated" -eq 1 ]; then
             # The migration is deliberately not undone - it only moves trees
-            # that stay valid, and rerunning continues from it. But a message
-            # claiming nothing changed after ~/works has appeared is a lie that
-            # sends the person investigating in exactly the wrong direction.
-            # Found live: the base gate aborted after a migration and said
-            # "nothing was changed" over a machine whose layout had just moved.
+            # that stay valid, and rerunning continues from it. A message
+            # claiming nothing changed after ~/works has appeared would send
+            # whoever is investigating in exactly the wrong direction.
             echo "!! install aborted; the layout migration had already completed and" >&2
             echo "   stands - rerunning will continue from it" >&2
         else
@@ -211,10 +209,8 @@ fi
 # A later failure does not undo it and does not need to: it only moves trees
 # that stay valid, and re-running is a no-op.
 # Recorded from the pre-state, not from having called them: the migrations are
-# no-ops on an already-migrated machine, and the abort message keys on this
-# flag - claiming "the layout migration had already completed and stands" on a
-# machine where nothing moved is the same investigative wrong turn the flag
-# exists to prevent, one layer up. (Review find, PR #33.)
+# no-ops on an already-migrated machine, and claiming a migration "stands" on a
+# machine where nothing moved is the wrong turn this flag exists to prevent.
 if [ -e "$(works_legacy_root)" ] || [ -L "$(works_legacy_root)" ] || [ -d "$(works_legacy_plug)" ]; then
     migrated=1
 fi
@@ -473,12 +469,10 @@ echo "== install the shared toolkit -> ~/works/lib =="
 # Two directories because they hold two different things: the toolkit any
 # application sources, and this application's own payload.
 mkdir -p "$HOME/works/lib" "$HOME/works/apps/ableton-live"
-# The app toolkit lives with the app, not in lib. Two reasons, both earned: lib
-# is generation-locked by the infrastructure gate, and app payload behind the
-# Works gate is mis-tiered - a keep-newer-infrastructure install would skip the
-# app's OWN toolkit update; and the app's directory should contain the app,
-# which is the same sentence the launcher's placement is justified by above.
-# The launcher sources these as siblings. Review find, PR #33.
+# The app toolkit lives with the app, not in lib: lib is generation-locked by
+# the infrastructure gate, so app payload there would skip its own update
+# whenever a newer infrastructure is kept - and the app's directory should
+# contain the app. The launcher sources these as siblings.
 install -m644 "$here/detect-scale.sh" "$HOME/works/apps/ableton-live/detect-scale.sh"
 install -m644 "$here/detect-theme.sh" "$HOME/works/apps/ableton-live/detect-theme.sh"
 install -m644 "$here/shortcut-hold.sh" "$HOME/works/apps/ableton-live/shortcut-hold.sh"

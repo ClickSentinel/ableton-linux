@@ -7,20 +7,15 @@
 #   install-works.sh install                the write, honouring what check decided
 #
 # Two entry points because the decision and the write belong at different
-# moments of an application install: the decision before anything is stopped or
-# moved (two of its outcomes are refusals, and a refusal that early leaves the
-# machine untouched), the write after the runtime has landed. `install`
-# re-derives the same answer from the same files rather than trusting state
-# passed between the calls - the reads are cheap, and re-deriving cannot
-# disagree with a check that really ran.
+# moments of an application install: check before anything is stopped or moved
+# (two outcomes are refusals, and that early a refusal leaves the machine
+# untouched), install after the runtime lands. install re-derives the answer
+# from the same files rather than trusting state passed between calls.
 #
-# Every application's kit carries its own copy of this infrastructure, because
-# one self-sufficient installer is the distribution model: run one file, get a
-# working system, no bootstrap in front of it. The cost is that every install
-# is also an infrastructure write onto a machine other applications may already
-# depend on, and unguarded, whichever kit ran last would own ~/works/lib -
-# silently downgrading everyone else. So the write is arbitrated by the ABI
-# range (see runtime-env.sh):
+# Every kit carries its own copy of this infrastructure - one self-sufficient
+# installer is the distribution model - so every install is also a write onto a
+# machine other applications may depend on. Unguarded, whichever kit ran last
+# would own ~/works/lib. The ABI range (see runtime-env.sh) arbitrates:
 #
 #   kit newer or equal, nobody stranded    install it        (the silent path)
 #   kit newer, would strand an app         ask, naming them
@@ -29,8 +24,7 @@
 #   kit older, its app below OLDEST        refuse: exit 1
 #
 # Equal generations install unconditionally: the contract is identical by
-# definition of the number, so last-writer-wins is safe exactly there - which
-# is the ordinary re-install and needs no arbitration.
+# definition of the number, so last-writer-wins is safe exactly there.
 set -euo pipefail
 export LC_ALL=C.UTF-8
 
@@ -125,10 +119,9 @@ cmd_install() {
     install -m755 "$here/works-plug" "$HOME/works/lib/works-plug"
     install -m644 "$here/runtime-env.sh" "$HOME/works/lib/runtime-env.sh"
     ln -sfn "$HOME/works/bin/works" "$BIN/works"
-    # The two commands this replaced, from an installer that predates `works`,
-    # and the app toolkit copies from before it moved home (2026-08-10) - both
-    # removed so lib stays what the census and the gate say it is: Works,
-    # whole, nothing else.
+    # Legacy PATH commands from before `works`, and app-toolkit copies from
+    # before the toolkit lived with its app - removed so lib stays what the
+    # census and the gate say it is: Works, whole, nothing else.
     rm -f "$BIN/ableton-runtime" "$BIN/ableton-update" \
           "$BIN/works-runtime" "$BIN/works-update" 2>/dev/null || true
     rm -f "$HOME/works/lib/detect-scale.sh" "$HOME/works/lib/detect-theme.sh" \
