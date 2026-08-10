@@ -61,6 +61,16 @@ a_registered() {   # plug, display name
     printf '"%s"="SOFTWARE\\\\Vendor\\\\%s\\\\Capabilities"\n' "$2" "${2// /}" >> "$reg"
 }
 
+# An Add/Remove entry the way an installer writes one: a DisplayName under the
+# Uninstall key, optionally marked SystemComponent=1 - the Windows convention
+# for hidden support packages.
+a_uninstalled() {   # plug, display name, [systemcomponent]
+    local reg="$P/$1/system.reg"
+    printf '\n[Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\%s] 1784299416\n' "${2// /}" >> "$reg"
+    printf '"DisplayName"="%s"\n' "$2" >> "$reg"
+    [ -z "${3:-}" ] || printf '"SystemComponent"=dword:00000001\n' >> "$reg"
+}
+
 # --- list ---------------------------------------------------------------------
 
 @test "list says so when there are no Plugs yet" {
@@ -97,6 +107,42 @@ a_registered() {   # plug, display name
 # guards: two applications in one Plug is the shape ~/.wine-ableton was already
 # in before Plugs had a name, and nothing about the read is per-application — a
 # second vendor needs no new file, no new glob and no change here.
+# guards: measured on real prefixes - the two indexes are disjoint. An NSIS
+# install writes Uninstall and no RegisteredApplications, so a registration-only
+# census lists its Plug as empty. The census is the union.
+@test "an application in Uninstall alone is a tenant" {
+    store; a_plug studio 12
+    a_uninstalled studio "Notepad++ (64-bit x64)"
+    run bash -c '. "$0"; works_plug_tenants "$1"' "$REPO/works/runtime-env.sh" "$P/studio"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Notepad++"* ]]
+}
+
+# guards: SystemComponent=1 is the Windows convention for hidden support
+# packages (the MSI runtime sub-packages carry it), and platform runtime
+# components carry no structural marker at all - Windows lists them in
+# Apps & Features - so those are dropped by name. Platform knowledge, not
+# tenant knowledge: no application is named in the filter.
+@test "support packages and platform runtimes are not tenants" {
+    store; a_plug studio 12
+    a_uninstalled studio "Some Hidden Component" hidden
+    a_uninstalled studio "Microsoft Visual C++ 2022 X64 Minimum Runtime - 14.44"
+    a_uninstalled studio "Wine Mono Runtime"
+    a_uninstalled studio "Microsoft Edge WebView2 Runtime"
+    run bash -c '. "$0"; works_plug_tenants "$1"' "$REPO/works/runtime-env.sh" "$P/studio"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ] || { echo "listed as tenants: $output" >&2; false; }
+}
+
+@test "registered and unregistered tenants union in one Plug" {
+    store; a_plug studio 12
+    a_registered studio "Ableton Live 12 Suite"
+    a_uninstalled studio "Notepad++ (64-bit x64)"
+    run bash -c '. "$0"; works_plug_tenants "$1"' "$REPO/works/runtime-env.sh" "$P/studio"
+    [[ "$output" == *"Ableton Live 12 Suite"* ]]
+    [[ "$output" == *"Notepad++"* ]]
+}
+
 #
 # Asserted against the resolver rather than the rendered row: the TENANTS column
 # truncates the way BUILD does, and a real registered name is long enough
