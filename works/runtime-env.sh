@@ -51,7 +51,7 @@ WORKS_ABI_OLDEST=1
 #   * works_legacy_root / works_legacy_plug frozen history; leaves when
 #                                           migration is install-time only
 #   * ABLETON-WINE-BUILD-INFO.txt           artifact format; compat-window rename
-#   * works_env_compat's two shipped names  one release of promised compat
+#   * the TEMPORARY fenced rename compat    deleted whole, on schedule
 #   * works_manifest_url's URLs             per-app `origin`, once the updater
 #                                           takes an app argument
 #   * ableton_live_pids / "Ableton Live"    the app declares its process
@@ -59,6 +59,10 @@ WORKS_ABI_OLDEST=1
 #                                           Plug's RegisteredApplications name
 # New mentions outside this list are regressions.
 
+# ========================= TEMPORARY: RENAME COMPAT ==========================
+# DELETE this whole fenced block, fences included, in the first release after
+# one has shipped with the WORKS_* names.
+#
 # The two override names the released world documents: ABLETON_WINE_ROOT and
 # ABLETON_WINEPREFIX shipped, are in users' profiles and in ableton-vm-tools,
 # and are read for one release after the rename, with a single note. Only
@@ -79,6 +83,7 @@ works_env_compat() {
     done
 }
 works_env_compat
+# ======================= END TEMPORARY: RENAME COMPAT ========================
 
 # The directory installs live under. A seam for the tests; nothing else sets it.
 works_home() {
