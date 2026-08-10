@@ -76,7 +76,7 @@ if [ ! -d "$plug" ]; then
 fi
 # First boot writes the registry and the base stamp; idempotent afterwards.
 echo "== preparing the Plug =="
-WINEPREFIX="$plug" WINEDLLOVERRIDES="mscoree,mshtml=" "$rt/bin/wineboot" -u
+WINEPREFIX="$plug" WINEDLLOVERRIDES="mscoree,mshtml,winemenubuilder.exe=" "$rt/bin/wineboot" -u
 WINEPREFIX="$plug" "$rt/bin/wineserver" -w
 
 echo "== installing Notepad++ $VERSION (silent) =="

@@ -48,7 +48,8 @@ if [ -z "$remaining" ]; then
     works_remove_runtimes
     # The commands themselves live in works/bin; ~/.local/bin holds only links.
     rm -f  "$HOME/works/bin/works" "$HOME/works/lib/works-runtime" \
-           "$HOME/works/lib/works-update" "$HOME/works/lib/works-plug"
+           "$HOME/works/lib/works-update" "$HOME/works/lib/works-plug" \
+           "$HOME/works/lib/works-app"
     rmdir  "$HOME/works/bin" 2>/dev/null || true
     rm -f  "$HOME/.local/bin/works"
     rm -rf "$HOME/works/lib" "$HOME/works/apps" 2>/dev/null || true

@@ -102,7 +102,7 @@ mkdir -p "$kit/bin" "$kit/dist" "$kit/vendor"
 cp -a "$tarball" "$tarball.sha256" "$kit/dist/"
 cp -a "dist/BUILD-INFO-${VERSION}.txt" "$kit/" 2>/dev/null || true
 mkdir -p "$kit/scripts"
-cp -a works/runtime-env.sh works/works works/works-runtime works/works-update works/works-plug works/install-works.sh scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
+cp -a works/runtime-env.sh works/works works/works-runtime works/works-update works/works-plug works/works-app works/install-works.sh scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
       scripts/ableton-live scripts/max9 scripts/detect-scale.sh \
       scripts/detect-theme.sh scripts/shortcut-hold.sh \
       scripts/check-live-audio.sh scripts/setup-link.sh \

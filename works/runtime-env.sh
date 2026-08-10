@@ -568,7 +568,7 @@ works_plug_tenants() {
                 END { if (dn != "" && sc == 0) print dn }
             ' "$_p/$_f" 2>/dev/null
         done
-    } | grep -vE '^(Wine Mono|Microsoft Visual C\+\+|Microsoft Edge WebView2|Microsoft \.NET)'       | sort -u | awk 'NR>1{printf ", "} {printf "%s", $0} END{if (NR) print ""}'
+    } | grep -vE '^(Wine Mono|Microsoft Visual C\+\+|Microsoft Edge WebView2|Microsoft \.NET)'       | sort -u
 }
 
 # Bind this shell to the runtime: drop inherited Wine settings that would reach

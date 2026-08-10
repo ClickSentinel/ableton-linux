@@ -28,7 +28,7 @@ trap 'rm -rf "$stage"' EXIT
 kit="$stage/kit"
 mkdir -p "$kit/works" "$kit/apps/notepad-plus-plus"
 cp -a works/runtime-env.sh works/works works/works-runtime works/works-update \
-      works/works-plug works/install-works.sh "$kit/works/"
+      works/works-plug works/works-app works/install-works.sh "$kit/works/"
 cp -a "$here/install-notepad-plus-plus.sh" "$here/notepad-plus-plus" \
       "$here/ONBOARDING.md" "$kit/apps/notepad-plus-plus/"
 install -m644 "$payload" "$kit/apps/notepad-plus-plus/$(basename "$payload")"

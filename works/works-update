@@ -101,9 +101,9 @@ want_id="$(works_compose_id "$want_ver" "$want_commit" \
 # by design -- a nightly carries its kind -- and unpadded output left the dates
 # and Wine versions on the two rows unalignable against each other.
 printf '   available: %-32s %-12s %s\n' \
-    "${want_id:-$want_ver}" "${want_wine:-?}" "${want_at:-—}"
+    "${want_id:-$want_ver}" "${want_wine:-?}" "${want_at:--}"
 printf '   installed: %-32s %-12s %s\n' \
-    "$(works_runtime_id "$root" 2>/dev/null || echo 'none')" "${have_wine:-?}" "${have_at:-—}"
+    "$(works_runtime_id "$root" 2>/dev/null || echo 'none')" "${have_wine:-?}" "${have_at:--}"
 
 # The case that had no answer at all before: same build, nothing to do. Compared
 # on source-commit rather than the version, which is identical across every
