@@ -560,6 +560,80 @@ wires_plug_tenants() {
     } | grep -vE '^(Wine Mono|Microsoft Visual C\+\+|Microsoft Edge WebView2|Microsoft \.NET)'       | sort -u
 }
 
+# The Uninstall index as records, not just names. wires_plug_tenants answers
+# "what is in this Plug" and throws the rest away; this keeps it, because an
+# installer writes down everything an application record needs and there is no
+# reason to make a person retype it:
+#
+#   DisplayIcon      where the executable is
+#   DisplayVersion   what version it is
+#   DisplayName      what to call it
+#   QuietUninstallString  how to remove it again
+#
+# One tab-separated line per entry: key, name, icon, version, location,
+# uninstall. Values stay as the registry spells them - doubled backslashes and
+# all - because unescaping is the caller's business and doing it in awk is how
+# a quote in a product name becomes a parse error.
+wires_plug_entries() {
+    local _p="${1:-}"; [ -n "$_p" ] || _p="$(wires_plug_path)"
+    _p="${_p%/}"
+    local _f
+    for _f in system.reg user.reg; do
+        [ -r "$_p/$_f" ] || continue
+        awk '
+            function emit() {
+                if (key != "" && sc == 0 && dn != "")
+                    printf "%s\t%s\t%s\t%s\t%s\t%s\n", key, dn, di, dv, il,
+                           (qus != "" ? qus : us)
+            }
+            /^\[/ {
+                emit()
+                key = ""; dn = ""; di = ""; dv = ""; il = ""; us = ""; qus = ""; sc = 0
+                if ($0 ~ /CurrentVersion\\\\Uninstall\\\\/) {
+                    key = $0; sub(/^\[/, "", key); sub(/\].*$/, "", key)
+                    sub(/^.*Uninstall\\\\/, "", key)
+                }
+                next
+            }
+            key != "" && /^"SystemComponent"=dword:00000001/ { sc = 1; next }
+            key != "" && /^"[A-Za-z]+"="/ {
+                n = $0; sub(/^"/, "", n); sub(/".*$/, "", n)
+                v = $0; sub(/^"[^"]*"="/, "", v); sub(/"$/, "", v)
+                if      (n == "DisplayName")          dn = v
+                else if (n == "DisplayIcon")          di = v
+                else if (n == "DisplayVersion")       dv = v
+                else if (n == "InstallLocation")      il = v
+                else if (n == "UninstallString")      us = v
+                else if (n == "QuietUninstallString") qus = v
+            }
+            END { emit() }
+        ' "$_p/$_f"
+    done | sort -u
+}
+
+# A registry value as the string it means. The .reg format doubles backslashes
+# and escapes quotes; every path out of wires_plug_entries comes through here.
+wires_reg_unescape() {
+    local _s="$1"
+    _s="${_s//\\\\/\\}"
+    _s="${_s//\\\"/\"}"
+    printf '%s\n' "$_s"
+}
+
+# A Windows path inside a Plug, as a path on this machine. Takes the drive
+# letter off rather than mapping it: everything an installer writes lands on
+# C:, and a Plug's other drives are links into the real home, which is not
+# where an application's own files go. A trailing ,N is an icon index, not part
+# of the path - DisplayIcon carries one more often than not.
+wires_win_path() {
+    local _p="${1%/}" _w="$2"
+    _w="${_w%%,[0-9]*}"
+    _w="${_w#\"}"; _w="${_w%\"}"
+    case "$_w" in [A-Za-z]:*) _w="${_w#?:}" ;; esac
+    _w="${_w//\\//}"
+    printf '%s\n' "$_p/drive_c$_w"
+}
+
 # Bind this shell to the runtime: drop inherited Wine settings that would reach
 # the wrong build, then export what wine and its helpers read.
 #
