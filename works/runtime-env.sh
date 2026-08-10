@@ -75,6 +75,12 @@ WORKS_ABI_OLDEST=1
 #   * the ABLETON_* names in works_env_compat - one release of promised compat.
 #   * the shibco URLs in works_manifest_url - replaced by per-app `origin` when
 #     the updater grows an app argument.
+#   * ableton_live_pids and the "Ableton Live"*.exe match - the one entry this
+#     inventory originally missed. The mechanism (scan /proc by exe and by
+#     WINEPREFIX) is already generic; what is the app's is "which of those
+#     processes holds unsaved work", and the exit is the app declaring its
+#     process signature the way its launcher declares WORKS_ABI_MIN - or
+#     deriving it from the Plug's own RegisteredApplications name.
 # Nothing else in this file should mention the application, and new mentions
 # are regressions.
 
