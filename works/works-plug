@@ -110,15 +110,17 @@ cmd_list() {
     # copy into a script, a bug report or a `cd`, and rebuilding it by hand from
     # a root and a name is where the typo comes from. What is true of a build is
     # true of a Plug.
-    printf '  %-20s %-24s %-30s %s\n' "PLUG" "TENANTS" "BOUND TO" "PATH"
+    # Tenants get lines of their own under each Plug: real product names are
+    # longer than any column, and a truncated name is worse than none.
+    printf '  %-20s %-40s %s\n' "PLUG" "BOUND TO" "PATH"
     while read -r name; do
         [ -n "$name" ] || continue
         n=$((n+1))
         mark="  "; [ "$plugs/$name" = "${sel%/}" ] && mark="* "
         path="$plugs/$name"
         case "$path" in "$HOME"/*) path="~${path#"$HOME"}" ;; esac
-        printf '%s%-20.20s %-24.24s %-30.30s %s\n' "$mark" "$name" \
-            "$(works_plug_tenants "$plugs/$name")" "$(bound_to "$name")" "$path"
+        printf '%s%-20.20s %-40.40s %s\n' "$mark" "$name" "$(bound_to "$name")" "$path"
+        works_plug_tenants "$plugs/$name" | sed 's/^/        /'
     done < <(works_plug_names)
     [ "$n" -gt 0 ] || echo "  (none)"
     # A default pointing at a Plug someone removed by hand resolves to nothing,
@@ -134,7 +136,7 @@ cmd_list() {
 # of these commands offers, the other should: a person who has learned that
 # `runtime use` asks should not find that `plug use` refuses.
 cmd_pick() {
-    local -a names=(); local name i=0 sel cur
+    local -a names=(); local name i=0 sel cur t
     [ -d "$plugs" ] || { echo "!! no Plugs to switch between" >&2; return 1; }
     sel="$(works_plug_path)"
     while read -r name; do [ -n "$name" ] && names+=("$name"); done < <(works_plug_names)
@@ -149,8 +151,9 @@ cmd_pick() {
     for name in "${names[@]}"; do
         i=$((i+1))
         cur=""; [ "$plugs/$name" = "${sel%/}" ] && cur="  (current)"
-        printf '  %2d) %-20s %-24s %s%s\n' "$i" "$name" \
-            "$(works_plug_tenants "$plugs/$name")" "$(bound_to "$name")" "$cur"
+        t="$(works_plug_tenants "$plugs/$name" | grep -c . || true)"
+        printf '  %2d) %-20s %-10s %s%s\n' "$i" "$name" \
+            "$t app(s)" "$(bound_to "$name")" "$cur"
     done
     local ans=""
     printf 'Which Plug? [1-%d, or q to cancel] ' "${#names[@]}" > /dev/tty
@@ -382,7 +385,7 @@ cmd_rm() {
 
     if [ -z "$yes" ]; then
         echo "This deletes $plugs/$want and everything installed in it" \
-             "($(works_plug_tenants "$plugs/$want" 2>/dev/null || true))."
+             "($(works_plug_tenants "$plugs/$want" 2>/dev/null | paste -sd ', ' -))."
         ask_tty "Remove it? [y/N] "
         case "$?" in
             0) ;;

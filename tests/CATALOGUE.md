@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-440 tests across 17 suites. See [README.md](README.md) for how to run
+448 tests across 18 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -23,7 +23,8 @@ for which run on a PR.
 - [tests/unit/run-header.bats](#run-header) — 12 test(s)
 - [tests/unit/manifest.bats](#manifest) — 21 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 42 test(s)
-- [tests/unit/works.bats](#works) — 12 test(s)
+- [tests/unit/works.bats](#works) — 13 test(s)
+- [tests/unit/works-app.bats](#works-app) — 7 test(s)
 - [tests/unit/promote.bats](#promote) — 11 test(s)
 - [tests/unit/works-runtime.bats](#works-runtime) — 38 test(s)
 - [tests/unit/works-plug.bats](#works-plug) — 45 test(s)
@@ -471,6 +472,30 @@ beside it — and nothing exercised the installed shape until now.
 | 10 | help is spelled three ways and they agree | `works help` is the spelling a person reaches for before they know the |
 | 11 | the long form carries the detail the short form leaves out | — |
 | 12 | help names every command it dispatches | — |
+| 13 | app is reachable through the dispatcher | — |
+
+<a id="works-app"></a>
+
+## tests/unit/works-app.bats
+
+
+works/works-app — the applications installed on this machine.
+
+The apps directory is the census, so listing is a walk and removal is a
+directory - and removal must never reach into a Plug: what an application
+installed into a prefix stays until the Plug goes.
+
+  ./tests/run.sh tests/unit/works-app.bats
+
+| # | Test | Guards |
+| --- | --- | --- |
+| 1 | list names every application with version and floor | — |
+| 2 | list says so with nothing installed | — |
+| 3 | rm removes the application and its own link, and nothing else | — |
+| 4 | rm leaves a foreign PATH command alone | a same-named command from anywhere else is not ours to delete |
+| 5 | rm refuses an unknown application and lists what is installed | — |
+| 6 | rm without a terminal refuses unless -y | with no terminal nobody consented; -y is how a script says it meant it |
+| 7 | help ends on a command, not on prose | — |
 
 <a id="promote"></a>
 
@@ -843,6 +868,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `a pinned prefix is a deliberate choice` | migrate-layout: plug: an explicit WORKS_PLUG is left alone |
 | `a release has no kind, and must not grow one` | works-update: a release is reported without a kind |
 | `a retarget under a running Live is safe and must not refuse` | works-update: a channel switch is allowed while something is running, with a note |
+| `a same-named command from anywhere else is not ours to delete` | works-app: rm leaves a foreign PATH command alone |
 | `a script calling `use` with no argument must fail, not block forever` | works-runtime: use with no argument refuses when there is no terminal |
 | `a stale exported WORKS_RUNTIME from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
 | `a switch must move the channel it names, and only that one` | works-update: switching channel leaves the other channel where it was |
@@ -977,4 +1003,5 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `uninstalling one application used to run works_remove_runtimes and take` | install-runs: uninstalling one application keeps the runtimes another still needs |
 | `which door of the installer this opens, which is not a detail. Both` | works-update: a matching checksum reaches the installer, through the update door |
 | `with no terminal nobody can answer, and the header takes the update` | run-header: with no terminal the update is taken, not the install |
+| `with no terminal nobody consented; -y is how a script says it meant it` | works-app: rm without a terminal refuses unless -y |
 | `works_manifest_write emits the key unconditionally but writes whatever` | manifest: a manifest with an empty wine field is refused |

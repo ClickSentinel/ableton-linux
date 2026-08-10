@@ -153,3 +153,9 @@ store() { a_build 2026.06.01.1+bbbbbbb; ln -sfn "2026.06.01.1+bbbbbbb" "$C/stabl
     [ "$status" -eq 0 ]
     [[ "$output" == *"works runtime"* ]]
 }
+
+@test "app is reachable through the dispatcher" {
+    run bash "$REPO/works/works" app list
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"APP"* ]]
+}

@@ -97,8 +97,8 @@ cmd_list() {
         base="$(base_of "$e")"
         path="$container/$e"
         case "$path" in "$HOME"/*) path="~${path#"$HOME"}" ;; esac
-        if [ "$container/$e" = "$live" ]; then printf '* %-32.32s %-12s %-22s %s\n' "$e" "${base:-?}" "${at:-—}" "$path"
-        else                                   printf '  %-32.32s %-12s %-22s %s\n' "$e" "${base:-?}" "${at:-—}" "$path"; fi
+        if [ "$container/$e" = "$live" ]; then printf '* %-32.32s %-12s %-22s %s\n' "$e" "${base:-?}" "${at:--}" "$path"
+        else                                   printf '  %-32.32s %-12s %-22s %s\n' "$e" "${base:-?}" "${at:--}" "$path"; fi
     done < <(sorted)
     [ "$n" -gt 0 ] || echo "No installed builds found in $container"
     local aside e

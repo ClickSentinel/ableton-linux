@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# The applications installed on this machine: list them, remove one.
+#
+# The apps directory is the census - an application exists because
+# ~/works/apps/<name>/ does, with a launcher of the same name inside - so
+# listing is a walk and removal is a directory. Nothing here touches a Plug:
+# what an application installed into a prefix stays until the Plug goes.
+set -uo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+for _l in "$here/runtime-env.sh" \
+          "$here/../works/runtime-env.sh" \
+          "$HOME/works/lib/runtime-env.sh"; do
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v works_app_names >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/works/lib" >&2; exit 1; }
+
+BIN="$HOME/.local/bin"
+
+ask_tty() {
+    local prompt="$1" ans=""
+    { : >/dev/tty; } 2>/dev/null || return 2
+    printf '%s' "$prompt" > /dev/tty
+    read -r -t 60 ans < /dev/tty || { printf '\n' > /dev/tty 2>/dev/null || true; return 1; }
+    case "$ans" in y|Y|yes|Yes|YES) return 0 ;; *) return 1 ;; esac
+}
+
+cmd_list() {
+    local n=0 name dir ver min path
+    printf '  %-24s %-30s %-4s %s\n' "APP" "VERSION" "ABI" "PATH"
+    while read -r name; do
+        [ -n "$name" ] || continue
+        n=$((n+1))
+        dir="$(works_home)/apps/$name"
+        ver="$(head -1 "$dir/VERSION" 2>/dev/null || echo '-')"
+        min="$(works_abi_field "$dir/$name" WORKS_ABI_MIN 2>/dev/null || echo 1)"
+        path="$dir"
+        case "$path" in "$HOME"/*) path="~${path#"$HOME"}" ;; esac
+        printf '  %-24.24s %-30.30s %-4s %s\n' "$name" "$ver" "$min" "$path"
+    done < <(works_app_names)
+    [ "$n" -gt 0 ] || echo "  (none)"
+}
+
+cmd_rm() {
+    local want="" yes="" dir
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -y|--yes) yes=1 ;;
+            -*)       echo "!! unknown option: $1" >&2; return 1 ;;
+            *)        [ -z "$want" ] || { echo "!! one name at a time: $1" >&2; return 1; }
+                      want="$1" ;;
+        esac
+        shift
+    done
+    [ -n "$want" ] || { echo "!! usage: works app rm <name> [-y]" >&2; return 1; }
+    dir="$(works_home)/apps/$want"
+    [ -d "$dir" ] || {
+        echo "!! no such application: $want" >&2
+        echo "   installed:" >&2; works_app_names | sed 's/^/     /' >&2
+        return 1; }
+
+    if [ -z "$yes" ]; then
+        echo "This removes the $want launcher and its files under $dir."
+        echo "Plugs and anything installed inside them are untouched."
+        ask_tty "Remove it? [y/N] "
+        case "$?" in
+            0) ;;
+            2) echo "!! no terminal to confirm on; pass -y if you mean it" >&2; return 1 ;;
+            *) echo "cancelled"; return 1 ;;
+        esac
+    fi
+
+    # Only the link this application owns: a same-named command from anywhere
+    # else is not ours to delete.
+    if [ "$(readlink "$BIN/$want" 2>/dev/null)" = "$dir/$want" ]; then
+        rm -f "$BIN/$want"
+    fi
+    rm -rf "${dir:?}"
+    echo "removed $want; Plugs and their contents are untouched"
+}
+
+short_usage() {
+    cat <<'EOF'
+usage: works app {list|rm}                 `works app help` for detail
+
+  works app list                  every installed application
+  works app rm <name> [-y]        remove one; Plugs are untouched
+EOF
+}
+
+long_usage() {
+    cat <<'EOF'
+The applications installed on this machine.
+
+  works app list                  every installed application, with version,
+                                  declared ABI floor, and path
+  works app rm <name> [-y]        remove the launcher and the application's
+                                  files under ~/works/apps; anything it
+                                  installed inside a Plug stays until the
+                                  Plug goes
+EOF
+}
+
+case "${1:-list}" in
+    list|ls)        cmd_list ;;
+    rm|remove)      shift; cmd_rm "$@" ;;
+    -h|--help|help) long_usage ;;
+    *) echo "!! unknown command: $1" >&2; short_usage >&2; exit 1 ;;
+esac

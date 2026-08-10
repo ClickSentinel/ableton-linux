@@ -32,6 +32,7 @@ usage: works <command> [options]          `works help` for what each one does
 
   works runtime {list|path|use}   the builds in the store, and which one is live
   works plug {list|new|use|rm}    the prefixes applications are installed into
+  works app {list|rm}             the applications installed on this machine
   works update [--check]          is there a newer build on this channel?
   works stop [-y]                 stop everything running from the runtime or a Plug
 EOF
@@ -48,6 +49,8 @@ Works: the runtime, the store, and the Plugs an application runs in.
   works plug new <name>           a fresh Plug, or --from a clone of another
   works plug use [name]           make one the default for new launches
   works plug rm <name> [-y]       remove a Plug and everything in it
+  works app list                  every installed application
+  works app rm <name> [-y]        remove one; Plugs are untouched
   works update [--check]          is there a newer build on this channel?
   works stop [-y]                 stop everything running from the runtime or a Plug
 EOF
@@ -57,6 +60,7 @@ cmd="${1:-}"; [ $# -gt 0 ] && shift
 case "$cmd" in
     runtime)             exec "$verbs/works-runtime" "$@" ;;
     plug)                exec "$verbs/works-plug" "$@" ;;
+    app)                 exec "$verbs/works-app" "$@" ;;
     update)              exec "$verbs/works-update" "$@" ;;
     stop)                exec "$verbs/works-runtime" stop "$@" ;;
     "")                  short_usage ;;

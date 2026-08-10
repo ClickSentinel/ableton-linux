@@ -117,6 +117,7 @@ cmd_install() {
     install -m755 "$here/works-runtime" "$HOME/works/lib/works-runtime"
     install -m755 "$here/works-update" "$HOME/works/lib/works-update"
     install -m755 "$here/works-plug" "$HOME/works/lib/works-plug"
+    install -m755 "$here/works-app" "$HOME/works/lib/works-app"
     install -m644 "$here/runtime-env.sh" "$HOME/works/lib/runtime-env.sh"
     ln -sfn "$HOME/works/bin/works" "$BIN/works"
     # Legacy PATH commands from before `works`, and app-toolkit copies from
