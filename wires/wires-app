@@ -48,16 +48,20 @@ app_rel_exe() {
 # be exact - removing software is not a place for a fuzzy match.
 payload_entry() {
     local plug="${1%/}" exe="$2" key disp icon ver loc rest
-    while IFS=$'\037' read -r key disp icon ver loc rest; do
+    while IFS="$WIRES_FS" read -r key disp icon ver loc rest; do
         [ -n "$key" ] || continue
         if [ -n "$icon" ] && [ "$(wires_win_path "$plug" "$(wires_reg_unescape "$icon")")" = "$exe" ]; then
-            printf '%s\037%s\037%s\n' "$key" "$(wires_reg_unescape "$disp")" "$(wires_reg_unescape "$rest")"
+            printf '%s%s%s%s%s\n' "$key" "$WIRES_FS" \
+                   "$(wires_reg_unescape "$disp")" "$WIRES_FS" \
+                   "$(wires_reg_unescape "$rest")"
             return 0
         fi
         if [ -n "$loc" ]; then
             local d; d="$(wires_win_path "$plug" "$(wires_reg_unescape "$loc")")"
             case "$exe" in "${d%/}"/*)
-                printf '%s\037%s\037%s\n' "$key" "$(wires_reg_unescape "$disp")" "$(wires_reg_unescape "$rest")"
+                printf '%s%s%s%s%s\n' "$key" "$WIRES_FS" \
+                   "$(wires_reg_unescape "$disp")" "$WIRES_FS" \
+                   "$(wires_reg_unescape "$rest")"
                 return 0 ;;
             esac
         fi
@@ -129,7 +133,7 @@ cmd_rm() {
             echo "!! nothing matching $want is registered in ${plug##*/}." >&2
             echo "   Plugs holding it: wires plug list" >&2
             return 1; }
-        IFS=$'\037' read -r ekey edisp ecmd <<<"$entry"
+        IFS="$WIRES_FS" read -r ekey edisp ecmd <<<"$entry"
         [ -n "$ecmd" ] || { echo "!! $edisp registered no way to uninstall itself" >&2; return 1; }
         rt="$(wires_runtime_path)"
         [ -x "$rt/bin/wine" ] || { echo "!! no runtime installed" >&2; return 1; }
@@ -155,7 +159,7 @@ cmd_rm() {
     if [ "$payload" -eq 1 ]; then
         echo "== removing $edisp from ${plug##*/} =="
         run_uninstaller "$plug" "$ecmd" "$rt" || return 1
-        if wires_plug_entries "$plug" | cut -f1 | grep -qxF "$ekey"; then
+        if wires_plug_entries "$plug" | cut -d"$WIRES_FS" -f1 | grep -qxF "$ekey"; then
             echo "!! $edisp is still registered in ${plug##*/}; its uninstaller did not" >&2
             echo "   finish. The application record is left in place." >&2
             return 1
@@ -249,6 +253,105 @@ LAUNCHER
     ln -sfn "$dir/$name" "$BIN/$name"
 }
 
+# Turn registry entries into application records. Takes the keys to consider -
+# the ones an install just added, or the ones nothing has adopted yet - and
+# returns non-zero when it adopted nothing, because both callers treat that as
+# the failure it is.
+#
+# The executable comes from DisplayIcon where that is an .exe, which is usual,
+# and otherwise from the largest .exe directly under InstallLocation, which is
+# the application far more often than not. An entry that yields neither is
+# named and skipped rather than guessed at.
+adopt_matching() {
+    local p="${1%/}" keys="$2" name="$3"
+    local key disp icon ver loc rest exe this n=0
+    while IFS="$WIRES_FS" read -r key disp icon ver loc rest; do
+        [ -n "$key" ] || continue
+        printf '%s\n' "$keys" | grep -qxF "$key" || continue
+        disp="$(wires_reg_unescape "$disp")"
+        icon="$(wires_reg_unescape "$icon")"
+        loc="$(wires_reg_unescape "$loc")"
+        exe=""
+        [ -z "$icon" ] || exe="$(wires_win_path "$p" "$icon")"
+        case "$exe" in *.[Ee][Xx][Ee]) ;; *) exe="" ;; esac
+        if [ -z "$exe" ] && [ -n "$loc" ]; then
+            exe="$(find "$(wires_win_path "$p" "$loc")" -maxdepth 1 -iname '*.exe' \
+                    -printf '%s\t%p\n' 2>/dev/null | sort -rn | head -1 | cut -f2)"
+        fi
+        [ -n "$exe" ] && [ -f "$exe" ] || {
+            echo "   skipped $disp (no executable found)" >&2; continue; }
+        this="$name"; [ -n "$this" ] || this="$(app_slug "$exe")"
+        adopt_entry "$this" "$exe" "$ver" "$p" "$disp"
+        echo "   $disp $ver  ->  $this"
+        n=$((n+1))
+    done < <(wires_plug_entries "$p")
+    [ "$n" -gt 0 ]
+}
+
+# Wire up software already sitting in a Plug. The same reading `install` does,
+# without the installing - for anything put there by hand, by an installer run
+# outside Wires, or by an install whose adoption did not finish.
+cmd_adopt() {
+    local plug="" name="" want=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --plug)   shift; plug="${1:-}" ;;
+            --plug=*) plug="${1#--plug=}" ;;
+            --name)   shift; name="${1:-}" ;;
+            --name=*) name="${1#--name=}" ;;
+            -*) echo "!! unknown option: $1" >&2; return 2 ;;
+            *)  [ -z "$want" ] || { echo "!! one at a time: $1" >&2; return 2; }
+                want="$1" ;;
+        esac
+        shift
+    done
+    local p
+    if [ -n "$plug" ]; then p="$(wires_plugs_dir)/$plug"; else p="$(wires_plug_path)"; fi
+    [ -d "$p" ] || { echo "!! no such Plug: ${plug:-$p}" >&2; return 1; }
+
+    # Everything registered that no application record already fronts. The
+    # comparison is on the executable, not the name: what an application is
+    # called in a menu and what it is called as a command are different things.
+    local known="" a rel
+    while read -r a; do
+        [ -n "$a" ] || continue
+        rel="$(app_rel_exe "$(wires_home)/apps/$a/$a")"
+        [ -z "$rel" ] || known="$known${p%/}/$rel"$'\n'
+    done < <(wires_app_names)
+
+    local key disp icon ver loc rest exe cand="" shown=0
+    while IFS="$WIRES_FS" read -r key disp icon ver loc rest; do
+        [ -n "$key" ] || continue
+        icon="$(wires_reg_unescape "$icon")"
+        exe=""; [ -z "$icon" ] || exe="$(wires_win_path "$p" "$icon")"
+        case "$exe" in *.[Ee][Xx][Ee]) ;; *) exe="" ;; esac
+        # Already fronted by a record: skip. An entry whose DisplayIcon is not
+        # an .exe stays a candidate - adopt_matching looks harder than this does.
+        if [ -n "$exe" ] && printf '%s\n' "$known" | grep -qxF "$exe"; then
+            continue
+        fi
+        # A platform runtime is not an application, and the census has always
+        # said so; this reader is raw, so the policy is applied here.
+        printf '%s\n' "$(wires_reg_unescape "$disp")" \
+            | grep -qE "$(wires_platform_runtimes)" && continue
+        if [ -n "$want" ]; then
+            case "$(wires_reg_unescape "$disp")" in *"$want"*) ;; *) continue ;; esac
+        fi
+        cand="$cand$key"$'\n'
+        shown=$((shown+1))
+    done < <(wires_plug_entries "$p")
+
+    [ "$shown" -gt 0 ] || {
+        echo "Nothing in ${p##*/} is waiting to be adopted." >&2
+        echo "   wires plug list shows what is installed where." >&2
+        return 1; }
+    echo "== adopting from ${p##*/} =="
+    adopt_matching "$p" "$cand" "$name" \
+        || { echo "!! nothing adoptable found" >&2; return 1; }
+    echo
+    echo "OK. Launch it by name, or see it with: wires app list"
+}
+
 # Run a Windows installer into the selected Plug and wire up whatever it left
 # behind. The running is the part Wine already does; the wiring is the part
 # that did not exist, and it is done by reading the registry the installer just
@@ -285,7 +388,7 @@ cmd_install() {
     WINEPREFIX="$p" "$rt/bin/wineserver" -w
 
     local before after
-    before="$(wires_plug_entries "$p" | cut -f1)"
+    before="$(wires_plug_entries "$p" | cut -d"$WIRES_FS" -f1)"
 
     local kind="" flags=()
     if [ "$visible" -eq 0 ]; then
@@ -313,7 +416,7 @@ cmd_install() {
     fi
     WINEPREFIX="$p" "$rt/bin/wineserver" -w
 
-    after="$(wires_plug_entries "$p" | cut -f1)"
+    after="$(wires_plug_entries "$p" | cut -d"$WIRES_FS" -f1)"
     local fresh
     fresh="$(comm -13 <(printf '%s\n' "$before" | sort -u) <(printf '%s\n' "$after" | sort -u))"
     [ -n "$fresh" ] || {
@@ -322,31 +425,8 @@ cmd_install() {
         echo "   register - name its executable with \`wires app adopt\` instead." >&2
         return 1; }
 
-    local key disp icon ver loc rest exe n=0
-    while IFS=$'\037' read -r key disp icon ver loc rest; do
-        [ -n "$key" ] || continue
-        printf '%s\n' "$fresh" | grep -qxF "$key" || continue
-        disp="$(wires_reg_unescape "$disp")"
-        icon="$(wires_reg_unescape "$icon")"
-        loc="$(wires_reg_unescape "$loc")"
-        exe=""
-        [ -z "$icon" ] || exe="$(wires_win_path "$p" "$icon")"
-        case "$exe" in *.[Ee][Xx][Ee]) ;; *) exe="" ;; esac
-        if [ -z "$exe" ] && [ -n "$loc" ]; then
-            # No usable DisplayIcon: the largest executable directly under
-            # InstallLocation is the application far more often than not.
-            exe="$(find "$(wires_win_path "$p" "$loc")" -maxdepth 1 -iname '*.exe' \
-                    -printf '%s\t%p\n' 2>/dev/null | sort -rn | head -1 | cut -f2)"
-        fi
-        [ -n "$exe" ] && [ -f "$exe" ] || {
-            echo "   skipped $disp (no executable found)" >&2; continue; }
-        local this="$name"; [ -n "$this" ] || this="$(app_slug "$exe")"
-        adopt_entry "$this" "$exe" "$ver" "$p" "$disp"
-        echo "   $disp $ver  ->  $this"
-        n=$((n+1))
-    done < <(wires_plug_entries "$p")
-
-    [ "$n" -gt 0 ] || { echo "!! nothing adoptable was installed" >&2; return 1; }
+    adopt_matching "$p" "$fresh" "$name" \
+        || { echo "!! nothing adoptable was installed" >&2; return 1; }
     echo
     echo "OK. Launch it by name, or see it with: wires app list"
 }
@@ -357,6 +437,7 @@ usage: wires app {list|rm}                 `wires app help` for detail
 
   wires app list                  every installed application
   wires app install <exe>         run a Windows installer, wire up the result
+  wires app adopt [match]         wire up software already in a Plug
   wires app rm <name> [-y]        remove one; Plugs are untouched
   wires app rm <name> --payload   ...and uninstall it from the Plug too
 EOF
@@ -383,6 +464,7 @@ EOF
 case "${1:-list}" in
     list|ls)        cmd_list ;;
     install|add)    shift; cmd_install "$@" ;;
+    adopt)          shift; cmd_adopt "$@" ;;
     rm|remove)      shift; cmd_rm "$@" ;;
     -h|--help|help) long_usage ;;
     *) echo "!! unknown command: $1" >&2; short_usage >&2; exit 1 ;;

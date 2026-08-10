@@ -557,7 +557,7 @@ wires_plug_tenants() {
                 END { if (dn != "" && sc == 0) print dn }
             ' "$_p/$_f" 2>/dev/null
         done
-    } | grep -vE '^(Wine Mono|Microsoft Visual C\+\+|Microsoft Edge WebView2|Microsoft \.NET)'       | sort -u
+    } | grep -vE "$(wires_platform_runtimes)" | sort -u
 }
 
 # The Uninstall index as records, not just names. wires_plug_tenants answers
@@ -580,6 +580,25 @@ wires_plug_tenants() {
 # Values stay as the registry spells them - doubled backslashes and all -
 # because unescaping is the caller's business and doing it in awk is how a
 # quote in a product name becomes a parse error.
+# The separator wires_plug_entries puts between fields, named so a consumer
+# cannot quietly keep assuming the last one. The awk below writes it as 31
+# because awk has no $'' quoting; the two are the same character and have to
+# stay that way.
+WIRES_FS=$'\037'
+
+# The support packages Windows itself lists in Apps & Features and nobody
+# thinks of as applications. One expression, because two readers that disagree
+# about this produce a census that says one thing and an adoption that does
+# another - which is exactly what happened: `adopt` inherited none of the
+# filtering `tenants` had, and made application records for a WebView2 runtime
+# and a Visual C++ redistributable.
+#
+# Platform knowledge, not tenant knowledge: these are the runtime's own support
+# payloads and no application is named here.
+wires_platform_runtimes() {
+    printf '%s\n' '^(Wine Mono|Microsoft Visual C\+\+|Microsoft Edge WebView2|Microsoft \.NET|Microsoft Windows Desktop Runtime|vcredist)'
+}
+
 wires_plug_entries() {
     local _p="${1:-}"; [ -n "$_p" ] || _p="$(wires_plug_path)"
     _p="${_p%/}"
