@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-462 tests across 18 suites. See [README.md](README.md) for how to run
+464 tests across 18 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -19,7 +19,7 @@ for which run on a PR.
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/install-runs.bats](#install-runs) — 29 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 31 test(s)
 - [tests/unit/run-header.bats](#run-header) — 12 test(s)
 - [tests/unit/manifest.bats](#manifest) — 23 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 42 test(s)
@@ -308,6 +308,8 @@ tree ships.
 | 27 | the verb honours a pinned WIRES_RUNTIME with a dated rollback | — |
 | 28 | an older implementation at the same ABI does not replace a newer one | found in review. The ABI answers compatibility, not recency - two kits |
 | 29 | a higher installed ABI is kept even against a newer implementation | the interface must never go backward even when the kit is newer by |
+| 30 | an empty desktop entry is replaced, not mistaken for a hand-made one | found on the fedora rig. The preserve rule asked only whether a file |
+| 31 | a hand-made desktop entry is still preserved | the other half of the same rule - the protection it exists for must |
 
 <a id="run-header"></a>
 
@@ -917,6 +919,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `found in review. install.sh hands this to `wineserver -k` *before*` | runtime-env: live prefix: names the legacy path while the destination is absent |
 | `found in review. wires-update guards its Wine-base refusal on the field` | manifest: a manifest with no wine field is refused |
 | `found on a VM after a fix that did not work. The architecture is` | runtime-env: a 32-bit prefix declared only in user.reg is not mistaken for unfinished |
+| `found on the fedora rig. The preserve rule asked only whether a file` | install-runs: an empty desktop entry is replaced, not mistaken for a hand-made one |
 | `install.sh aborting on its own first lines, which no resolver test can` | install-runs: install.sh gets past its own initialisation |
 | `install.sh writes the channel file, so "removed everything install.sh` | install-runs: uninstalling takes the recorded channel back |
 | `issue #106` | repo-hygiene: desktop entries validate after substitution |
@@ -989,6 +992,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the marker says an application has been installed here. It does NOT say` | run-header: a runtime with no prefix takes the full install, not the update |
 | `the old guard compared two runtimes and applied the answer to a machine` | wires-update: with no Plug, a base change from the store is not obstructed |
 | `the other direction of the same promise` | install-runs: a kit below the installed OLDEST is refused whole |
+| `the other half of the same rule - the protection it exists for must` | install-runs: a hand-made desktop entry is still preserved |
 | `the path is what people copy into a script or a bug report, and it is` | wires-plug: list shows each Plug's path, abbreviated under home |
 | `the path is what people copy into a script, a bug report or a `cd`,` | wires-runtime: list shows each build's path, abbreviated under home |
 | `the plural is what fingers type after `wires app list` teaches the` | wires: the plural nouns alias to the singular |

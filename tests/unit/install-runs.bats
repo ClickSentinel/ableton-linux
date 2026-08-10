@@ -493,3 +493,35 @@ setup() {
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     grep -q 'SENTINEL-HIGHER-ABI' "$HOME/wires/lib/runtime-env.sh"
 }
+
+# guards: found on the fedora rig. The preserve rule asked only whether a file
+# existed and did not route through the launcher, so a zero-byte entry left by
+# an interrupted install satisfied it - and was preserved across every later
+# install, leaving that machine with a desktop entry that launches nothing. An
+# entry nobody wrote is not an entry to protect.
+@test "an empty desktop entry is replaced, not mistaken for a hand-made one" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
+    : > "$HOME/.local/share/applications/ableton-live.desktop"
+
+    run env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [[ "$output" != *"preserving existing"*"ableton-live.desktop"* ]] \
+        || { echo "an empty entry was treated as hand-made" >&2; false; }
+    grep -qF "$HOME/.local/bin/ableton-live" \
+        "$HOME/.local/share/applications/ableton-live.desktop"
+}
+
+# guards: the other half of the same rule - the protection it exists for must
+# survive the fix. A real entry pointing somewhere else is someone's choice.
+@test "a hand-made desktop entry is still preserved" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
+    printf '[Desktop Entry]\nType=Application\nName=Mine\nExec=/usr/bin/true\n' \
+        > "$HOME/.local/share/applications/ableton-live.desktop"
+
+    run env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [[ "$output" == *"preserving existing"*"ableton-live.desktop"* ]]
+    grep -qF 'Exec=/usr/bin/true' "$HOME/.local/share/applications/ableton-live.desktop"
+}

@@ -255,10 +255,24 @@ if [ -n "$newest" ]; then
         live_icon="live-$edition"
     fi
 fi
+# Does this entry belong to someone else? Only a file that is actually a
+# desktop entry - non-empty, with an Exec line - and whose Exec does not route
+# through our launcher.
+hand_made_desktop() {
+    [ -s "$1" ] || return 1
+    grep -q '^Exec=' "$1" || return 1
+    ! grep -qF "$2" "$1"
+}
+
 # The visible launcher entry: an entry whose Exec does not route through the
 # launcher is treated as hand-made and preserved; ours is refreshed so the
 # name, icon and WM class track the installed edition.
-if [ -e "$APPS/ableton-live.desktop" ] && ! grep -qF "$BIN/ableton-live" "$APPS/ableton-live.desktop"; then
+#
+# Hand-made means it has an Exec line. Testing existence alone preserved an
+# empty file forever, so a truncated entry left by an interrupted install kept
+# every later install from writing a working one (found on the fedora rig,
+# zero bytes, preserved across four installs).
+if hand_made_desktop "$APPS/ableton-live.desktop" "$BIN/ableton-live"; then
     echo "   preserving existing $APPS/ableton-live.desktop (it does not route through the launcher)"
 else
     sed -e "s#@HOME@#$HOME#g" -e "s#@NAME@#$live_name#g" \
@@ -322,7 +336,7 @@ max_unix="$live_prefix/drive_c/Program Files/Cycling '74/Max 9/Max.exe"
 if [ -f "$max_unix" ]; then
     echo "== install the Max 9 launcher =="
     install -m755 "$here/max9" "$BIN/max9"
-    if [ -e "$APPS/max9.desktop" ] && ! grep -qF "$BIN/max9" "$APPS/max9.desktop"; then
+    if hand_made_desktop "$APPS/max9.desktop" "$BIN/max9"; then
         echo "   preserving existing $APPS/max9.desktop (it does not route through the launcher)"
     else
         sed "s#@HOME@#$HOME#g" "$root/desktop/max9.desktop.in" > "$APPS/max9.desktop"
