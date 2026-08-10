@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-452 tests across 18 suites. See [README.md](README.md) for how to run
+459 tests across 18 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -21,12 +21,12 @@ for which run on a PR.
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/install-runs.bats](#install-runs) — 27 test(s)
 - [tests/unit/run-header.bats](#run-header) — 12 test(s)
-- [tests/unit/manifest.bats](#manifest) — 21 test(s)
+- [tests/unit/manifest.bats](#manifest) — 23 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 42 test(s)
 - [tests/unit/works.bats](#works) — 14 test(s)
 - [tests/unit/works-app.bats](#works-app) — 7 test(s)
 - [tests/unit/promote.bats](#promote) — 11 test(s)
-- [tests/unit/works-runtime.bats](#works-runtime) — 38 test(s)
+- [tests/unit/works-runtime.bats](#works-runtime) — 43 test(s)
 - [tests/unit/works-plug.bats](#works-plug) — 45 test(s)
 - [tests/unit/works-update.bats](#works-update) — 37 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 75 test(s)
@@ -382,6 +382,8 @@ round-trip them: a manifest this repo writes must be one this repo accepts.
 | 19 | a BUILD-INFO with no source-commit produces a manifest that is refused | this is the exact shape that made the first stable manifest invalid |
 | 20 | no channel resolves to a fork | a fork is where nightlies are tested, and the shipped default pointing |
 | 21 | stable resolves through latest, nightly through its own tag | /releases/latest/ excludes prereleases, which is what keeps the nightly |
+| 22 | the writer carries the runtime tarball when one is given | runtime-only installs read these two fields and refuse without them, |
+| 23 | the writer omits the runtime fields when none is given | — |
 
 <a id="migrate-layout"></a>
 
@@ -583,6 +585,11 @@ resolve through it instead of naming a directory.
 | 36 | a newer build of the same base switches without a question | — |
 | 37 | rollback within the base is noted, never called a DOWNGRADE | — |
 | 38 | a rollback whose booting runtime is gone stays a refusal | the label comparison needs the runtime that booted the Plug, and that |
+| 39 | install with no tarball takes the channel's current build | — |
+| 40 | install says so and stops when the build is already here | the comparison happens before the stop, so an up-to-date machine is |
+| 41 | a manifest without runtime fields is refused, pointing at works update | manifests published before runtime-only installs name no tarball, and |
+| 42 | a checksum mismatch refuses before anything is staged | — |
+| 43 | a named tarball skips the web entirely | a named tarball is a deliberate local act - CI, a bisect, an offline |
 
 <a id="works-plug"></a>
 
@@ -869,6 +876,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `a half-read manifest cannot answer "is this newer" or "does this` | works-update: an incomplete manifest is refused |
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
 | `a label is a suffix on the release form, not a licence to accept any` | runtime-env: tarball predicate: a labelled debug tree is still refused |
+| `a named tarball is a deliberate local act - CI, a bisect, an offline` | works-runtime: a named tarball skips the web entirely |
 | `a pinned prefix is a deliberate choice` | migrate-layout: plug: an explicit WORKS_PLUG is left alone |
 | `a release has no kind, and must not grow one` | works-update: a release is reported without a kind |
 | `a retarget under a running Live is safe and must not refuse` | works-update: a channel switch is allowed while something is running, with a note |
@@ -914,6 +922,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `licence GPLv2+` | packaging: the kit ships the GPL source and licence Ableton Link requires |
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
 | `make-installer accepted WORKS_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
+| `manifests published before runtime-only installs name no tarball, and` | works-runtime: a manifest without runtime fields is refused, pointing at works update |
 | `measured on real prefixes - the two indexes are disjoint. An NSIS` | works-plug: an application in Uninstall alone is a tenant |
 | `moving a release must not strand the installer it names` | manifest: the installer URL is resolved beside the manifest |
 | `names tie across every nightly between two releases, so ordering on` | migrate-layout: retention orders by built-at, not by the name |
@@ -931,6 +940,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `renaming a prefix out from under a live wineserver corrupts its` | migrate-layout: plug: a prefix something is running from is not moved |
 | `replacing the tree under a running Live is how a session is lost` | works-update: it refuses while something is running from the runtime |
 | `reporting the channel's bare version against the installed id put a` | works-update: both sides of the report are ids, not one id and one version |
+| `runtime-only installs read these two fields and refuse without them,` | manifest: the writer carries the runtime tarball when one is given |
 | `same measurement as works-runtime's same-base tests - by stamp alone` | works-update: a same-base newer build in the store retargets without consent |
 | `scoping` | runtime-env: runtime pids: a process from another Wine install is ignored |
 | `scripts/ableton-live` | launcher-cli: a stale wineserver is killed and the session booted before registry writes<br>launcher: windowmetrics: a value wrapped across continuation lines is rejoined |
@@ -955,6 +965,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the channel is what the launcher resolves through` | works-runtime: use refuses a name that is not installed |
 | `the check must not fire on the infrastructure everyone actually has` | launcher-cli: a launcher runs under a library that predates the contract |
 | `the checksum is the only thing making the manifest's URL trustworthy` | works-update: a checksum mismatch stops the install |
+| `the comparison happens before the stop, so an up-to-date machine is` | works-runtime: install says so and stops when the build is already here |
 | `the container sees only what build.sh passes with -e, and an unset` | repo-hygiene: build.sh forwards every variable container-build.sh reads from its environment |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |

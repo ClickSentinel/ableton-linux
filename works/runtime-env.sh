@@ -1254,19 +1254,26 @@ works_tarball_buildinfo() {
 # Write one. Called by the publish step; kept here so the writer and the reader
 # cannot drift apart.
 works_manifest_write() {
-    local _channel="$1" _info="$2" _installer="$3" _sha="$4" _k
+    local _channel="$1" _info="$2" _installer="$3" _sha="$4" _runtime="${5:-}" _runtime_sha="${6:-}" _k
     [ -r "$_info" ] || { echo "!! no BUILD-INFO at $_info" >&2; return 1; }
-    printf 'channel:       %s\n' "$_channel"
-    printf 'dist-version:  %s\n' "$(works_buildinfo_field "$_info" dist-version)"
-    printf 'installer:     %s\n' "$_installer"
-    printf 'sha256:        %s\n' "$_sha"
-    printf 'source-commit: %s\n' "$(works_buildinfo_field "$_info" source-commit)"
-    printf 'built-at:      %s\n' "$(works_buildinfo_field "$_info" built-at)"
+    printf 'channel:        %s\n' "$_channel"
+    printf 'dist-version:   %s\n' "$(works_buildinfo_field "$_info" dist-version)"
+    printf 'installer:      %s\n' "$_installer"
+    printf 'sha256:         %s\n' "$_sha"
+    # Optional: the runtime tarball published beside the installer, for
+    # runtime-only installs. Absent from older manifests, and the consumer
+    # says so rather than guessing at asset names.
+    if [ -n "$_runtime" ]; then
+        printf 'runtime:        %s\n' "$_runtime"
+        printf 'runtime-sha256: %s\n' "$_runtime_sha"
+    fi
+    printf 'source-commit:  %s\n' "$(works_buildinfo_field "$_info" source-commit)"
+    printf 'built-at:       %s\n' "$(works_buildinfo_field "$_info" built-at)"
     # Optional, and absent for a release. Carried so the updater can report the
     # id a build will land under rather than only its version.
     _k="$(works_buildinfo_field "$_info" build-kind)"
-    [ -z "$_k" ] || printf 'build-kind:    %s\n' "$_k"
-    printf 'wine:          %s\n' "$(works_buildinfo_field "$_info" wine)"
+    [ -z "$_k" ] || printf 'build-kind:     %s\n' "$_k"
+    printf 'wine:           %s\n' "$(works_buildinfo_field "$_info" wine)"
 }
 
 # Is a manifest usable? Refuses rather than half-applying: a field missing here

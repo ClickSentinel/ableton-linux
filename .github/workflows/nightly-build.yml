@@ -217,6 +217,16 @@ jobs:
           tarball="dist/wine-d2d1-nspa-11.13-${LABEL}.tar.zst"
           cp "$built" "$tarball"
           ( cd dist && sha256sum "$(basename "$tarball")" > "$(basename "$tarball").sha256" )
+          # The runtime fields must match the labeled tarball published beside
+          # the installer, or runtime-only installs refuse every build here.
+          want_rt="$(awk '$1 == "runtime-sha256:" {print $2}' dist/manifest.txt)"
+          got_rt="$(sha256sum "$tarball" | cut -d' ' -f1)"
+          [ "$want_rt" = "$got_rt" ] || {
+              echo "!! manifest runtime-sha256 does not match the published tarball" >&2
+              exit 1; }
+          grep -q "^runtime: *$(basename "$tarball")$" dist/manifest.txt || {
+              echo "!! the manifest does not name the published runtime tarball" >&2
+              cat dist/manifest.txt >&2; exit 1; }
 
           {
               echo "Automated build of \`main\` — **not a release.** Expect breakage."

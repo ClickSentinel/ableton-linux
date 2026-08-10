@@ -289,7 +289,7 @@ cmd_use() {
 cmd_install() {
     (
     set -e
-    local tarball="" chan=stable validate="" 
+    local tarball="" chan="" validate=""
     while [ $# -gt 0 ]; do
         case "$1" in
             --channel)   shift; chan="${1:-}" ;;
@@ -302,13 +302,62 @@ cmd_install() {
         esac
         shift
     done
-    [ -n "$tarball" ] && [ -f "$tarball" ] || {
-        echo "!! usage: works runtime install <tarball> [--channel c] [--validate cmd]" >&2; exit 2; }
-    case "$chan" in stable|nightly) ;; *) echo "!! not a channel: $chan" >&2; exit 2 ;; esac
+    if [ -n "$tarball" ] && [ ! -f "$tarball" ]; then
+        echo "!! no such tarball: $tarball" >&2; exit 2
+    fi
+    case "$chan" in stable|nightly|"") ;; *) echo "!! not a channel: $chan" >&2; exit 2 ;; esac
     [ -z "$validate" ] || [ -x "$validate" ] || {
         echo "!! --validate is not an executable: $validate" >&2; exit 2; }
 
-    local NAME WINE_ROOT WINE_ROOT_DIR STORE stamp stage backup replaced replaced_orig promoted migrated
+    local NAME WINE_ROOT WINE_ROOT_DIR STORE stamp stage backup replaced replaced_orig promoted migrated dltmp
+    dltmp=""
+
+    # No tarball names the web: the followed channel's manifest says what is
+    # current, and the download happens here - before anything is stopped or
+    # moved, so a machine is never disturbed for a build that is not there,
+    # is already installed, or does not verify.
+    if [ -z "$tarball" ]; then
+        [ -n "$chan" ] || chan="$(works_channel)"
+        local url want_commit have_commit rtname rtsha got
+        url="$(works_manifest_url "$chan")" || { echo "!! no manifest URL for $chan" >&2; exit 1; }
+        dltmp="$(mktemp -d)"
+        echo "== channel: $chan =="
+        echo "   $url"
+        curl -fsSL --retry 2 --max-time 60 -o "$dltmp/manifest.txt" "$url" || {
+            echo "!! could not fetch the manifest. Offline, or the channel has published nothing yet." >&2
+            rm -rf "$dltmp"; exit 1; }
+        works_manifest_valid "$dltmp/manifest.txt" || {
+            echo "!! the manifest is incomplete; refusing to act on it" >&2
+            rm -rf "$dltmp"; exit 1; }
+        rtname="$(works_buildinfo_field "$dltmp/manifest.txt" runtime)"
+        rtsha="$(works_buildinfo_field "$dltmp/manifest.txt" runtime-sha256)"
+        if [ -z "$rtname" ] || [ -z "$rtsha" ]; then
+            echo "!! this channel's manifest predates runtime-only installs." >&2
+            echo "   Use \`works update\` for the full installer, or pass a tarball." >&2
+            rm -rf "$dltmp"; exit 1
+        fi
+        case "$rtname" in */*|*..*) echo "!! the manifest names an unusable runtime path" >&2; rm -rf "$dltmp"; exit 1 ;; esac
+        want_commit="$(works_buildinfo_field "$dltmp/manifest.txt" source-commit)"
+        have_commit="$(works_buildinfo_field "$(works_runtime_path)/ABLETON-WINE-BUILD-INFO.txt" source-commit 2>/dev/null || true)"
+        if [ -n "$want_commit" ] && [ "$want_commit" = "$have_commit" ]; then
+            echo "You already have this build."
+            rm -rf "$dltmp"; exit 0
+        fi
+        echo "== downloading $rtname =="
+        local progress="-sS"; [ -t 2 ] && progress="--progress-bar"
+        curl -fL --retry 2 $progress -o "$dltmp/$rtname" \
+            "$(works_manifest_installer_url "$url" "$rtname")" || {
+            echo "!! download failed" >&2; rm -rf "$dltmp"; exit 1; }
+        got="$(sha256sum "$dltmp/$rtname" | cut -d' ' -f1)"
+        [ "$got" = "$rtsha" ] || {
+            echo "!! checksum mismatch - refusing to install" >&2
+            echo "   expected $rtsha" >&2
+            echo "   got      $got" >&2
+            rm -rf "$dltmp"; exit 1; }
+        echo "   ok"
+        tarball="$dltmp/$rtname"
+    fi
+    [ -n "$chan" ] || chan=stable
     NAME="$(works_runtime_name)"
     WINE_ROOT="$(works_runtime_path)"
     WINE_ROOT_DIR="$(dirname "$WINE_ROOT")"
@@ -348,6 +397,7 @@ cmd_install() {
             fi
         fi
         [ -z "$stage" ] || rm -rf "$stage"
+        [ -z "$dltmp" ] || rm -rf "$dltmp"
         exit "$rc"
     }
     trap cleanup EXIT
@@ -573,7 +623,7 @@ usage: works runtime {list|path|use|install|stop}   `works runtime help` for det
   works runtime list              every installed build, newest first
   works runtime path              the runtime root, for scripts and docs
   works runtime use [id]          switch the channel to another build
-  works runtime install <tarball> install a build into the store
+  works runtime install [tarball] this channel's current build, or a local one
   works runtime stop [-y]         stop everything running from the runtime or a Plug
 EOF
 }
@@ -588,8 +638,10 @@ Which build of the runtime is in use, and switching between them.
   works runtime use <id>          point the channel at a different build
   works runtime use --previous    the last build that is not the current one
   works runtime use <id> --force  accept a Wine base change unattended
-  works runtime install <tarball> [--channel c] [--validate cmd]
-                                  stop, migrate, stage, guard, promote, prune;
+  works runtime install [tarball] [--channel c] [--validate cmd]
+                                  no tarball: fetch the channel's manifest,
+                                  compare, download and verify, then install;
+                                  a tarball skips the web entirely.
                                   --validate runs against the staged tree
   works runtime stop [-y]         stop everything running from the runtime or a Plug
 EOF

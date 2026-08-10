@@ -202,9 +202,14 @@ chmod +x "$out"
 # updater compares against. See works_tarball_buildinfo.
 info="$stage/runtime-BUILD-INFO.txt"
 if works_tarball_buildinfo "$tarball" > "$info" && [ -s "$info" ]; then
+    # The runtime asset is published under the label's name (the workflow copies
+    # the built tarball to it), so the manifest names that, with the identical
+    # content's checksum - runtime-only installs verify against these fields.
     works_manifest_write "${WORKS_CHANNEL_PUBLISH:-stable}" "$info" \
         "${WORKS_PUBLISH_AS:-$(basename "$out")}" \
-        "$(awk '{print $1}' "$out.sha256")" > dist/manifest.txt
+        "$(awk '{print $1}' "$out.sha256")" \
+        "${NAME}-${LABEL}.tar.zst" \
+        "$(sha256sum "$tarball" | cut -d' ' -f1)" > dist/manifest.txt
     works_manifest_valid dist/manifest.txt || {
         echo "!! the manifest this build would publish is incomplete:" >&2
         sed 's/^/   /' dist/manifest.txt >&2
