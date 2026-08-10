@@ -14,7 +14,7 @@ cd "$(dirname "$0")"
 
 SRC=$HOME/.wine-regression-prefix-test
 LEGACY=$HOME/.wine-ableton
-PLUG=$HOME/works/plugs/studio
+PLUG=$HOME/wires/plugs/studio
 NEW=$(ls -1 ableton-wine-setup-*.run | head -1)
 
 restore() {
@@ -27,7 +27,7 @@ trap restore EXIT
 
 echo "== [1/5] put the real Live prefix at the legacy path =="
 pkill -f 'Ableton Live' 2>/dev/null; sleep 2
-rm -rf "$HOME/works" "$HOME/.local/opt/wine-d2d1-nspa-"* 2>/dev/null
+rm -rf "$HOME/wires" "$HOME/.local/opt/wine-d2d1-nspa-"* 2>/dev/null
 [ -d "$SRC" ] || { echo "!! no regression prefix at $SRC"; exit 1; }
 [ -e "$LEGACY" ] && rm -rf "$LEGACY"
 mv "$SRC" "$LEGACY"

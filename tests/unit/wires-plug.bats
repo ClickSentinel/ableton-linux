@@ -1,30 +1,30 @@
 #!/usr/bin/env bats
 #
-# works/works-plug — the prefixes applications are installed into.
+# wires/wires-plug — the prefixes applications are installed into.
 #
 # A Plug is a directory and one symlink: the name is the directory's name, the
-# tenants are whatever is in drive_c, and `.works-runtime` is the only recorded
+# tenants are whatever is in drive_c, and `.wires-runtime` is the only recorded
 # state. So most of this is about the filesystem being the list — that a Plug
 # nobody made is not offered, that a binding survives being walked, and that the
 # destructive verbs refuse before they act rather than after.
 #
-#   ./tests/run.sh tests/unit/works-plug.bats
+#   ./tests/run.sh tests/unit/wires-plug.bats
 
 bats_require_minimum_version 1.5.0
 
 load ../helpers/common
 
-PLUG() { bash "$REPO/works/works-plug" "$@"; }
+PLUG() { bash "$REPO/wires/wires-plug" "$@"; }
 
 setup() {
     HOME="$BATS_TEST_TMPDIR/home"
     export HOME
-    export WORKS_HOME="$BATS_TEST_TMPDIR/opt"
-    unset WORKS_RUNTIME WORKS_PLUG WORKS_CHANNEL
-    mkdir -p "$HOME" "$WORKS_HOME"
-    . "$REPO/works/runtime-env.sh"
-    C="$(works_runtime_store)"
-    P="$(works_plugs_dir)"
+    export WIRES_HOME="$BATS_TEST_TMPDIR/opt"
+    unset WIRES_RUNTIME WIRES_PLUG WIRES_CHANNEL
+    mkdir -p "$HOME" "$WIRES_HOME"
+    . "$REPO/wires/runtime-env.sh"
+    C="$(wires_runtime_store)"
+    P="$(wires_plugs_dir)"
 }
 
 a_build() {   # name, commit, built-at
@@ -52,7 +52,7 @@ store() {
 
 # Register an application the way its Windows installer would: a value under
 # HKLM\Software\RegisteredApplications naming it, which is the index the Default
-# Programs schema defines and what works_plug_tenants reads. Written in Wine's
+# Programs schema defines and what wires_plug_tenants reads. Written in Wine's
 # own .reg syntax, so the fixture and the field agree about the format.
 a_registered() {   # plug, display name
     local reg="$P/$1/system.reg"
@@ -113,7 +113,7 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
 @test "an application in Uninstall alone is a tenant" {
     store; a_plug studio 12
     a_uninstalled studio "Notepad++ (64-bit x64)"
-    run bash -c '. "$0"; works_plug_tenants "$1"' "$REPO/works/runtime-env.sh" "$P/studio"
+    run bash -c '. "$0"; wires_plug_tenants "$1"' "$REPO/wires/runtime-env.sh" "$P/studio"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Notepad++"* ]]
 }
@@ -129,7 +129,7 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
     a_uninstalled studio "Microsoft Visual C++ 2022 X64 Minimum Runtime - 14.44"
     a_uninstalled studio "Wine Mono Runtime"
     a_uninstalled studio "Microsoft Edge WebView2 Runtime"
-    run bash -c '. "$0"; works_plug_tenants "$1"' "$REPO/works/runtime-env.sh" "$P/studio"
+    run bash -c '. "$0"; wires_plug_tenants "$1"' "$REPO/wires/runtime-env.sh" "$P/studio"
     [ "$status" -eq 0 ]
     [ -z "$output" ] || { echo "listed as tenants: $output" >&2; false; }
 }
@@ -138,7 +138,7 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
     store; a_plug studio 12
     a_registered studio "Ableton Live 12 Suite"
     a_uninstalled studio "Notepad++ (64-bit x64)"
-    run bash -c '. "$0"; works_plug_tenants "$1"' "$REPO/works/runtime-env.sh" "$P/studio"
+    run bash -c '. "$0"; wires_plug_tenants "$1"' "$REPO/wires/runtime-env.sh" "$P/studio"
     [[ "$output" == *"Ableton Live 12 Suite"* ]]
     [[ "$output" == *"Notepad++"* ]]
 }
@@ -152,7 +152,7 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
     store; a_plug studio 12
     a_registered studio "Ableton Live 12 Suite"
     a_registered studio "Max 9"
-    run bash -c '. "$0"; works_plug_tenants "$1"' "$REPO/works/runtime-env.sh" "$P/studio"
+    run bash -c '. "$0"; wires_plug_tenants "$1"' "$REPO/wires/runtime-env.sh" "$P/studio"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Ableton Live 12 Suite"* ]]
     [[ "$output" == *"Max 9"* ]]
@@ -172,11 +172,11 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
 
 # guards: a Plug bound to the channel link and a Plug pinned to a build resolve
 # to the same directory today, and reporting them identically hides the one
-# difference that matters -- whether `works runtime use` will move it
+# difference that matters -- whether `wires runtime use` will move it
 @test "list separates following a channel from being pinned to a build" {
     store; a_plug follow 12; a_plug pinned 12
-    ln -sfn ../../runtimes/stable "$P/follow/.works-runtime"
-    ln -sfn ../../runtimes/2026.06.01.1+bbbbbbb "$P/pinned/.works-runtime"
+    ln -sfn ../../runtimes/stable "$P/follow/.wires-runtime"
+    ln -sfn ../../runtimes/2026.06.01.1+bbbbbbb "$P/pinned/.wires-runtime"
     run PLUG list
     [[ "$output" == *"2026.06.01.1+bbbbbbb (stable)"* ]]
     [[ "$output" == *"2026.06.01.1+bbbbbbb (pinned)"* ]]
@@ -223,7 +223,7 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
     run PLUG use work
     [ "$status" -eq 0 ]
     [ "$(readlink "$P/default")" = "work" ]
-    [ "$(works_plug_path)" = "$P/work" ]
+    [ "$(wires_plug_path)" = "$P/work" ]
 }
 
 # guards: the path is what people copy into a script or a bug report, and it is
@@ -235,25 +235,25 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
     [ "$status" -eq 0 ]
     [[ "$output" == *"PATH"* ]]
     [[ "$output" == *"/plugs/studio"* ]]
-    [[ "$output" != *"$HOME/works"* ]] || { echo "home was not abbreviated" >&2; false; }
+    [[ "$output" != *"$HOME/wires"* ]] || { echo "home was not abbreviated" >&2; false; }
 }
 
-# guards: `works runtime use` with no argument offers a numbered list, so this
+# guards: `wires runtime use` with no argument offers a numbered list, so this
 # must too. Anything one of them offers the other should — a person who learned
 # the behaviour on one should not find the other refuses.
 @test "use with no argument refuses when there is no terminal, naming the Plugs" {
     store; a_plug studio 12; a_plug work 12
-    run setsid bash "$REPO/works/works-plug" use
+    run setsid bash "$REPO/wires/wires-plug" use
     [ "$status" -ne 0 ]
     [[ "$output" == *"no terminal"* ]]
-    [[ "$output" == *"works plug use studio"* ]]
-    [[ "$output" == *"works plug use work"* ]]
+    [[ "$output" == *"wires plug use studio"* ]]
+    [[ "$output" == *"wires plug use work"* ]]
 }
 
 @test "use with no argument leaves the default alone" {
     store; a_plug studio 12; a_plug work 12
     PLUG use work
-    setsid bash "$REPO/works/works-plug" use || true
+    setsid bash "$REPO/wires/wires-plug" use || true
     [ "$(readlink "$P/default")" = "work" ]
 }
 
@@ -292,7 +292,7 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
     run PLUG new fresh
     [ "$status" -eq 0 ]
     [ -d "$P/fresh" ]
-    [ "$(readlink "$P/fresh/.works-runtime")" = "../../runtimes/stable" ]
+    [ "$(readlink "$P/fresh/.wires-runtime")" = "../../runtimes/stable" ]
 }
 
 # guards: a Plug with no prefix in it yet still has to appear, or `new` produces
@@ -315,7 +315,7 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
     store
     run PLUG new held --runtime 2026.06.01.1+bbbbbbb
     [ "$status" -eq 0 ]
-    [ "$(readlink "$P/held/.works-runtime")" = "../../runtimes/2026.06.01.1+bbbbbbb" ]
+    [ "$(readlink "$P/held/.wires-runtime")" = "../../runtimes/2026.06.01.1+bbbbbbb" ]
 }
 
 @test "new --runtime refuses a build that is not in the store" {
@@ -349,9 +349,9 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
 
 @test "a clone inherits the binding the source had" {
     store; a_plug studio 12
-    ln -sfn ../../runtimes/2026.06.01.1+bbbbbbb "$P/studio/.works-runtime"
+    ln -sfn ../../runtimes/2026.06.01.1+bbbbbbb "$P/studio/.wires-runtime"
     PLUG new work --from studio
-    [ "$(readlink "$P/work/.works-runtime")" = "../../runtimes/2026.06.01.1+bbbbbbb" ]
+    [ "$(readlink "$P/work/.wires-runtime")" = "../../runtimes/2026.06.01.1+bbbbbbb" ]
 }
 
 @test "new --from refuses a source that is not a Plug" {
@@ -422,7 +422,7 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
     run PLUG rm work -y
     [ "$status" -ne 0 ]
     [[ "$output" == *"is the default Plug"* ]]
-    [[ "$output" == *"works plug use studio"* ]]
+    [[ "$output" == *"wires plug use studio"* ]]
     [ -e "$P/work" ]
 }
 
@@ -441,7 +441,7 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
 # content, so it must not proceed where nobody can answer for it
 @test "rm without -y and with no terminal refuses rather than assuming" {
     store; a_plug studio 12; a_plug work 12
-    run setsid bash "$REPO/works/works-plug" rm work
+    run setsid bash "$REPO/wires/wires-plug" rm work
     [ "$status" -ne 0 ]
     [[ "$output" == *"pass -y"* ]]
     [ -e "$P/work" ]
@@ -458,30 +458,30 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
 
 # guards: two Plugs running different builds is the whole point of the binding,
 # and it is read at launch rather than by the resolver -- install.sh resolves the
-# runtime it is installing *into* through works_runtime_path, and a Plug must
+# runtime it is installing *into* through wires_runtime_path, and a Plug must
 # not move that
 @test "a Plug's binding decides the runtime a launch binds to" {
     store
     a_build 2026.01.01.1+aaaaaaa aaaaaaa 2026-01-01T00:00:00Z
     a_plug studio 12
-    ln -sfn ../../runtimes/2026.01.01.1+aaaaaaa "$P/studio/.works-runtime"
-    ( works_bind_runtime; [ "$WINE_ROOT" = "$C/2026.01.01.1+aaaaaaa" ] ) \
+    ln -sfn ../../runtimes/2026.01.01.1+aaaaaaa "$P/studio/.wires-runtime"
+    ( wires_bind_runtime; [ "$WINE_ROOT" = "$C/2026.01.01.1+aaaaaaa" ] ) \
         || { echo "bound to the channel, not the Plug" >&2; false; }
 }
 
 @test "an unbound Plug binds to whatever the channel resolves to" {
     store; a_plug studio 12
-    ( works_bind_runtime; [ "$WINE_ROOT" = "$C/2026.06.01.1+bbbbbbb" ] )
+    ( wires_bind_runtime; [ "$WINE_ROOT" = "$C/2026.06.01.1+bbbbbbb" ] )
 }
 
-# guards: the VMs and anyone bisecting a build rely on WORKS_RUNTIME being the
+# guards: the VMs and anyone bisecting a build rely on WIRES_RUNTIME being the
 # outermost say, and a Plug binding must not have quietly taken that over
-@test "WORKS_RUNTIME still overrides a Plug's binding" {
+@test "WIRES_RUNTIME still overrides a Plug's binding" {
     store
     a_build 2026.01.01.1+aaaaaaa aaaaaaa 2026-01-01T00:00:00Z
     a_plug studio 12
-    ln -sfn ../../runtimes/2026.01.01.1+aaaaaaa "$P/studio/.works-runtime"
-    ( WORKS_RUNTIME=/somewhere/else works_bind_runtime
+    ln -sfn ../../runtimes/2026.01.01.1+aaaaaaa "$P/studio/.wires-runtime"
+    ( WIRES_RUNTIME=/somewhere/else wires_bind_runtime
       [ "$WINE_ROOT" = "/somewhere/else" ] )
 }
 
@@ -493,8 +493,8 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
     store
     a_build 2026.01.01.1+aaaaaaa aaaaaaa 2026-01-01T00:00:00Z
     a_plug studio 12
-    ln -sfn ../../runtimes/2026.01.01.1+aaaaaaa "$P/studio/.works-runtime"
-    WORKS_RUNTIME_KEEP=1 works_prune_runtimes
+    ln -sfn ../../runtimes/2026.01.01.1+aaaaaaa "$P/studio/.wires-runtime"
+    WIRES_RUNTIME_KEEP=1 wires_prune_runtimes
     [ -d "$C/2026.01.01.1+aaaaaaa" ] || { echo "the bound build was pruned" >&2; false; }
 }
 
@@ -505,7 +505,7 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
     store
     a_build 2026.01.01.1+aaaaaaa aaaaaaa 2026-01-01T00:00:00Z
     a_plug studio 12
-    WORKS_RUNTIME_KEEP=1 works_prune_runtimes
+    WIRES_RUNTIME_KEEP=1 wires_prune_runtimes
     [ ! -d "$C/2026.01.01.1+aaaaaaa" ] || { echo "nothing was prunable to begin with" >&2; false; }
 }
 
@@ -515,12 +515,12 @@ a_uninstalled() {   # plug, display name, [systemcomponent]
     run PLUG --help
     [ "$status" -eq 0 ]
     last="$(printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | tail -1)"
-    [[ "$last" == "  works plug"* ]] || { echo "help trails into prose: $last" >&2; false; }
+    [[ "$last" == "  wires plug"* ]] || { echo "help trails into prose: $last" >&2; false; }
 }
 
 @test "plug is reachable through the dispatcher" {
     store; a_plug studio 12
-    run bash "$REPO/works/works" plug list
+    run bash "$REPO/wires/wires" plug list
     [ "$status" -eq 0 ]
     [[ "$output" == *"studio"* ]]
 }

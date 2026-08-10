@@ -14,15 +14,15 @@ cd "$root"
 ENGINE="${ENGINE:-podman}"
 IMAGE="${IMAGE:-ableton-wine-build:22.04}"
 # Runtime naming and tarball selection resolve in one place; see
-# works/runtime-env.sh.
+# wires/runtime-env.sh.
 for _l in "$(dirname "$0")/runtime-env.sh" \
-          "$(dirname "$0")/../works/runtime-env.sh"; do
-    # shellcheck source=works/runtime-env.sh
+          "$(dirname "$0")/../wires/runtime-env.sh"; do
+    # shellcheck source=wires/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
-command -v works_pick_tarball >/dev/null 2>&1 || {
+command -v wires_pick_tarball >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
-NAME="$(works_runtime_name)"
+NAME="$(wires_runtime_name)"
 VERSION="$(cat VERSION)"
 # What the finished installer is called, as opposed to which runtime goes in it.
 # They are the same for a release and differ for a nightly, which must not bump
@@ -30,15 +30,15 @@ VERSION="$(cat VERSION)"
 # its format and its pairing with CHANGELOG and BUILD-INFO. Everything that
 # locates a build input keeps using VERSION; only the artifact's name, the
 # header stamp and the version recorded into the installed kit use LABEL.
-LABEL="${WORKS_DIST_LABEL:-$VERSION}"
-# WORKS_RUNTIME_TARBALL pins one outright; otherwise the exact-version
+LABEL="${WIRES_DIST_LABEL:-$VERSION}"
+# WIRES_RUNTIME_TARBALL pins one outright; otherwise the exact-version
 # runtime if present, else the newest properly-named one. Never a bare glob.
-if [ -n "${WORKS_RUNTIME_TARBALL:-}" ]; then
-    tarball="$WORKS_RUNTIME_TARBALL"
-    [ -f "$tarball" ] || { echo "!! WORKS_RUNTIME_TARBALL is not a file: $tarball" >&2; exit 1; }
+if [ -n "${WIRES_RUNTIME_TARBALL:-}" ]; then
+    tarball="$WIRES_RUNTIME_TARBALL"
+    [ -f "$tarball" ] || { echo "!! WIRES_RUNTIME_TARBALL is not a file: $tarball" >&2; exit 1; }
 else
     tarball="dist/${NAME}-${VERSION}.tar.zst"
-    [ -f "$tarball" ] || tarball="$(works_pick_tarball dist)"
+    [ -f "$tarball" ] || tarball="$(wires_pick_tarball dist)"
 fi
 
 [ -n "$tarball" ] && [ -f "$tarball" ] || { echo "!! no ${NAME}-*.tar.zst in dist/: run ./build.sh first" >&2; exit 1; }
@@ -52,7 +52,7 @@ fi
 # install.sh honours its own pin whatever the name, deliberately: there the
 # consequence lands on whoever set the variable. Here it lands on whoever is
 # handed the .run, so this refuses instead.
-works_is_runtime_tarball "$tarball" || {
+wires_is_runtime_tarball "$tarball" || {
     echo "!! not a name the kit's install.sh will select: $(basename "$tarball")" >&2
     echo "   expected ${NAME}-<YYYY.MM.DD.N>.tar.zst — rename it, or drop it in dist/ under that name" >&2
     exit 1; }
@@ -102,7 +102,7 @@ mkdir -p "$kit/bin" "$kit/dist" "$kit/vendor"
 cp -a "$tarball" "$tarball.sha256" "$kit/dist/"
 cp -a "dist/BUILD-INFO-${VERSION}.txt" "$kit/" 2>/dev/null || true
 mkdir -p "$kit/scripts"
-cp -a works/runtime-env.sh works/works works/works-runtime works/works-update works/works-plug works/works-app works/install-works.sh scripts/install.sh scripts/validate-runtime.sh scripts/setup-prefix.sh scripts/uninstall.sh \
+cp -a wires/runtime-env.sh wires/wires wires/wires-runtime wires/wires-update wires/wires-plug wires/wires-app wires/install-wires.sh scripts/install.sh scripts/validate-runtime.sh scripts/setup-prefix.sh scripts/uninstall.sh \
       scripts/ableton-live scripts/max9 scripts/detect-scale.sh \
       scripts/detect-theme.sh scripts/shortcut-hold.sh \
       scripts/check-live-audio.sh scripts/setup-link.sh \
@@ -154,7 +154,7 @@ printf '%s\n' "$LABEL" > "$kit/VERSION"
 # checksum and so cannot exist until after this is packed. They answer different
 # questions anyway - the manifest says what a channel currently points at, for
 # the updater; this says what this kit is, for the installer holding it.
-printf '%s\n' "${WORKS_CHANNEL_PUBLISH:-stable}" > "$kit/channel"
+printf '%s\n' "${WIRES_CHANNEL_PUBLISH:-stable}" > "$kit/channel"
 install -m755 dist/cabextract-static "$kit/bin/cabextract"
 install -m755 dist/ableton-linkd "$kit/bin/ableton-linkd"
 # Ableton Link is GPLv2+ with no linking exception, so the built daemon's
@@ -199,23 +199,23 @@ chmod +x "$out"
 # Same bytes either way, so the checksum is the built file's.
 # Read from the runtime being packed, not from dist/BUILD-INFO-<version>.txt:
 # the tarball's copy is the one that lands on the user's machine and the one the
-# updater compares against. See works_tarball_buildinfo.
+# updater compares against. See wires_tarball_buildinfo.
 info="$stage/runtime-BUILD-INFO.txt"
-if works_tarball_buildinfo "$tarball" > "$info" && [ -s "$info" ]; then
+if wires_tarball_buildinfo "$tarball" > "$info" && [ -s "$info" ]; then
     # The runtime asset is published under the label's name (the workflow copies
     # the built tarball to it), so the manifest names that, with the identical
     # content's checksum - runtime-only installs verify against these fields.
-    works_manifest_write "${WORKS_CHANNEL_PUBLISH:-stable}" "$info" \
-        "${WORKS_PUBLISH_AS:-$(basename "$out")}" \
+    wires_manifest_write "${WIRES_CHANNEL_PUBLISH:-stable}" "$info" \
+        "${WIRES_PUBLISH_AS:-$(basename "$out")}" \
         "$(awk '{print $1}' "$out.sha256")" \
         "${NAME}-${LABEL}.tar.zst" \
         "$(sha256sum "$tarball" | cut -d' ' -f1)" > dist/manifest.txt
-    works_manifest_valid dist/manifest.txt || {
+    wires_manifest_valid dist/manifest.txt || {
         echo "!! the manifest this build would publish is incomplete:" >&2
         sed 's/^/   /' dist/manifest.txt >&2
         echo "   the runtime's BUILD-INFO is missing a field -- rebuild it" >&2
         exit 1; }
-    echo "   manifest: dist/manifest.txt -> ${WORKS_PUBLISH_AS:-$(basename "$out")}"
+    echo "   manifest: dist/manifest.txt -> ${WIRES_PUBLISH_AS:-$(basename "$out")}"
 else
     echo "!! could not read BUILD-INFO out of $(basename "$tarball")" >&2
     exit 1

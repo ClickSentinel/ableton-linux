@@ -1,70 +1,70 @@
 #!/usr/bin/env bash
-# Remove what install.sh added. The Wine prefix (~/works/plugs/studio) is kept unless you pass --prefix.
+# Remove what install.sh added. The Wine prefix (~/wires/plugs/studio) is kept unless you pass --prefix.
 set -euo pipefail
-# Matches install.sh: WORKS_RUNTIME picks a non-default runtime to remove.
+# Matches install.sh: WIRES_RUNTIME picks a non-default runtime to remove.
 # Resolved by the same function install.sh uses, rather than by a second copy
 # carrying its own literal of the runtime name — this is a script that runs
 # `rm -rf` on whatever it resolves, so the two disagreeing is not a cosmetic
 # problem.
 for _l in "$(dirname "$0")/runtime-env.sh" \
-          "$(cd "$(dirname "$0")/.." && pwd)/works/runtime-env.sh"; do
-    # shellcheck source=works/runtime-env.sh
+          "$(cd "$(dirname "$0")/.." && pwd)/wires/runtime-env.sh"; do
+    # shellcheck source=wires/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
-command -v works_runtime_path >/dev/null 2>&1 || {
+command -v wires_runtime_path >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
 BIN="$HOME/.local/bin/ableton-live"
 APPS="$HOME/.local/share/applications"
 
 # This application's own pieces go first, unconditionally: they are what this
-# script is for. The shared infrastructure - the runtimes, the works command,
+# script is for. The shared infrastructure - the runtimes, the wires command,
 # the toolkit, the channel - is decided afterwards, by who is left.
 rm -f  "$BIN"        && echo "removed $BIN"
 rm -f  "$BIN".rollback-*
-# Legacy PATH links from installers that predate the works command.
-rm -f  "$HOME/.local/bin/works-runtime" "$HOME/.local/bin/works-update" \
+# Legacy PATH links from installers that predate the wires command.
+rm -f  "$HOME/.local/bin/wires-runtime" "$HOME/.local/bin/wires-update" \
        "$HOME/.local/bin/ableton-runtime" "$HOME/.local/bin/ableton-update"
 # Stop and drop the Ableton Link session anchor's user unit (setup-link.sh
-# installs it under ~/.config); the daemon binary goes with ~/works/apps/ableton-live.
+# installs it under ~/.config); the daemon binary goes with ~/wires/apps/ableton-live.
 systemctl --user disable --now ableton-linkd.service 2>/dev/null || true
 rm -f  "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/ableton-linkd.service" \
     && echo "removed ~/.config/systemd/user/ableton-linkd.service"
 systemctl --user daemon-reload 2>/dev/null || true
-rm -rf "$HOME/works/apps/ableton-live" && echo "removed ~/works/apps/ableton-live"
+rm -rf "$HOME/wires/apps/ableton-live" && echo "removed ~/wires/apps/ableton-live"
 
 # Everything shared goes only with the last application, and the directory is
 # the census - a second application's uninstall runs these same lines and gets
 # the right answer without either knowing about the other. This used to remove
-# the runtimes and the works command unconditionally, which meant uninstalling
-# one application took every other application's runtime and its `works` with
+# the runtimes and the wires command unconditionally, which meant uninstalling
+# one application took every other application's runtime and its `wires` with
 # it: the exact dependency between applications the bundled-infrastructure
 # model exists to prevent, created by the uninstaller.
-remaining="$(works_app_names 2>/dev/null || true)"
+remaining="$(wires_app_names 2>/dev/null || true)"
 if [ -z "$remaining" ]; then
     # Removing by sibling glob around one resolved path stopped working when
-    # the runtime moved into the store: works_runtime_path now names a build
+    # the runtime moved into the store: wires_runtime_path now names a build
     # *inside* the container, so `rm -rf` on it would take one entry and leave
     # the rest orphaned behind a dangling channel.
-    works_remove_runtimes
-    # The commands themselves live in works/bin; ~/.local/bin holds only links.
-    rm -f  "$HOME/works/bin/works" "$HOME/works/lib/works-runtime" \
-           "$HOME/works/lib/works-update" "$HOME/works/lib/works-plug" \
-           "$HOME/works/lib/works-app"
-    rmdir  "$HOME/works/bin" 2>/dev/null || true
-    rm -f  "$HOME/.local/bin/works"
-    rm -rf "$HOME/works/lib" "$HOME/works/apps" 2>/dev/null || true
-    echo "removed ~/works/lib and the works command (no application left)"
+    wires_remove_runtimes
+    # The commands themselves live in wires/bin; ~/.local/bin holds only links.
+    rm -f  "$HOME/wires/bin/wires" "$HOME/wires/lib/wires-runtime" \
+           "$HOME/wires/lib/wires-update" "$HOME/wires/lib/wires-plug" \
+           "$HOME/wires/lib/wires-app"
+    rmdir  "$HOME/wires/bin" 2>/dev/null || true
+    rm -f  "$HOME/.local/bin/wires"
+    rm -rf "$HOME/wires/lib" "$HOME/wires/apps" 2>/dev/null || true
+    echo "removed ~/wires/lib and the wires command (no application left)"
     # The channel install.sh recorded. Not prompted for, unlike the prefix:
     # this is one word of preference, not data, and leaving it behind means a
     # later install is followed by an update pointed at a channel nothing
     # here chose.
-    rm -f  "$(works_runtime_store)/.channel"
-    rmdir  "$(works_runtime_store)" 2>/dev/null || true
+    rm -f  "$(wires_runtime_store)/.channel"
+    rmdir  "$(wires_runtime_store)" 2>/dev/null || true
     # Leave no empty shell behind, but never take a Plug with it: rmdir
     # refuses a directory that still holds anything.
-    rmdir "$HOME/works" 2>/dev/null && echo "removed ~/works" || true
+    rmdir "$HOME/wires" 2>/dev/null && echo "removed ~/wires" || true
 else
-    echo "kept the runtimes and the works command; still installed:"
+    echo "kept the runtimes and the wires command; still installed:"
     printf '%s\n' "$remaining" | sed 's/^/     /'
 fi
 rmdir  "${XDG_CONFIG_HOME:-$HOME/.config}/ableton-wine" 2>/dev/null \
@@ -90,10 +90,10 @@ sed -i -e '\#^x-scheme-handler/ableton=wine-protocol-ableton\.desktop;\?$#d' \
 echo "removed desktop entries, icons and MIME registrations"
 
 if [ "${1:-}" = "--prefix" ]; then
-    # works_plug_path, not a literal: it honours WORKS_PLUG, then the `default`
-    # symlink `works plug use` writes, then studio. The literal removed the Plug
+    # wires_plug_path, not a literal: it honours WIRES_PLUG, then the `default`
+    # symlink `wires plug use` writes, then studio. The literal removed the Plug
     # the machine started with rather than the one it is actually using.
-    pfx="$(works_plug_path)"
+    pfx="$(wires_plug_path)"
     # No terminal means no answer; keep the prefix rather than delete it blind.
     read -rp "Also delete $pfx? This removes your Live installation AND its authorisation. [y/N] " a || a=n
     case "$a" in
@@ -104,11 +104,11 @@ if [ "${1:-}" = "--prefix" ]; then
     # their own authorisations, and an uninstall that removed them without ever
     # naming them would be the single destructive surprise in a script whose job
     # is to be reversible. Name them instead.
-    others="$(works_plug_names 2>/dev/null | grep -vxF "${pfx##*/}" || true)"
+    others="$(wires_plug_names 2>/dev/null | grep -vxF "${pfx##*/}" || true)"
     if [ -n "$others" ]; then
         echo ""
         echo "These Plugs are still here, each with whatever is installed in it:"
-        printf '%s\n' "$others" | sed 's/^/     works plug rm /'
+        printf '%s\n' "$others" | sed 's/^/     wires plug rm /'
     fi
 fi
 

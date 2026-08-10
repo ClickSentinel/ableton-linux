@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Does this staged runtime tree carry what Ableton Live needs? Run by
-# `works runtime install --validate` against the unpacked candidate before
-# anything is promoted: Works files and guards the build, the application
+# `wires runtime install --validate` against the unpacked candidate before
+# anything is promoted: Wires files and guards the build, the application
 # vouches for it, and this is the voucher. Component knowledge only - the
 # store, the base guard and the rollback are not this script's business.
 #

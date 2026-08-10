@@ -22,16 +22,16 @@ root="$(cd "$here/.." && pwd)"
 cd "$root"
 
 # Runtime naming and the tarball predicate resolve in one place; see
-# works/runtime-env.sh.
-# shellcheck source=works/runtime-env.sh
-. "$root/works/runtime-env.sh"
+# wires/runtime-env.sh.
+# shellcheck source=wires/runtime-env.sh
+. "$root/wires/runtime-env.sh"
 
 src="${1:?usage: promote-nightly.sh <nightly-tarball> [version]}"
 VERSION="${2:-$(cat "$root/VERSION")}"
-NAME="$(works_runtime_name)"
+NAME="$(wires_runtime_name)"
 
 [ -f "$src" ] || { echo "!! no such tarball: $src" >&2; exit 1; }
-works_is_runtime_tarball "$src" \
+wires_is_runtime_tarball "$src" \
     || { echo "!! not a runtime tarball this repo would select: ${src##*/}" >&2; exit 1; }
 case "${src##*/}" in
     *+*) ;;
@@ -52,10 +52,10 @@ info="$work/$NAME/ABLETON-WINE-BUILD-INFO.txt"
 # The fields promotion depends on. A tarball without identity cannot be
 # promoted - there would be nothing tying the release back to the build that
 # soaked, which is the entire point of promoting instead of rebuilding.
-commit="$(works_buildinfo_field "$info" source-commit)"
-built="$(works_buildinfo_field "$info" built-at)"
-kind="$(works_buildinfo_field "$info" build-kind)"
-olddist="$(works_buildinfo_field "$info" dist-version)"
+commit="$(wires_buildinfo_field "$info" source-commit)"
+built="$(wires_buildinfo_field "$info" built-at)"
+kind="$(wires_buildinfo_field "$info" build-kind)"
+olddist="$(wires_buildinfo_field "$info" dist-version)"
 [ -n "$commit" ] && [ "$commit" != unknown ] \
     || { echo "!! BUILD-INFO carries no source-commit; promote needs the identity" >&2; exit 1; }
 [ -n "$built" ] || { echo "!! BUILD-INFO carries no built-at" >&2; exit 1; }
@@ -71,7 +71,7 @@ printf 'promoted-from: %s+%s.%s\n' "$olddist" "$kind" "${commit:0:7}" >> "$info"
 
 # A seam for the tests: a fake tarball left behind in the real dist/ would win
 # a later selector pick. Everything else writes where a release expects it.
-dest="${WORKS_PROMOTE_DEST:-dist}"
+dest="${WIRES_PROMOTE_DEST:-dist}"
 out="$dest/$NAME-$VERSION.tar.zst"
 mkdir -p "$dest"
 echo "== repack -> $out =="
@@ -84,4 +84,4 @@ cp "$info" "$dest/BUILD-INFO.txt"
 
 echo "== promoted =="
 echo "   $olddist+$kind.${commit:0:7}  ->  $VERSION+${commit:0:7}"
-echo "   next: WORKS_RUNTIME_TARBALL=$out ./scripts/make-installer.sh"
+echo "   next: WIRES_RUNTIME_TARBALL=$out ./scripts/make-installer.sh"

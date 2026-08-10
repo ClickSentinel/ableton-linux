@@ -33,10 +33,10 @@ APP="ableton-live"
 # POSIX sh, runtime-env.sh is bash, and the first use came before the kit had
 # been extracted. Every updater defect found on 2026-08-09 was in that copy: it
 # got the runtime's legacy fallback right and the prefix's wrong, so the "is
-# there an install here" test looked only at ~/works/plugs/studio and no
+# there an install here" test looked only at ~/wires/plugs/studio and no
 # unmigrated machine - which is every existing user - was ever offered an
-# update. It hardcoded plugs/studio, so `works plug use` did not reach it. And
-# it read WORKS_PLUG but not ABLETON_WINEPREFIX, which install.sh does read,
+# update. It hardcoded plugs/studio, so `wires plug use` did not reach it. And
+# it read WIRES_PLUG but not ABLETON_WINEPREFIX, which install.sh does read,
 # so on a machine setting the old name the two disagreed about which
 # prefix was being installed into.
 #
@@ -47,9 +47,9 @@ APP="ableton-live"
 # are both on disk and can be asked properly.
 #
 # Two markers because the answer has to be yes on a machine installed by any kit
-# that predates ~/works, which is the population this whole question is about.
+# that predates ~/wires, which is the population this whole question is about.
 returning=0
-for marker in "$HOME/works/apps/$APP/VERSION" \
+for marker in "$HOME/wires/apps/$APP/VERSION" \
               "$HOME/.local/share/ableton-wine/VERSION"; do
     if [ -f "$marker" ]; then returning=1; break; fi
 done
@@ -67,8 +67,8 @@ done
 # still is - which is the whole point of this test.
 if [ "$returning" = 1 ]; then
     have_prefix=0
-    for reg in "${WORKS_PLUG:+$WORKS_PLUG/system.reg}" \
-               "$HOME"/works/plugs/*/system.reg \
+    for reg in "${WIRES_PLUG:+$WIRES_PLUG/system.reg}" \
+               "$HOME"/wires/plugs/*/system.reg \
                "$HOME/.wine-ableton/system.reg"; do
         if [ -n "$reg" ] && [ -f "$reg" ]; then have_prefix=1; break; fi
     done
@@ -84,7 +84,7 @@ fail() { printf '!! %s\n' "$*" >&2; exit 1; }
 # Written out, not sliced out of the header comment with `head -18 | sed -n
 # '2,18p'`. That range rots the moment a comment above it is edited, and it had
 # already rotted: line 18 is a note about the payload marker, so --help printed
-# a sentence of internal prose under the options. The same defect the works
+# a sentence of internal prose under the options. The same defect the wires
 # verbs were rewritten to remove, in the one script they did not cover.
 usage() {
     cat <<'EOF'
@@ -104,8 +104,8 @@ Environment:
   ABLETON_DPI_MODE    auto|preserve|100|fractional|dpi<N> (overrides scale auto-detection)
   ABLETON_THEME_MODE  auto|dark|light|preserve (overrides the light/dark sync)
   ABLETON_LIVE_VERSION  11|12 (prepare the prefix for this Live version; default 12)
-  WORKS_PLUG          install into this Plug instead of the selected one
-  WORKS_RUNTIME       use this runtime tree instead of the store's
+  WIRES_PLUG          install into this Plug instead of the selected one
+  WIRES_RUNTIME       use this runtime tree instead of the store's
 EOF
 }
 
@@ -144,7 +144,7 @@ say "== Ableton-on-Wine installer $VERSION =="
 # Live installation, authorization, and projects; compatibility settings may
 # change.
 if [ "$mode" = install ] && [ "$returning" = 1 ]; then
-    installed_ver="$(cat "$HOME/works/apps/$APP/VERSION" 2>/dev/null \
+    installed_ver="$(cat "$HOME/wires/apps/$APP/VERSION" 2>/dev/null \
                   || cat "$HOME/.local/share/ableton-wine/VERSION" 2>/dev/null || true)"
     say ""
     say "An existing installation was found${installed_ver:+ (version $installed_ver)}."
@@ -262,7 +262,7 @@ warn_stale_link_hook() {
 }
 
 configure_link() {
-    local marker="$HOME/works/apps/ableton-live/link-configured"
+    local marker="$HOME/wires/apps/ableton-live/link-configured"
     # The version is owned by setup-link.sh; a marker recording anything else
     # forces one re-run so existing installs pick up changed behavior.
     local required_version
@@ -313,7 +313,7 @@ configure_link() {
     fi
 
     say "!! Ableton Link was not configured; Live installation will continue."
-    say "!! Close Live and run ~/works/apps/ableton-live/setup-link.sh to retry."
+    say "!! Close Live and run ~/wires/apps/ableton-live/setup-link.sh to retry."
     return 0
 }
 
@@ -373,7 +373,7 @@ if [ "$mode" = update ]; then
 fi
 
 # --- install the runtime ------------------------------------------------------
-say "-- installing the patched Wine (goes to ~/works, touches nothing else)"
+say "-- installing the patched Wine (goes to ~/wires, touches nothing else)"
 bash "$kit/scripts/install.sh"
 [ "$mode" = runtime ] && { say "OK: the patched Wine is installed (--runtime-only: stopped before creating the Wine prefix)"; exit 0; }
 # From here the real resolver answers, and nothing in this file guesses a path
@@ -382,13 +382,13 @@ bash "$kit/scripts/install.sh"
 # It has to be read *after* install.sh, not before: the store may have just been
 # created and the migration may have just moved both the runtime and the Plug.
 #
-# works_plug_path, not a literal: it resolves WORKS_PLUG, then the `default`
-# symlink `works plug use` writes, then studio. Hardcoding the last of those is
+# wires_plug_path, not a literal: it resolves WIRES_PLUG, then the `default`
+# symlink `wires plug use` writes, then studio. Hardcoding the last of those is
 # why Live's installer would run into studio on a machine whose selected Plug
 # was something else.
 . "$kit/scripts/runtime-env.sh"
-WINE_ROOT="$(works_runtime_path)"
-PREFIX_DIR="$(works_plug_path)"
+WINE_ROOT="$(wires_runtime_path)"
+PREFIX_DIR="$(wires_plug_path)"
 configure_link
 
 # --- create the prefix --------------------------------------------------------

@@ -4,7 +4,7 @@
 #
 # The launcher runs for real here: discovery, the single-instance lock, registry
 # sync, argument routing, right up to the exec. What it would have exec'd is
-# captured instead of run, because WORKS_RUNTIME points at a fake runtime
+# captured instead of run, because WIRES_RUNTIME points at a fake runtime
 # tree whose `wine` logs its argv and exits (see helpers/launcher.bash).
 #
 # This is the half that users actually experience — which Live starts, what
@@ -242,16 +242,16 @@ EOF
 # die partway through on whichever missing function it reaches first, which
 # reads as a crash rather than a version conflict. The launcher sources the lib
 # beside itself first, so the fixture is a copy of the launcher with a doctored
-# library beside it: exactly the layout of an installed app under ~/works/apps.
+# library beside it: exactly the layout of an installed app under ~/wires/apps.
 @test "a launcher below the infrastructure's OLDEST refuses as a version conflict" {
     d="$BATS_TEST_TMPDIR/stranded"
     mkdir -p "$d"
     cp "$REPO/scripts/ableton-live" "$d/ableton-live"
     cat > "$d/runtime-env.sh" <<'LIB'
-WORKS_ABI=9
-WORKS_ABI_OLDEST=9
-works_runtime_path() { printf '/nowhere\n'; }
-works_bind_runtime() { :; }
+WIRES_ABI=9
+WIRES_ABI_OLDEST=9
+wires_runtime_path() { printf '/nowhere\n'; }
+wires_bind_runtime() { :; }
 LIB
     run --separate-stderr env HOME="$FAKE_HOME" PATH="$PATH" bash "$d/ableton-live"
     [ "$status" -eq 1 ]
@@ -267,8 +267,8 @@ LIB
     mkdir -p "$d"
     cp "$REPO/scripts/ableton-live" "$d/ableton-live"
     cat > "$d/runtime-env.sh" <<'LIB'
-works_runtime_path() { printf '/nowhere\n'; }
-works_bind_runtime() { :; }
+wires_runtime_path() { printf '/nowhere\n'; }
+wires_bind_runtime() { :; }
 LIB
     run --separate-stderr env HOME="$FAKE_HOME" PATH="$PATH" bash "$d/ableton-live"
     [[ "$stderr" != *"no longer supports this launcher"* ]] \

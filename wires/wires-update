@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Is there a newer runtime on this channel, and do you want it?
 #
-#   works update                    check this machine's channel, and offer it
-#   works update --check            say what is available; change nothing
-#   works update --channel nightly  switch channel and update to it
-#   works update --yes              do not ask (still refuses a Wine base change)
+#   wires update                    check this machine's channel, and offer it
+#   wires update --check            say what is available; change nothing
+#   wires update --channel nightly  switch channel and update to it
+#   wires update --yes              do not ask (still refuses a Wine base change)
 #
 # Nothing checked for updates before this. A user on a daily channel had no way
 # to know a build existed short of opening the releases page, and the install
@@ -15,13 +15,13 @@
 set -uo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-for _l in "$here/runtime-env.sh" "$HOME/works/lib/runtime-env.sh" \
-          "$here/../works/runtime-env.sh"; do
-    # shellcheck source=works/runtime-env.sh
+for _l in "$here/runtime-env.sh" "$HOME/wires/lib/runtime-env.sh" \
+          "$here/../wires/runtime-env.sh"; do
+    # shellcheck source=wires/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
-command -v works_manifest_url >/dev/null 2>&1 || {
-    echo "!! runtime-env.sh not found next to $0 or in ~/works/lib" >&2; exit 1; }
+command -v wires_manifest_url >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/wires/lib" >&2; exit 1; }
 
 CHECK=0; ASSUME_YES=0; WANT_CHANNEL=""
 while [ $# -gt 0 ]; do
@@ -39,33 +39,33 @@ done
 
 # A pinned runtime opts out of channels, so updating by channel is not an action
 # this machine can take - and pretending otherwise was worse than refusing.
-# WORKS_RUNTIME is the outermost say in every resolver (the tests, the
+# WIRES_RUNTIME is the outermost say in every resolver (the tests, the
 # regression VMs and anyone bisecting depend on that), so an update run under it
 # read the channel and the store as usual, then handed the installer a mode that
 # wrote flat to the pinned path with a dated rollback and never touched the
 # channel: the command reported a channel it had not changed. Say what is true
 # and stop.
-if [ -n "${WORKS_RUNTIME:-}" ]; then
-    echo "!! WORKS_RUNTIME is pinned to $WORKS_RUNTIME." >&2
+if [ -n "${WIRES_RUNTIME:-}" ]; then
+    echo "!! WIRES_RUNTIME is pinned to $WIRES_RUNTIME." >&2
     echo "   Updates follow a channel, and a pinned runtime does not. Unset it to" >&2
     echo "   update, or install a build over the pin deliberately with" >&2
-    echo "   WORKS_RUNTIME_TARBALL and install.sh." >&2
+    echo "   WIRES_RUNTIME_TARBALL and install.sh." >&2
     exit 1
 fi
 
 # A channel names a symlink and selects a URL, so it is checked against the
 # allowlist rather than trusted — the same constraint that ended the source-repo
-# experiment. works_channel does that; asking it is how the value is validated.
+# experiment. wires_channel does that; asking it is how the value is validated.
 if [ -n "$WANT_CHANNEL" ]; then
-    if [ "$(WORKS_CHANNEL="$WANT_CHANNEL" works_channel 2>/dev/null)" != "$WANT_CHANNEL" ]; then
+    if [ "$(WIRES_CHANNEL="$WANT_CHANNEL" wires_channel 2>/dev/null)" != "$WANT_CHANNEL" ]; then
         echo "!! not a channel: $WANT_CHANNEL" >&2; exit 1
     fi
     CHANNEL="$WANT_CHANNEL"
 else
-    CHANNEL="$(works_channel)"
+    CHANNEL="$(wires_channel)"
 fi
 
-url="$(works_manifest_url "$CHANNEL")" || { echo "!! no manifest URL for $CHANNEL" >&2; exit 1; }
+url="$(wires_manifest_url "$CHANNEL")" || { echo "!! no manifest URL for $CHANNEL" >&2; exit 1; }
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
 echo "== channel: $CHANNEL =="
@@ -74,41 +74,41 @@ if ! curl -fsSL --retry 2 --max-time 60 -o "$tmp/manifest.txt" "$url"; then
     echo "!! could not fetch the manifest. Offline, or the channel has published nothing yet." >&2
     exit 1
 fi
-works_manifest_valid "$tmp/manifest.txt" || {
+wires_manifest_valid "$tmp/manifest.txt" || {
     echo "!! the manifest is incomplete; refusing to act on it" >&2
     sed 's/^/   /' "$tmp/manifest.txt" >&2; exit 1; }
 
-want_commit="$(works_buildinfo_field "$tmp/manifest.txt" source-commit)"
-want_at="$(works_buildinfo_field "$tmp/manifest.txt" built-at)"
-want_wine="$(works_buildinfo_field "$tmp/manifest.txt" wine)"
-want_ver="$(works_buildinfo_field "$tmp/manifest.txt" dist-version)"
-installer="$(works_buildinfo_field "$tmp/manifest.txt" installer)"
-want_sha="$(works_buildinfo_field "$tmp/manifest.txt" sha256)"
+want_commit="$(wires_buildinfo_field "$tmp/manifest.txt" source-commit)"
+want_at="$(wires_buildinfo_field "$tmp/manifest.txt" built-at)"
+want_wine="$(wires_buildinfo_field "$tmp/manifest.txt" wine)"
+want_ver="$(wires_buildinfo_field "$tmp/manifest.txt" dist-version)"
+installer="$(wires_buildinfo_field "$tmp/manifest.txt" installer)"
+want_sha="$(wires_buildinfo_field "$tmp/manifest.txt" sha256)"
 
-root="$(works_runtime_path)"
+root="$(wires_runtime_path)"
 have_info="$root/ABLETON-WINE-BUILD-INFO.txt"
-have_commit="$(works_buildinfo_field "$have_info" source-commit)"
-have_at="$(works_buildinfo_field "$have_info" built-at)"
-have_wine="$(works_buildinfo_field "$have_info" wine)"
+have_commit="$(wires_buildinfo_field "$have_info" source-commit)"
+have_at="$(wires_buildinfo_field "$have_info" built-at)"
+have_wine="$(wires_buildinfo_field "$have_info" wine)"
 
 # Both sides show the same thing: the id a build lands under. Reporting the
 # channel's bare dist-version against the installed id put a version beside an
 # identifier and invited comparing them, when only one of them is a name.
-want_id="$(works_compose_id "$want_ver" "$want_commit" \
-    "$(works_buildinfo_field "$tmp/manifest.txt" build-kind)")"
-# Same columns and same order as `works runtime list`, so the two commands
+want_id="$(wires_compose_id "$want_ver" "$want_commit" \
+    "$(wires_buildinfo_field "$tmp/manifest.txt" build-kind)")"
+# Same columns and same order as `wires runtime list`, so the two commands
 # describe a build the same way. Fixed widths because the ids differ in length
 # by design -- a nightly carries its kind -- and unpadded output left the dates
 # and Wine versions on the two rows unalignable against each other.
 printf '   available: %-32s %-12s %s\n' \
     "${want_id:-$want_ver}" "${want_wine:-?}" "${want_at:--}"
 printf '   installed: %-32s %-12s %s\n' \
-    "$(works_runtime_id "$root" 2>/dev/null || echo 'none')" "${have_wine:-?}" "${have_at:--}"
+    "$(wires_runtime_id "$root" 2>/dev/null || echo 'none')" "${have_wine:-?}" "${have_at:--}"
 
 # The case that had no answer at all before: same build, nothing to do. Compared
 # on source-commit rather than the version, which is identical across every
 # nightly between two releases.
-if [ -n "$want_commit" ] && [ "$want_commit" = "$have_commit" ] && [ "$CHANNEL" = "$(works_channel)" ]; then
+if [ -n "$want_commit" ] && [ "$want_commit" = "$have_commit" ] && [ "$CHANNEL" = "$(wires_channel)" ]; then
     echo
     echo "You already have this build."
     exit 0
@@ -130,7 +130,7 @@ fi
 #
 # The busy check deliberately does NOT come up here with it. What is running
 # only matters to the branch that replaces the tree; retargeting a channel under
-# a running Live is safe for the same reason `works runtime use` allows it, and
+# a running Live is safe for the same reason `wires runtime use` allows it, and
 # says so rather than refusing -- the resolver hands back the build, not the
 # channel, so a session that has already started keeps what it started with.
 #
@@ -160,10 +160,10 @@ fi
 
 # Already in the store from an earlier install? Then this is a channel switch,
 # not a download.
-container="$(works_runtime_store)"
+container="$(wires_runtime_store)"
 for e in "$container"/*; do
     [ -d "$e" ] && [ ! -L "$e" ] || continue
-    [ "$(works_buildinfo_field "$e/ABLETON-WINE-BUILD-INFO.txt" source-commit)" = "$want_commit" ] || continue
+    [ "$(wires_buildinfo_field "$e/ABLETON-WINE-BUILD-INFO.txt" source-commit)" = "$want_commit" ] || continue
     echo
     echo "That build is already installed as ${e##*/} — no download needed."
     [ "$CHECK" -eq 0 ] || exit 0
@@ -174,7 +174,7 @@ for e in "$container"/*; do
     back=""; fwd=""; roll=""
     while read -r _plug; do
         [ -n "$_plug" ] || continue
-        move="$(works_base_move "$e" "$(works_plugs_dir)/$_plug")" || {
+        move="$(wires_base_move "$e" "$(wires_plugs_dir)/$_plug")" || {
             echo "!! $_plug will not say which Wine base bootstrapped it; refusing" >&2
             exit 1; }
         # refresh - a newer build of the same base - is the ordinary update and
@@ -185,17 +185,17 @@ for e in "$container"/*; do
             forward)  fwd="$fwd $_plug" ;;
             rollback) roll="$roll $_plug" ;;
         esac
-    done < <(works_plugs_following "$CHANNEL")
+    done < <(wires_plugs_following "$CHANNEL")
     if [ -n "$roll" ]; then
         echo "   note: an older build of the same Wine base; going back for:$roll"
     fi
-    if [ -n "$back" ] && [ "${WORKS_ALLOW_BASE_CHANGE:-0}" != 1 ]; then
+    if [ -n "$back" ] && [ "${WIRES_ALLOW_BASE_CHANGE:-0}" != 1 ]; then
         echo "!! that build is on an OLDER Wine base than:$back" >&2
         echo "   Wine cannot take a prefix back. Refusing; set" >&2
-        echo "   WORKS_ALLOW_BASE_CHANGE=1 if you mean it." >&2
+        echo "   WIRES_ALLOW_BASE_CHANGE=1 if you mean it." >&2
         exit 1
     fi
-    if [ -n "$fwd" ] && [ "$ASSUME_YES" -eq 0 ] && [ "${WORKS_ALLOW_BASE_CHANGE:-0}" != 1 ]; then
+    if [ -n "$fwd" ] && [ "$ASSUME_YES" -eq 0 ] && [ "${WIRES_ALLOW_BASE_CHANGE:-0}" != 1 ]; then
         echo "   Re-bootstrapped on next launch, and not reversible:$fwd"
         if { : >/dev/tty; } 2>/dev/null; then
             printf 'Continue? [y/N] ' > /dev/tty
@@ -209,11 +209,11 @@ for e in "$container"/*; do
     # Asked before the retarget, not after: the resolver follows the channel, so
     # once it has moved this would be asking whether anything runs from the build
     # being switched *to*. What the note is about is the one being switched from.
-    was_busy=""; works_runtime_busy && was_busy=1
+    was_busy=""; wires_runtime_busy && was_busy=1
     ln -sfn "${e##*/}" "$container/$CHANNEL"
-    printf '%s\n' "$CHANNEL" > "$(works_channel_file)"
+    printf '%s\n' "$CHANNEL" > "$(wires_channel_file)"
     echo "channel $CHANNEL -> ${e##*/}"
-    # Same note `works runtime use` gives, for the same reason.
+    # Same note `wires runtime use` gives, for the same reason.
     if [ -n "$was_busy" ]; then
         echo "note: something is still running from the previous build. It keeps"
         echo "      the build it started with; this takes effect on the next launch."
@@ -229,7 +229,7 @@ fi
 # Here rather than higher up: this is the first line past which the tree gets
 # replaced, and replacing a tree under a running Live is what loses a session.
 # Everything above this point either only reports, or moves a symlink.
-if works_runtime_busy; then
+if wires_runtime_busy; then
     echo; echo "!! something is running from the runtime. Close Live first." >&2
     exit 1
 fi
@@ -251,7 +251,7 @@ echo "== downloading $installer =="
 # hash marks per redraw in whatever is capturing the output.
 progress="-sS"; [ -t 2 ] && progress="--progress-bar"
 curl -fL --retry 2 $progress -o "$tmp/$installer" \
-    "$(works_manifest_installer_url "$url" "$installer")" || {
+    "$(wires_manifest_installer_url "$url" "$installer")" || {
         echo "!! download failed" >&2; exit 1; }
 
 echo "== verifying =="
@@ -267,7 +267,7 @@ echo "   ok"
 # and the toolkit; only --update goes on to configure Link and re-run the prefix
 # setup, which is where a kit's registry policy and DLL healing live. Ending here
 # on --runtime-only meant updating by command and updating by installer left two
-# different machines, with no report of the difference - a user who only ran `works
+# different machines, with no report of the difference - a user who only ran `wires
 # update` never received a prefix-policy change and had no way to find out.
 echo "== installing =="
 sh "$tmp/$installer" --update

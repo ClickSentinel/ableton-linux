@@ -39,14 +39,14 @@ Accepted values are:
 Set a policy with this project's Wine:
 
 ```bash
-WINEPREFIX="$HOME/works/plugs/studio" \
-  "$(works runtime path)/bin/wine" reg add \
+WINEPREFIX="$HOME/wires/plugs/studio" \
+  "$(wires runtime path)/bin/wine" reg add \
   'HKCU\Software\Wine\X11 Driver' \
   /v FileDialogPortal /t REG_SZ /d auto /f
 ```
 
 Replace `auto` with `always` or `never` as needed. Use your
-`WORKS_PLUG` and `WORKS_RUNTIME` paths if they differ from the
+`WIRES_PLUG` and `WIRES_RUNTIME` paths if they differ from the
 defaults.
 
 For one Live launch, `WINE_FORCE_PORTAL=1 "$HOME/.local/bin/ableton-live"`

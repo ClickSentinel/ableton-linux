@@ -2,7 +2,7 @@
 # A HOME the installer can be pointed at without touching the real one.
 #
 # install.sh writes only under $HOME - BIN, APPS, the icon and mime trees, the
-# shared-lib directory and, unless WORKS_RUNTIME says otherwise, the runtime
+# shared-lib directory and, unless WIRES_RUNTIME says otherwise, the runtime
 # itself. So overriding HOME contains all of it, and is what these tests use
 # instead of overriding each path separately: a path this forgets would write to
 # the developer's real install, which is exactly the accident being guarded
@@ -24,7 +24,7 @@ install_sandbox() {
 
     # /proc is real and read-only, but the scan is scoped to the runtime root,
     # which is inside the sandbox, so nothing on this machine can match.
-    unset WORKS_RUNTIME WORKS_PLUG WORKS_RUNTIME_TARBALL
+    unset WIRES_RUNTIME WIRES_PLUG WIRES_RUNTIME_TARBALL
 }
 
 # A runtime tarball to install, or nothing. Prefers an explicit pin so a
@@ -39,9 +39,9 @@ sandbox_tarball() {
     # rather than fail; a stub is NOT created locally, because a leftover stub
     # in dist/ would be staged into the next real kit make-installer packs.
     { [ -f "$REPO/dist/ableton-linkd" ] || [ -f "$REPO/bin/ableton-linkd" ]; } || return 0
-    if [ -n "${WORKS_TEST_TARBALL:-}" ] && [ -f "$WORKS_TEST_TARBALL" ]; then
-        printf '%s\n' "$WORKS_TEST_TARBALL"
+    if [ -n "${WIRES_TEST_TARBALL:-}" ] && [ -f "$WIRES_TEST_TARBALL" ]; then
+        printf '%s\n' "$WIRES_TEST_TARBALL"
         return 0
     fi
-    works_pick_tarball "$REPO/dist"
+    wires_pick_tarball "$REPO/dist"
 }

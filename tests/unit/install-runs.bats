@@ -5,7 +5,7 @@
 # This file exists because nothing executed install.sh. The suite sourced
 # runtime-env.sh directly and checked the resolvers, which is worth doing and
 # says nothing about whether the script that uses them starts. On 2026-08-05 a
-# merge reordered install.sh's head so it called works_runtime_name eight
+# merge reordered install.sh's head so it called wires_runtime_name eight
 # lines before sourcing the file that defines it; under `set -euo pipefail` it
 # aborted on that line. 172 tests passed for thirteen commits.
 #
@@ -21,7 +21,7 @@
 # tree ships.
 #
 #   ./tests/run.sh tests/unit/install-runs.bats
-#   WORKS_TEST_TARBALL=/path/to/runtime.tar.zst ./tests/run.sh tests/unit/install-runs.bats
+#   WIRES_TEST_TARBALL=/path/to/runtime.tar.zst ./tests/run.sh tests/unit/install-runs.bats
 
 bats_require_minimum_version 1.5.0
 
@@ -30,13 +30,13 @@ load ../helpers/install-sandbox
 
 setup() {
     install_sandbox
-    . "$REPO/works/runtime-env.sh"
+    . "$REPO/wires/runtime-env.sh"
 }
 
 # guards: install.sh aborting on its own first lines, which no resolver test can
 # see because the resolvers themselves are fine
 @test "install.sh gets past its own initialisation" {
-    run env WORKS_RUNTIME="$BATS_TEST_TMPDIR/rt" \
+    run env WIRES_RUNTIME="$BATS_TEST_TMPDIR/rt" \
         bash "$REPO/scripts/install.sh" --runtime-only
     # Deliberately indifferent to whether it succeeded: whether dist/ happens to
     # hold a tarball is not what this is about, and an earlier draft that
@@ -52,43 +52,43 @@ setup() {
 @test "install.sh resolves its roots from the shared lib, not from its own copy" {
     # The pin has to reach the script, not just the library: install.sh snapshots
     # WINE_ROOT once and every later step follows it.
-    run env WORKS_RUNTIME="$BATS_TEST_TMPDIR/pinned-root" \
+    run env WIRES_RUNTIME="$BATS_TEST_TMPDIR/pinned-root" \
         bash "$REPO/scripts/install.sh" --runtime-only
     [[ "$output" != *"command not found"* ]] || { echo "$output" >&2; false; }
     # whatever it did, it did not do it at the default location
-    [ ! -e "$HOME/works/$(works_runtime_name)" ]
+    [ ! -e "$HOME/wires/$(wires_runtime_name)" ]
 }
 
 # guards: the whole install path — staging, the required-file gate, promote,
 # the launcher, and the shared lib landing where the launcher can source it
 @test "a real tarball installs, and the tree identifies itself" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
 
     root="$BATS_TEST_TMPDIR/rt"
-    run env WORKS_RUNTIME="$root" WORKS_RUNTIME_TARBALL="$tarball" \
+    run env WIRES_RUNTIME="$root" WIRES_RUNTIME_TARBALL="$tarball" \
         bash "$REPO/scripts/install.sh" --runtime-only
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
 
     [ -x "$root/bin/wine" ]
-    [ -n "$(works_runtime_id "$root")" ]
+    [ -n "$(wires_runtime_id "$root")" ]
     # the launcher and the resolver it sources both land
     [ -x "$HOME/.local/bin/ableton-live" ]
-    [ -f "$HOME/works/lib/runtime-env.sh" ]
+    [ -f "$HOME/wires/lib/runtime-env.sh" ]
     # and nothing was written to the default location
-    [ ! -e "$HOME/works/$(works_runtime_name)" ]
+    [ ! -e "$HOME/wires/$(wires_runtime_name)" ]
 }
 
 # guards: the promote step and its dated rollback, which is where the store's
 # layout will later be maintained or broken
 @test "a second install promotes and leaves the previous runtime behind" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
 
     root="$BATS_TEST_TMPDIR/rt"
-    env WORKS_RUNTIME="$root" WORKS_RUNTIME_TARBALL="$tarball" \
+    env WIRES_RUNTIME="$root" WIRES_RUNTIME_TARBALL="$tarball" \
         bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
-    run env WORKS_RUNTIME="$root" WORKS_RUNTIME_TARBALL="$tarball" \
+    run env WIRES_RUNTIME="$root" WIRES_RUNTIME_TARBALL="$tarball" \
         bash "$REPO/scripts/install.sh" --runtime-only
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
 
@@ -107,29 +107,29 @@ setup() {
 
 @test "a fresh install lands in the store, not the flat path" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
 
-    run env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    run env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
 
-    container="$(works_runtime_store)"
+    container="$(wires_runtime_store)"
     [ -L "$container/stable" ]
     id="$(readlink "$container/stable")"
     [ -f "$container/$id/bin/wine" ]
-    [ "$id" = "$(works_runtime_id "$container/$id")" ]
+    [ "$id" = "$(wires_runtime_id "$container/$id")" ]
     # a new user never sees the flat layout
-    [ ! -e "$(works_legacy_root)" ]
+    [ ! -e "$(wires_legacy_root)" ]
 }
 
 @test "the channel stays a symlink across a second install" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
 
-    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
-    run env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    run env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
 
-    container="$(works_runtime_store)"
+    container="$(wires_runtime_store)"
     [ -L "$container/stable" ] || { echo "the channel is no longer a symlink" >&2; false; }
     # and no rollback symlink was left pointing into the store
     [ -z "$(find "$container" -maxdepth 1 -name 'stable-rollback-*')" ]
@@ -140,30 +140,30 @@ setup() {
 # tree, which is what /proc/PID/exe reporting resolved paths makes non-obvious
 @test "after installing, the resolver points at a real build directory" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
 
-    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
-    root="$(works_runtime_path)"
+    env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    root="$(wires_runtime_path)"
     [ -d "$root" ] && [ ! -L "$root" ]
     [ -x "$root/bin/wine" ]
-    [ "$root" = "$(readlink -f "$(works_runtime_store)/stable")" ]
+    [ "$root" = "$(readlink -f "$(wires_runtime_store)/stable")" ]
 }
 
 # guards: an existing flat install is what nearly every user has
 @test "a flat install is migrated by the installer, not just by the library" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
 
-    legacy="$(works_legacy_root)"
+    legacy="$(wires_legacy_root)"
     mkdir -p "$legacy/bin"
     : > "$legacy/bin/wine"
     printf 'dist-version: 2026.01.01.1\npatch-stack:  0ldbui1daaa\n' \
         > "$legacy/ABLETON-WINE-BUILD-INFO.txt"
 
-    run env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    run env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
 
-    container="$(works_runtime_store)"
+    container="$(wires_runtime_store)"
     [ ! -e "$legacy" ]
     [ -d "$container/2026.01.01.1+0ldbui1" ]   # the old build, now readable
     [ -L "$container/stable" ]
@@ -177,53 +177,53 @@ setup() {
 
 @test "a kit declares its channel and the installer promotes into it" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
     export XDG_CONFIG_HOME="$HOME/.config"
     printf 'stable\n' > "$BATS_TEST_TMPDIR/pretend-stable"
 
     # a checkout stands in for a kit: dist/channel is the same marker
     mkdir -p "$BATS_TEST_TMPDIR/dist" && printf 'nightly\n' > "$REPO/dist/channel"
-    run env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    run env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
     rm -f "$REPO/dist/channel"
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
 
-    container="$(works_runtime_store)"
+    container="$(wires_runtime_store)"
     [ -L "$container/nightly" ] || { echo "no nightly channel: $(ls -1 "$container")" >&2; false; }
     [ ! -e "$container/stable" ] || { echo "stable was pointed at a nightly build" >&2; false; }
 }
 
 @test "installing records the channel, so the updater follows it" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
     export XDG_CONFIG_HOME="$HOME/.config"
     printf 'nightly\n' > "$REPO/dist/channel"
-    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
     rm -f "$REPO/dist/channel"
-    [ "$(cat "$HOME/works/runtimes/.channel")" = "nightly" ]
+    [ "$(cat "$HOME/wires/runtimes/.channel")" = "nightly" ]
 }
 
 @test "a kit with no channel marker is stable, as every older kit was" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
     export XDG_CONFIG_HOME="$HOME/.config"
     rm -f "$REPO/dist/channel"
-    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
-    [ -L "$(works_runtime_store)/stable" ]
+    env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    [ -L "$(wires_runtime_store)/stable" ]
 }
 
 # guards: install.sh writes the channel file, so "removed everything install.sh
 # added" has to include it — left behind, a later install is followed by an
-# `works-update` pointed at a channel nothing on the machine chose
+# `wires-update` pointed at a channel nothing on the machine chose
 @test "uninstalling takes the recorded channel back" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
     export XDG_CONFIG_HOME="$HOME/.config"
-    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
-    [ -r "$HOME/works/runtimes/.channel" ]
+    env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    [ -r "$HOME/wires/runtimes/.channel" ]
 
     run setsid --wait bash "$REPO/scripts/uninstall.sh" --yes
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
-    [ ! -e "$HOME/works/runtimes/.channel" ]
+    [ ! -e "$HOME/wires/runtimes/.channel" ]
 }
 
 # guards: the config directory is not ours to clear out — only the one file is
@@ -231,9 +231,9 @@ setup() {
 # thing here that cannot be reinstalled, so removal must be asked for
 @test "uninstalling keeps the Plug, and the work inside it" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
-    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
-    plug="$HOME/works/plugs/studio"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
+    env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    plug="$HOME/wires/plugs/studio"
     mkdir -p "$plug/drive_c"
     printf 'my set\n' > "$plug/drive_c/mine.als"
 
@@ -243,17 +243,17 @@ setup() {
 
 @test "uninstalling takes the shared toolkit only when no application is left" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
-    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
-    [ -r "$HOME/works/lib/runtime-env.sh" ]
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
+    env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    [ -r "$HOME/wires/lib/runtime-env.sh" ]
 
-    mkdir -p "$HOME/works/apps/another-app"      # a second tenant, mid-uninstall
+    mkdir -p "$HOME/wires/apps/another-app"      # a second tenant, mid-uninstall
     setsid --wait bash "$REPO/scripts/uninstall.sh" --yes >/dev/null 2>&1
-    [ -r "$HOME/works/lib/runtime-env.sh" ] || { echo "the toolkit went while another app still needs it" >&2; false; }
+    [ -r "$HOME/wires/lib/runtime-env.sh" ] || { echo "the toolkit went while another app still needs it" >&2; false; }
 
-    rmdir "$HOME/works/apps/another-app"
+    rmdir "$HOME/wires/apps/another-app"
     setsid --wait bash "$REPO/scripts/uninstall.sh" --yes >/dev/null 2>&1
-    [ ! -e "$HOME/works/lib" ]
+    [ ! -e "$HOME/wires/lib" ]
 }
 
 # --- setup-prefix.sh's own guard ----------------------------------------------
@@ -264,7 +264,7 @@ setup() {
 # guards: `wineboot -u` rewriting the registry under a live wineserver
 @test "setup-prefix refuses while something runs from the runtime" {
     root="$BATS_TEST_TMPDIR/rt"; mkdir -p "$root/bin"
-    export WORKS_RUNTIME="$root"
+    export WIRES_RUNTIME="$root"
     cp "$(command -v sleep)" "$root/bin/wineserver"
     "$root/bin/wineserver" 30 &
     local pid=$!
@@ -278,7 +278,7 @@ setup() {
 # exactly when nobody notices the prefix being rewritten
 @test "setup-prefix refuses with no terminal too" {
     root="$BATS_TEST_TMPDIR/rt"; mkdir -p "$root/bin"
-    export WORKS_RUNTIME="$root"
+    export WIRES_RUNTIME="$root"
     cp "$(command -v sleep)" "$root/bin/wineserver"
     "$root/bin/wineserver" 30 &
     local pid=$!
@@ -291,54 +291,54 @@ setup() {
 # stopped everything -- getting past it is the whole requirement
 @test "setup-prefix gets past the guard when nothing is running" {
     root="$BATS_TEST_TMPDIR/rt"; mkdir -p "$root/bin"
-    export WORKS_RUNTIME="$root"
+    export WIRES_RUNTIME="$root"
     run bash "$REPO/scripts/setup-prefix.sh"
     [[ "$output" != *"Close Live"* ]]
 }
 
 # guards: the app directory must contain the app — a launcher that lives only on
-# PATH means backing up ~/works misses the entry point, and removing the app
+# PATH means backing up ~/wires misses the entry point, and removing the app
 # leaves a working command pointing at nothing
 @test "the launcher lives with the application, and PATH holds a link to it" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
-    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
-    [ -x "$HOME/works/apps/ableton-live/ableton-live" ]
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
+    env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    [ -x "$HOME/wires/apps/ableton-live/ableton-live" ]
     [ -L "$HOME/.local/bin/ableton-live" ]
-    [ "$(readlink "$HOME/.local/bin/ableton-live")" = "$HOME/works/apps/ableton-live/ableton-live" ]
+    [ "$(readlink "$HOME/.local/bin/ableton-live")" = "$HOME/wires/apps/ableton-live/ableton-live" ]
 }
 
 # guards: one dated copy per install, on the PATH, pruned by nothing — the
 # defect the version store exists to end, in a second place
 @test "installing leaves no dated launcher copies behind" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
     mkdir -p "$HOME/.local/bin"
     : > "$HOME/.local/bin/ableton-live.rollback-20260101T000000Z"   # litter from an older installer
-    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
-    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
     n=$(find "$HOME/.local/bin" -name 'ableton-live.rollback-*' | wc -l)
     [ "$n" = 0 ] || { echo "$n dated launcher copies survived" >&2; false; }
 }
 
-@test "the works command lives outside any application, with its verbs beside the library" {
+@test "the wires command lives outside any application, with its verbs beside the library" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
-    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
-    [ -x "$HOME/works/bin/works" ]
-    [ -x "$HOME/works/lib/works-runtime" ]
-    [ ! -e "$HOME/works/apps/ableton-live/works" ]
-    [ -L "$HOME/.local/bin/works" ]
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
+    env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    [ -x "$HOME/wires/bin/wires" ]
+    [ -x "$HOME/wires/lib/wires-runtime" ]
+    [ ! -e "$HOME/wires/apps/ableton-live/wires" ]
+    [ -L "$HOME/.local/bin/wires" ]
     # the verbs implement the command; they are not commands
-    [ ! -e "$HOME/.local/bin/works-runtime" ]
+    [ ! -e "$HOME/.local/bin/wires-runtime" ]
     # Through the link, which is the only way a person invokes it: $0 is then
     # the link's path, and ../lib from there is not where the verbs live.
-    "$HOME/.local/bin/works" runtime path >/dev/null
-    "$HOME/works/bin/works" runtime path >/dev/null
+    "$HOME/.local/bin/wires" runtime path >/dev/null
+    "$HOME/wires/bin/wires" runtime path >/dev/null
 }
 
 # --- the infrastructure gate ----------------------------------------------------
-# Every kit carries its own copy of the Works infrastructure, so every install is
+# Every kit carries its own copy of the Wires infrastructure, so every install is
 # also a write onto a machine other applications may already depend on. The gate
 # arbitrates that write by the ABI range. The strand-prompt branch cannot be
 # reached here — this kit's OLDEST is 1 and nothing can be below it — so the
@@ -347,30 +347,30 @@ setup() {
 
 @test "a fresh install stamps the infrastructure contract" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
-    run env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
+    run env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
-    grep -q '^WORKS_ABI=' "$HOME/works/lib/runtime-env.sh"
-    grep -q '^WORKS_ABI_OLDEST=' "$HOME/works/lib/runtime-env.sh"
+    grep -q '^WIRES_ABI=' "$HOME/wires/lib/runtime-env.sh"
+    grep -q '^WIRES_ABI_OLDEST=' "$HOME/wires/lib/runtime-env.sh"
 }
 
-# guards: unguarded, whichever kit ran last owned ~/works/lib — installing an
+# guards: unguarded, whichever kit ran last owned ~/wires/lib — installing an
 # older application silently downgraded the infrastructure under every other
 # application on the machine
 @test "a newer installed infrastructure is kept, not overwritten" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
-    mkdir -p "$HOME/works/lib"
-    printf '# SENTINEL-NEWER-GENERATION\nWORKS_ABI=99\nWORKS_ABI_OLDEST=1\n' \
-        > "$HOME/works/lib/runtime-env.sh"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
+    mkdir -p "$HOME/wires/lib"
+    printf '# SENTINEL-NEWER-GENERATION\nWIRES_ABI=99\nWIRES_ABI_OLDEST=1\n' \
+        > "$HOME/wires/lib/runtime-env.sh"
 
-    run env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    run env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" == *"keeping the installed infrastructure"* ]]
-    grep -q 'SENTINEL-NEWER-GENERATION' "$HOME/works/lib/runtime-env.sh" \
+    grep -q 'SENTINEL-NEWER-GENERATION' "$HOME/wires/lib/runtime-env.sh" \
         || { echo "the newer library was overwritten by an older kit" >&2; false; }
     # the application itself still installed — that is the point of the split
-    [ -x "$HOME/works/apps/ableton-live/ableton-live" ]
+    [ -x "$HOME/wires/apps/ableton-live/ableton-live" ]
 }
 
 # guards: the other direction of the same promise — an installed infrastructure
@@ -378,55 +378,55 @@ setup() {
 # finding that out at install time beats finding it out as a launch failure
 @test "a kit below the installed OLDEST is refused whole" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
-    mkdir -p "$HOME/works/lib"
-    printf 'WORKS_ABI=99\nWORKS_ABI_OLDEST=99\n' > "$HOME/works/lib/runtime-env.sh"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
+    mkdir -p "$HOME/wires/lib"
+    printf 'WIRES_ABI=99\nWIRES_ABI_OLDEST=99\n' > "$HOME/wires/lib/runtime-env.sh"
 
-    run env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    run env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
     [ "$status" -ne 0 ]
     [[ "$output" == *"This kit is too old"* ]]
     # refused before anything landed: no store, no launcher
-    [ ! -e "$HOME/works/runtimes/stable" ]
-    [ ! -e "$HOME/works/apps/ableton-live/ableton-live" ]
+    [ ! -e "$HOME/wires/runtimes/stable" ]
+    [ ! -e "$HOME/wires/apps/ableton-live/ableton-live" ]
 }
 
-# guards: uninstalling one application used to run works_remove_runtimes and take
-# ~/works/bin/works unconditionally — so removing app A broke app B's launches
+# guards: uninstalling one application used to run wires_remove_runtimes and take
+# ~/wires/bin/wires unconditionally — so removing app A broke app B's launches
 # and deleted runtimes its Plugs were pinned to. The exact dependency between
 # applications the bundled model exists to prevent, created by the uninstaller.
 @test "uninstalling one application keeps the runtimes another still needs" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
-    env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
-    [ -L "$HOME/works/runtimes/stable" ]
-    mkdir -p "$HOME/works/apps/another-app"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
+    env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only >/dev/null 2>&1
+    [ -L "$HOME/wires/runtimes/stable" ]
+    mkdir -p "$HOME/wires/apps/another-app"
 
     run setsid --wait bash "$REPO/scripts/uninstall.sh" --yes
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" == *"kept the runtimes"* ]]
-    [ -L "$HOME/works/runtimes/stable" ] || { echo "the channel went with the wrong app" >&2; false; }
-    [ -x "$HOME/works/bin/works" ]       || { echo "the works command went with the wrong app" >&2; false; }
-    [ ! -e "$HOME/works/apps/ableton-live" ]
+    [ -L "$HOME/wires/runtimes/stable" ] || { echo "the channel went with the wrong app" >&2; false; }
+    [ -x "$HOME/wires/bin/wires" ]       || { echo "the wires command went with the wrong app" >&2; false; }
+    [ ! -e "$HOME/wires/apps/ableton-live" ]
 
     # and with the last application, everything shared goes too
-    rmdir "$HOME/works/apps/another-app"
+    rmdir "$HOME/wires/apps/another-app"
     setsid --wait bash "$REPO/scripts/uninstall.sh" --yes >/dev/null 2>&1
-    [ ! -e "$HOME/works/runtimes" ]
-    [ ! -e "$HOME/works/bin" ]
+    [ ! -e "$HOME/wires/runtimes" ]
+    [ ! -e "$HOME/wires/bin" ]
 }
 
 # --- the runtime install verb ---------------------------------------------------
-# The store lifecycle out of the application's installer: `works runtime
+# The store lifecycle out of the application's installer: `wires runtime
 # install` owns stop, migrate, stage, guard, promote and prune, and the caller
 # vouches for the build through --validate, run against the staged tree before
 # anything is promoted.
 
 @test "the verb installs into the store and honours --channel" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
-    run bash "$REPO/works/works-runtime" install "$tarball" --channel nightly
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
+    run bash "$REPO/wires/wires-runtime" install "$tarball" --channel nightly
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
-    container="$(works_runtime_store)"
+    container="$(wires_runtime_store)"
     [ -L "$container/nightly" ]
     [ -x "$container/$(readlink "$container/nightly")/bin/wine" ]
     [ "$(cat "$container/.channel")" = nightly ]
@@ -437,47 +437,47 @@ setup() {
 # machine unchanged - a validator that ran after promote would be an autopsy
 @test "a refusing validator stops the verb before anything is promoted" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
     v="$BATS_TEST_TMPDIR/refuse.sh"
     printf '#!/bin/sh\necho "!! vouch refused: $1" >&2\nexit 1\n' > "$v"; chmod +x "$v"
-    run bash "$REPO/works/works-runtime" install "$tarball" --validate "$v"
+    run bash "$REPO/wires/wires-runtime" install "$tarball" --validate "$v"
     [ "$status" -ne 0 ]
     [[ "$output" == *"vouch refused"* ]]
-    [ ! -e "$(works_runtime_store)/stable" ]
-    [ -z "$(find "$(works_runtime_store)" -maxdepth 1 -mindepth 1 -type d 2>/dev/null)" ]
+    [ ! -e "$(wires_runtime_store)/stable" ]
+    [ -z "$(find "$(wires_runtime_store)" -maxdepth 1 -mindepth 1 -type d 2>/dev/null)" ]
 }
 
-@test "the verb honours a pinned WORKS_RUNTIME with a dated rollback" {
+@test "the verb honours a pinned WIRES_RUNTIME with a dated rollback" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
     root="$BATS_TEST_TMPDIR/rt"
-    env WORKS_RUNTIME="$root" bash "$REPO/works/works-runtime" install "$tarball" >/dev/null 2>&1
-    run env WORKS_RUNTIME="$root" bash "$REPO/works/works-runtime" install "$tarball"
+    env WIRES_RUNTIME="$root" bash "$REPO/wires/wires-runtime" install "$tarball" >/dev/null 2>&1
+    run env WIRES_RUNTIME="$root" bash "$REPO/wires/wires-runtime" install "$tarball"
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [ -x "$root/bin/wine" ]
     [ "$(find "$(dirname "$root")" -maxdepth 1 -name "$(basename "$root")-rollback-*" | wc -l)" -eq 1 ]
-    [ ! -e "$HOME/works/runtimes/stable" ]
+    [ ! -e "$HOME/wires/runtimes/stable" ]
 }
 
 # guards: found in review. The ABI answers compatibility, not recency - two kits
 # both speaking ABI 1 carry different libraries, and comparing only the ABI made
 # equal-ABI installs last-writer-wins, so an older kit silently replaced a newer
-# library and took its fixes with it. WORKS_VERSION orders implementations
+# library and took its fixes with it. WIRES_VERSION orders implementations
 # within one interface.
 @test "an older implementation at the same ABI does not replace a newer one" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
-    mkdir -p "$HOME/works/lib"
-    printf '# SENTINEL-NEWER-IMPLEMENTATION\nWORKS_VERSION=99\nWORKS_ABI=1\nWORKS_ABI_OLDEST=1\n' \
-        > "$HOME/works/lib/runtime-env.sh"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
+    mkdir -p "$HOME/wires/lib"
+    printf '# SENTINEL-NEWER-IMPLEMENTATION\nWIRES_VERSION=99\nWIRES_ABI=1\nWIRES_ABI_OLDEST=1\n' \
+        > "$HOME/wires/lib/runtime-env.sh"
 
-    run env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    run env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" == *"keeping the installed infrastructure"* ]]
-    grep -q 'SENTINEL-NEWER-IMPLEMENTATION' "$HOME/works/lib/runtime-env.sh" \
+    grep -q 'SENTINEL-NEWER-IMPLEMENTATION' "$HOME/wires/lib/runtime-env.sh" \
         || { echo "an older implementation overwrote a newer one at equal ABI" >&2; false; }
     # and the application still installed, which is the point of keeping going
-    [ -x "$HOME/works/apps/ableton-live/ableton-live" ]
+    [ -x "$HOME/wires/apps/ableton-live/ableton-live" ]
 }
 
 # guards: the interface must never go backward even when the kit is newer by
@@ -485,11 +485,11 @@ setup() {
 # this kit's does not
 @test "a higher installed ABI is kept even against a newer implementation" {
     tarball="$(sandbox_tarball)"
-    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
-    mkdir -p "$HOME/works/lib"
-    printf '# SENTINEL-HIGHER-ABI\nWORKS_VERSION=0\nWORKS_ABI=99\nWORKS_ABI_OLDEST=1\n' \
-        > "$HOME/works/lib/runtime-env.sh"
-    run env WORKS_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
+    [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
+    mkdir -p "$HOME/wires/lib"
+    printf '# SENTINEL-HIGHER-ABI\nWIRES_VERSION=0\nWIRES_ABI=99\nWIRES_ABI_OLDEST=1\n' \
+        > "$HOME/wires/lib/runtime-env.sh"
+    run env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
-    grep -q 'SENTINEL-HIGHER-ABI' "$HOME/works/lib/runtime-env.sh"
+    grep -q 'SENTINEL-HIGHER-ABI' "$HOME/wires/lib/runtime-env.sh"
 }

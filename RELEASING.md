@@ -31,7 +31,7 @@ CI cannot launch Ableton Live, so the one check that matters stays human: downlo
 gh release edit v<VERSION> --draft=false
 ```
 
-Publishing flips `/releases/latest`, makes the manifest live for `works-update`, and runs `release.yml`'s verify job over every asset. A draft that fails the human check is deleted, not published; the tag can be reused after `git push --delete origin v<VERSION>`.
+Publishing flips `/releases/latest`, makes the manifest live for `wires-update`, and runs `release.yml`'s verify job over every asset. A draft that fails the human check is deleted, not published; the tag can be reused after `git push --delete origin v<VERSION>`.
 
 ## The plumbing, for when it misbehaves
 

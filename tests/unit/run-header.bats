@@ -7,7 +7,7 @@
 # for "does it exist and may it carry a version literal". Four of the ten defects
 # found on 2026-08-09 were in here, and the worst of them — that no unmigrated
 # machine was ever offered an update, because the existing-install test looked
-# only at ~/works/plugs/studio — would have been caught by the third test below.
+# only at ~/wires/plugs/studio — would have been caught by the third test below.
 #
 # The header is a template with a payload appended, so testing it means building
 # one: substitute the placeholders, tar a stub kit, concatenate. The stubs echo
@@ -24,7 +24,7 @@ setup() {
     HOME="$BATS_TEST_TMPDIR/home"
     export HOME
     mkdir -p "$HOME"
-    unset WORKS_PLUG WORKS_RUNTIME WORKS_HOME
+    unset WIRES_PLUG WIRES_RUNTIME WIRES_HOME
     RUN="$BATS_TEST_TMPDIR/fake.run"
     a_run
 }
@@ -42,8 +42,8 @@ a_run() {
     printf '#!/bin/sh\necho "KIT uninstall.sh $*"\n'            > "$kit/scripts/uninstall.sh"
     # The header sources these two, so they define rather than echo.
     cat > "$kit/scripts/runtime-env.sh" <<'EOF'
-works_runtime_path() { printf '%s\n' "$HOME/works/runtimes/stub"; }
-works_plug_path()    { printf '%s\n' "${WORKS_PLUG:-$HOME/works/plugs/studio}"; }
+wires_runtime_path() { printf '%s\n' "$HOME/wires/runtimes/stub"; }
+wires_plug_path()    { printf '%s\n' "${WIRES_PLUG:-$HOME/wires/plugs/studio}"; }
 EOF
     cat > "$kit/scripts/detect-scale.sh" <<'EOF'
 ableton_detect_scale_ex() { printf '1.0 stub\n'; }
@@ -69,13 +69,13 @@ a_legacy_install() {
     printf '2026.07.01.1\n' > "$HOME/.local/share/ableton-wine/VERSION"
 }
 
-# An installation on the ~/works layout, as this kit leaves one.
-a_works_install() {
-    mkdir -p "$HOME/works/runtimes/stub/bin" "$HOME/works/plugs/studio/drive_c" \
-             "$HOME/works/apps/ableton-live"
-    ln -sfn stub "$HOME/works/runtimes/stable"
-    : > "$HOME/works/plugs/studio/system.reg"
-    printf '2026.08.01.1\n' > "$HOME/works/apps/ableton-live/VERSION"
+# An installation on the ~/wires layout, as this kit leaves one.
+a_wires_install() {
+    mkdir -p "$HOME/wires/runtimes/stub/bin" "$HOME/wires/plugs/studio/drive_c" \
+             "$HOME/wires/apps/ableton-live"
+    ln -sfn stub "$HOME/wires/runtimes/stable"
+    : > "$HOME/wires/plugs/studio/system.reg"
+    printf '2026.08.01.1\n' > "$HOME/wires/apps/ableton-live/VERSION"
 }
 
 # --- the pre-extraction decision ---------------------------------------------
@@ -87,8 +87,8 @@ a_works_install() {
         || { echo "offered an update on a machine with nothing installed" >&2; false; }
 }
 
-@test "a machine on the ~/works layout is offered an update" {
-    a_works_install
+@test "a machine on the ~/wires layout is offered an update" {
+    a_wires_install
     run sh "$RUN" --no-launch --no-link
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" == *"existing installation was found"* ]]
@@ -97,7 +97,7 @@ a_works_install() {
 }
 
 # guards: THE defect. Every existing user is on the legacy layout on the day the
-# ~/works kit ships, and the header tested only ~/works/plugs/studio/system.reg
+# ~/wires kit ships, and the header tested only ~/wires/plugs/studio/system.reg
 # for the prefix — a path that by definition does not exist yet on such a
 # machine. So the update offer never fired, and the one population it was written
 # for walked the full-install path: asked for an Ableton download it did not
@@ -131,9 +131,9 @@ a_works_install() {
 # prefix that is not there rather than creating one. The install would fail where
 # the full path would have worked. Two questions, asked separately.
 @test "a runtime with no prefix takes the full install, not the update" {
-    mkdir -p "$HOME/works/runtimes/stub/bin" "$HOME/works/apps/ableton-live"
-    ln -sfn stub "$HOME/works/runtimes/stable"
-    printf '2026.08.01.1\n' > "$HOME/works/apps/ableton-live/VERSION"
+    mkdir -p "$HOME/wires/runtimes/stub/bin" "$HOME/wires/apps/ableton-live"
+    ln -sfn stub "$HOME/wires/runtimes/stable"
+    printf '2026.08.01.1\n' > "$HOME/wires/apps/ableton-live/VERSION"
     # deliberately no prefix, at either path
     run sh "$RUN" --no-launch --no-link
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
@@ -146,7 +146,7 @@ a_works_install() {
 # --- modes that must not consult the machine at all --------------------------
 
 @test "--runtime-only stops before the prefix, on any machine" {
-    a_works_install
+    a_wires_install
     run sh "$RUN" --runtime-only
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" == *"KIT install.sh"* ]]
@@ -155,7 +155,7 @@ a_works_install() {
 }
 
 @test "--update goes to the prefix refresh without asking" {
-    a_works_install
+    a_wires_install
     run sh "$RUN" --update
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" == *"KIT setup-prefix.sh --refresh"* ]]
@@ -170,7 +170,7 @@ a_works_install() {
 }
 
 @test "--uninstall runs the kit's uninstaller and stops" {
-    a_works_install
+    a_wires_install
     run sh "$RUN" --uninstall
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" == *"KIT uninstall.sh"* ]]
@@ -191,7 +191,7 @@ a_works_install() {
 
 # guards: --help sliced lines 2-18 of this file's own header comment, and line 18
 # is a note about the payload marker — so the options list ended with a sentence
-# of internal prose. The same line-range rot the works verbs were rewritten to
+# of internal prose. The same line-range rot the wires verbs were rewritten to
 # remove, in the one script they did not cover.
 @test "help ends on an option, not on prose about the payload" {
     run sh "$RUN" --help

@@ -10,18 +10,18 @@ bats_require_minimum_version 1.5.0
 load helpers/common
 
 # Files that are sourced, not executed, so they have no shebang of their own.
-SOURCED="scripts/detect-scale.sh scripts/detect-theme.sh scripts/ableton-profile.sh works/runtime-env.sh scripts/shortcut-hold.sh"
+SOURCED="scripts/detect-scale.sh scripts/detect-theme.sh scripts/ableton-profile.sh wires/runtime-env.sh scripts/shortcut-hold.sh"
 # The single-file installer header declares #!/bin/sh and then re-execs itself
 # into bash on line 19; shellcheck reads the shebang and not the re-exec.
 BASH_DIALECT="scripts/setup-run-header.sh"
 
-# works/works* are shipped commands carrying no .sh, so the glob above never
+# wires/wires* are shipped commands carrying no .sh, so the glob above never
 # reached them: four executables that make-installer.sh packs into the kit went
 # both unchecked and unparsed, and a warning in one was found by hand instead.
 all_shell_files() {
     (cd "$REPO" && git ls-files \
         'build.sh' 'scripts/*.sh' 'scripts/ableton-live' 'scripts/max9' \
-        'works/*.sh' 'works/works*' \
+        'wires/*.sh' 'wires/wires*' \
         'bin/ableton-live-beta' 'bin/ableton-live-portal' \
         'bin/ableton-wine-portal' 'bin/set-file-portal-policy' \
         'tests/run.sh' 'tests/catalogue.sh' 'tests/test-shortcut-hold.sh')
@@ -267,12 +267,12 @@ all_shell_files() {
     while read -r var; do
         [ -n "$var" ] || continue
         grep -q -- "-e \"$var=" build.sh || missing="$missing $var"
-    done < <(grep -oE '\$\{WORKS_[A-Z_]+:-' scripts/container-build.sh | sed 's/^\${//; s/:-$//' | sort -u)
+    done < <(grep -oE '\$\{WIRES_[A-Z_]+:-' scripts/container-build.sh | sed 's/^\${//; s/:-$//' | sort -u)
     [ -z "$missing" ] || { echo "container-build.sh reads these; build.sh passes none of them:$missing" >&2; false; }
 }
 
-# --- the works/ boundary --------------------------------------------------------
-# works/ is the future standalone repository, and its exit test was a comment
+# --- the wires/ boundary --------------------------------------------------------
+# wires/ is the future standalone repository, and its exit test was a comment
 # saying "grep for ableton and reach zero". A comment is not a gate: application
 # assumptions creep back into shared infrastructure exactly when nobody is
 # looking. This is the gate.
@@ -282,7 +282,7 @@ all_shell_files() {
 # edit, so counting comments would make documenting the debt look like incurring
 # it. The allowance is a fixed list of lines, not a count - a new mention has to
 # be added here by hand, which is the moment to ask whether it belongs.
-@test "works/ carries no application knowledge beyond the inventory" {
+@test "wires/ carries no application knowledge beyond the inventory" {
     cd "$REPO"
     # Strip comments and the fenced temporary compat block, then look for the
     # application's name in what is left.
@@ -293,7 +293,7 @@ all_shell_files() {
                 | grep -niE 'ableton|wine-d2d1-nspa|shibco' \
                 | grep -vE 'ABLETON_WINE_ROOT|ABLETON_WINEPREFIX' || true)"
         [ -z "$hits" ] || found="$found$f:"$'\n'"$hits"$'\n'
-    done < <(git ls-files 'works/*')
+    done < <(git ls-files 'wires/*')
     # A ratchet at the measured count, not a target: what remains is the
     # inventory's own list - the artifact BUILD-INFO filename, the frozen
     # legacy paths, the manifest URLs, the Live process scan and the legacy
@@ -303,9 +303,9 @@ all_shell_files() {
     allowed=32
     n="$(printf '%s' "$found" | grep -cE '^[0-9]+:' || true)"
     [ "$n" -le "$allowed" ] || {
-        echo "works/ gained application knowledge ($n mentions, allowance $allowed)." >&2
+        echo "wires/ gained application knowledge ($n mentions, allowance $allowed)." >&2
         echo "Each is a migration, not an edit - add it to the de-Ableton" >&2
-        echo "inventory in works/runtime-env.sh with its exit, or do not add it." >&2
+        echo "inventory in wires/runtime-env.sh with its exit, or do not add it." >&2
         printf '%s' "$found" >&2
         false
     }

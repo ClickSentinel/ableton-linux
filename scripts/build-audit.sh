@@ -5,14 +5,14 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 # Runtime naming and tarball selection resolve in one place; see
-# works/runtime-env.sh.
-for _l in "$(dirname "$0")/runtime-env.sh" "$root/works/runtime-env.sh"; do
-    # shellcheck source=works/runtime-env.sh
+# wires/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" "$root/wires/runtime-env.sh"; do
+    # shellcheck source=wires/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
-command -v works_pick_tarball >/dev/null 2>&1 || {
+command -v wires_pick_tarball >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
-NAME="$(works_runtime_name)"
+NAME="$(wires_runtime_name)"
 SERIES="$root/patches/SERIES.sha256"
 
 say()  { printf '%s\n' "$*"; }
@@ -41,7 +41,7 @@ if [ -z "$target" ]; then
     # Never a bare glob: this gate would otherwise certify the debug tree
     # instead of the runtime it is vouching for, and CI calls it with no
     # argument so the fallback is the path that actually runs.
-    target="$(works_pick_tarball "$root/dist")"
+    target="$(wires_pick_tarball "$root/dist")"
     [ -n "$target" ] || fail "no ${NAME}-*.tar.zst in dist/ and no argument given"
 fi
 cleanup_dir=""

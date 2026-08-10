@@ -24,8 +24,8 @@ MK="scripts/make-installer.sh"
 # `install -m644 ... "$kit/scripts/NAME"` lines.
 kit_script_names() {
     cd "$REPO"
-    sed -n '/^cp -a \(scripts\|works\)\//,/"\$kit\/scripts\/"/p' "$MK" \
-        | grep -oE '(scripts|works|tools)/[A-Za-z0-9_.-]+' | sed 's#.*/##'
+    sed -n '/^cp -a \(scripts\|wires\)\//,/"\$kit\/scripts\/"/p' "$MK" \
+        | grep -oE '(scripts|wires|tools)/[A-Za-z0-9_.-]+' | sed 's#.*/##'
     grep -oE 'install -m[0-9]+ [^ ]+ "\$kit/scripts/[A-Za-z0-9_.-]+"' "$MK" \
         | sed 's#.*/##; s#"$##'
 }
@@ -120,7 +120,7 @@ kit_script_names() {
 @test "only the shared lib and the build side spell the runtime name" {
     cd "$REPO"
     # install.sh and make-installer.sh used to hardcode it and were compared
-    # against each other; they now derive it from works_runtime_name, so they
+    # against each other; they now derive it from wires_runtime_name, so they
     # cannot disagree. What is left to check is that nobody reintroduces a
     # second spelling on the install side.
     #
@@ -128,7 +128,7 @@ kit_script_names() {
     # configure prefix and the artifact name, which is the one place the Wine
     # version genuinely belongs. setup-run-header.sh keeps one because it runs
     # before anything is installed and cannot source the lib.
-    allowed="works/runtime-env.sh build.sh scripts/container-build.sh scripts/build-audit.sh scripts/release.sh scripts/setup-run-header.sh"
+    allowed="wires/runtime-env.sh build.sh scripts/container-build.sh scripts/build-audit.sh scripts/release.sh scripts/setup-run-header.sh"
     offenders=""
     while read -r f; do
         case " $allowed " in *" $f "*) continue ;; esac
@@ -137,7 +137,7 @@ kit_script_names() {
     [ -z "$offenders" ] || {
         echo "these spell the runtime name instead of deriving it:$offenders" >&2; false; }
 
-    lib="$(grep -oE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' works/runtime-env.sh | head -1)"
+    lib="$(grep -oE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' wires/runtime-env.sh | head -1)"
     bs="$(grep -oE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' build.sh | head -1)"
     [ "$lib" = "$bs" ] || {
         echo "lib says '$lib', build.sh says '$bs'" >&2; false; }
@@ -164,7 +164,7 @@ kit_script_names() {
     # it. The installer's name is built from a label that defaults to VERSION,
     # so grepping for a source literal fails on a refactor that changed nothing
     # about the output — which is a test reporting on itself, not on the code.
-    unset WORKS_DIST_LABEL
+    unset WIRES_DIST_LABEL
     eval "$(grep -m1 '^VERSION=' "$MK")"
     eval "$(grep -m1 '^LABEL=' "$MK")"
     eval "produced=$(grep -m1 '^out=' "$MK" | cut -d= -f2-)"
@@ -184,7 +184,7 @@ kit_script_names() {
     # do not (update-desktop-database, sha256sum, readelf). So an underscore word
     # in command position is a function call, and it has to resolve somewhere —
     # in the file itself or in a lib the file sources.
-    defined="$(grep -hoE '^[a-z][a-z0-9_]*\(\)' scripts/* works/* 2>/dev/null | tr -d '()' | sort -u)"
+    defined="$(grep -hoE '^[a-z][a-z0-9_]*\(\)' scripts/* wires/* 2>/dev/null | tr -d '()' | sort -u)"
     missing=""
     while read -r f; do
         # Drop comments, glob forms, and anything shaped like an assignment —
@@ -200,18 +200,18 @@ kit_script_names() {
             command -v "$fn" >/dev/null 2>&1 && continue   # a real external command
             missing="$missing$f: $fn"$'\n'
         done
-    done < <(git ls-files 'scripts/*' 'works/*')
+    done < <(git ls-files 'scripts/*' 'wires/*')
     [ -z "$missing" ] || {
         echo "calls that resolve to no function or command:" >&2
         printf '%s' "$missing" >&2; false; }
 }
 
-# guards: make-installer accepted WORKS_RUNTIME_TARBALL with only an -f check,
+# guards: make-installer accepted WIRES_RUNTIME_TARBALL with only an -f check,
 # packed a 1.6G kit, and the kit's own install.sh then selected nothing from its
 # own payload — observed 2026-08-05
 @test "make-installer refuses a tarball the kit's installer cannot select" {
     cd "$REPO"
-    grep -qF 'works_is_runtime_tarball "$tarball"' "$MK" || {
+    grep -qF 'wires_is_runtime_tarball "$tarball"' "$MK" || {
         echo "make-installer.sh no longer checks the tarball it packs against the selector" >&2
         false; }
 }

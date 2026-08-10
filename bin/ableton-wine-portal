@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-runtime="${ABLETON_PORTAL_WINE_ROOT:-$HOME/works/wine-d2d1-nspa-11.13-portal}"
-prefix="${WORKS_PLUG:-$HOME/works/plugs/studio}"
+runtime="${ABLETON_PORTAL_WINE_ROOT:-$HOME/wires/wine-d2d1-nspa-11.13-portal}"
+prefix="${WIRES_PLUG:-$HOME/wires/plugs/studio}"
 
 if [[ ! -x "$runtime/bin/wine" || ! -x "$runtime/bin/wineserver" ]]; then
     echo "Portal-enabled Ableton Wine runtime is missing: $runtime" >&2

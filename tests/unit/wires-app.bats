@@ -1,31 +1,31 @@
 #!/usr/bin/env bats
 #
-# works/works-app — the applications installed on this machine.
+# wires/wires-app — the applications installed on this machine.
 #
 # The apps directory is the census, so listing is a walk and removal is a
 # directory - and removal must never reach into a Plug: what an application
 # installed into a prefix stays until the Plug goes.
 #
-#   ./tests/run.sh tests/unit/works-app.bats
+#   ./tests/run.sh tests/unit/wires-app.bats
 
 bats_require_minimum_version 1.5.0
 
 load ../helpers/common
 
-APPCMD() { bash "$REPO/works/works-app" "$@"; }
+APPCMD() { bash "$REPO/wires/wires-app" "$@"; }
 
 setup() {
     HOME="$BATS_TEST_TMPDIR/home"
     export HOME
-    export WORKS_HOME="$HOME/works"
-    unset WORKS_RUNTIME WORKS_PLUG
-    mkdir -p "$HOME/.local/bin" "$WORKS_HOME/apps"
+    export WIRES_HOME="$HOME/wires"
+    unset WIRES_RUNTIME WIRES_PLUG
+    mkdir -p "$HOME/.local/bin" "$WIRES_HOME/apps"
 }
 
 an_app() {   # name, [version], [min]
-    local d="$WORKS_HOME/apps/$1"
+    local d="$WIRES_HOME/apps/$1"
     mkdir -p "$d"
-    printf '#!/bin/sh\nWORKS_ABI_MIN=%s\n' "${3:-1}" > "$d/$1"
+    printf '#!/bin/sh\nWIRES_ABI_MIN=%s\n' "${3:-1}" > "$d/$1"
     chmod +x "$d/$1"
     [ -z "${2:-}" ] || printf '%s\n' "$2" > "$d/VERSION"
     ln -sfn "$d/$1" "$HOME/.local/bin/$1"
@@ -51,16 +51,16 @@ an_app() {   # name, [version], [min]
 @test "rm removes the application and its own link, and nothing else" {
     an_app ableton-live 2026.08.10.1
     an_app notepad-plus-plus 8.9.7
-    mkdir -p "$WORKS_HOME/plugs/studio/drive_c"
-    printf 'work\n' > "$WORKS_HOME/plugs/studio/drive_c/set.als"
+    mkdir -p "$WIRES_HOME/plugs/studio/drive_c"
+    printf 'work\n' > "$WIRES_HOME/plugs/studio/drive_c/set.als"
 
     run APPCMD rm notepad-plus-plus -y
     [ "$status" -eq 0 ]
-    [ ! -e "$WORKS_HOME/apps/notepad-plus-plus" ]
+    [ ! -e "$WIRES_HOME/apps/notepad-plus-plus" ]
     [ ! -e "$HOME/.local/bin/notepad-plus-plus" ]
     # the other application and the Plug's contents are untouched
-    [ -x "$WORKS_HOME/apps/ableton-live/ableton-live" ]
-    [ "$(cat "$WORKS_HOME/plugs/studio/drive_c/set.als")" = "work" ]
+    [ -x "$WIRES_HOME/apps/ableton-live/ableton-live" ]
+    [ "$(cat "$WIRES_HOME/plugs/studio/drive_c/set.als")" = "work" ]
 }
 
 # guards: a same-named command from anywhere else is not ours to delete
@@ -84,13 +84,13 @@ an_app() {   # name, [version], [min]
 # guards: with no terminal nobody consented; -y is how a script says it meant it
 @test "rm without a terminal refuses unless -y" {
     an_app notepad-plus-plus
-    run setsid bash "$REPO/works/works-app" rm notepad-plus-plus
+    run setsid bash "$REPO/wires/wires-app" rm notepad-plus-plus
     [ "$status" -ne 0 ]
-    [ -d "$WORKS_HOME/apps/notepad-plus-plus" ]
+    [ -d "$WIRES_HOME/apps/notepad-plus-plus" ]
 }
 
 @test "help ends on a command, not on prose" {
     run APPCMD help
     [ "$status" -eq 0 ]
-    [[ "$output" == *"works app rm"* ]]
+    [[ "$output" == *"wires app rm"* ]]
 }

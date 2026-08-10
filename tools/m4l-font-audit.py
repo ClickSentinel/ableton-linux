@@ -83,7 +83,7 @@ def probe_available(prefix, verbose=False):
     if not os.path.exists(exe):
         return None
     wine = os.path.join(os.path.expanduser(os.environ.get(
-        "WORKS_RUNTIME", _resolved_root())), "bin/wine")
+        "WIRES_RUNTIME", _resolved_root())), "bin/wine")
     if not os.path.exists(wine):
         wine = "wine"
     env = dict(os.environ, WINEPREFIX=prefix, WINEDEBUG="-all")
@@ -248,7 +248,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("paths", nargs="*", help="dirs or .amxd files to scan")
     ap.add_argument("--prefix", default=os.environ.get(
-        "WORKS_PLUG", os.path.expanduser("~/works/plugs/studio")))
+        "WIRES_PLUG", os.path.expanduser("~/wires/plugs/studio")))
     ap.add_argument("--verbose", "-v", action="store_true")
     ap.add_argument("--no-probe", action="store_true",
                     help="skip fontprobe.exe and use the fc-list estimate")
@@ -386,10 +386,10 @@ def _resolved_root():
     """Ask the installed resolver where the runtime is.
 
     The path stopped being a constant when the runtime moved into a store keyed
-    by build; works-runtime answers for both layouts.
+    by build; wires-runtime answers for both layouts.
     """
     try:
-        return subprocess.run(["works-runtime", "path"], capture_output=True,
+        return subprocess.run(["wires-runtime", "path"], capture_output=True,
                               text=True, check=True).stdout.strip()
     except Exception:
-        return os.path.expanduser("~/works/runtimes/stable")
+        return os.path.expanduser("~/wires/runtimes/stable")

@@ -1,39 +1,39 @@
 #!/usr/bin/env bats
 #
-# works/works-update — deciding whether to replace the runtime.
+# wires/wires-update — deciding whether to replace the runtime.
 #
 # Everything the updater does before it downloads is a refusal: same build,
 # unknown channel, incomplete manifest, a Wine base it cannot take a Plug back
 # across, a runtime something is still running from. Those refusals are the
 # feature — the download is the easy part — so this file is mostly about them.
 #
-# Nothing here reaches the network. WORKS_MANIFEST_URL points curl at a
+# Nothing here reaches the network. WIRES_MANIFEST_URL points curl at a
 # file:// URL, which is the same code path a real channel takes.
 #
-#   ./tests/run.sh tests/unit/works-update.bats
+#   ./tests/run.sh tests/unit/wires-update.bats
 
 bats_require_minimum_version 1.5.0
 
 load ../helpers/common
 
-UPD="$REPO/works/works-update"
+UPD="$REPO/wires/wires-update"
 
 setup() {
-    # works_runtime_busy falls back to pgrep when the /proc scan finds nothing,
+    # wires_runtime_busy falls back to pgrep when the /proc scan finds nothing,
     # and that fallback reads the whole host. Unstubbed, this file's verdict
     # depends on what else happens to be running — including the fake Live that
-    # works-runtime.bats spawns, which is precisely what the pattern matches.
+    # wires-runtime.bats spawns, which is precisely what the pattern matches.
     setup_stubs
     stub pgrep 1
     HOME="$BATS_TEST_TMPDIR/home"
     export HOME XDG_CONFIG_HOME="$HOME/.config"
-    export WORKS_HOME="$HOME/works"
-    export WORKS_CHANNEL_FILE="$XDG_CONFIG_HOME/works/channel"
-    mkdir -p "$XDG_CONFIG_HOME/works" "$WORKS_HOME/runtimes"
-    unset WORKS_CHANNEL WORKS_RUNTIME
+    export WIRES_HOME="$HOME/wires"
+    export WIRES_CHANNEL_FILE="$XDG_CONFIG_HOME/wires/channel"
+    mkdir -p "$XDG_CONFIG_HOME/wires" "$WIRES_HOME/runtimes"
+    unset WIRES_CHANNEL WIRES_RUNTIME
     PUB="$BATS_TEST_TMPDIR/pub"; mkdir -p "$PUB"
-    export WORKS_MANIFEST_URL="file://$PUB/manifest.txt"
-    STORE="$WORKS_HOME/runtimes"
+    export WIRES_MANIFEST_URL="file://$PUB/manifest.txt"
+    STORE="$WIRES_HOME/runtimes"
 }
 
 # A build in the store: a directory with a BUILD-INFO the resolver can read.
@@ -42,7 +42,7 @@ setup() {
 # The Wine base is two separate facts and they are not interchangeable. The
 # `wine:` label is what a manifest carries and what the early advisory compares;
 # share/wine/wine.inf is what Wine itself reads, and its mtime is what
-# works_base_move answers from. A fixture setting only the label would satisfy a
+# wires_base_move answers from. A fixture setting only the label would satisfy a
 # test the real field could not.
 a_build() {   # name, commit, built-at, wine, [base-stamp]
     local d="$STORE/$1"
@@ -57,7 +57,7 @@ a_build() {   # name, commit, built-at, wine, [base-stamp]
 # purpose: an unbound Plug follows the channel, which is what makes it one of
 # the Plugs a retarget actually moves.
 a_plug() {   # name, base-stamp
-    local d="$WORKS_HOME/plugs/$1"
+    local d="$WIRES_HOME/plugs/$1"
     mkdir -p "$d/drive_c"
     : > "$d/system.reg"
     printf '%s\n' "$2" > "$d/.update-timestamp"
@@ -69,11 +69,11 @@ a_manifest() {   # channel, commit, built-at, wine, installer, sha
     local info="$BATS_TEST_TMPDIR/pub-info.txt"
     printf 'dist-version: 2026.08.04.1\nsource-commit: %s\nbuilt-at:     %s\nwine:         %s\n' \
         "$2" "$3" "$4" > "$info"
-    ( . "$REPO/works/runtime-env.sh"
-      works_manifest_write "$1" "$info" "$5" "$6" ) > "$PUB/manifest.txt"
+    ( . "$REPO/wires/runtime-env.sh"
+      wires_manifest_write "$1" "$info" "$5" "$6" ) > "$PUB/manifest.txt"
 }
 
-on_channel() { printf '%s\n' "$1" > "$WORKS_CHANNEL_FILE"; }
+on_channel() { printf '%s\n' "$1" > "$WIRES_CHANNEL_FILE"; }
 point_at()   { ln -sfn "$2" "$STORE/$1"; }
 
 # --- nothing to do ------------------------------------------------------------
@@ -133,7 +133,7 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
     a_manifest nightly bbbbbbbb 2026-08-07T10:00:00Z wine-11.13 x.run deadbeef
 
     run "$UPD" --channel nightly
-    [ "$(cat "$WORKS_CHANNEL_FILE")" = "nightly" ]
+    [ "$(cat "$WIRES_CHANNEL_FILE")" = "nightly" ]
 }
 
 # guards: a switch must move the channel it names, and only that one
@@ -150,7 +150,7 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
 
 # guards: a retarget under a running Live is safe and must not refuse — the
 # resolver hands back the build rather than the channel, so a started session
-# keeps what it started with. `works runtime use` allows exactly this, and the
+# keeps what it started with. `wires runtime use` allows exactly this, and the
 # two commands disagreeing about it would be the surprise.
 @test "a channel switch is allowed while something is running, with a note" {
     a_build 2026.08.04.1+aaaa aaaaaaaa 2026-08-06T10:00:00Z wine-11.13
@@ -184,7 +184,7 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
     run "$UPD" --channel nightly --check
     [ "$status" -eq 0 ]
     [ ! -e "$STORE/nightly" ]
-    [ "$(cat "$WORKS_CHANNEL_FILE")" = "stable" ]
+    [ "$(cat "$WIRES_CHANNEL_FILE")" = "stable" ]
 }
 
 # --- what it refuses ----------------------------------------------------------
@@ -216,7 +216,7 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
 
 @test "a manifest that cannot be fetched is an error, not an update" {
     on_channel stable
-    WORKS_MANIFEST_URL="file://$PUB/absent.txt" run "$UPD"
+    WIRES_MANIFEST_URL="file://$PUB/absent.txt" run "$UPD"
     [ "$status" -ne 0 ]
     [[ "$output" == *"could not fetch"* ]]
 }
@@ -389,7 +389,7 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
 # This asserted --runtime-only until 2026-08-09, which is how the defect stayed
 # invisible: updating by command and updating by installer left two different
 # machines, and the test pinned the difference in place as if it were the
-# contract. A user who only ever ran `works update` never received a
+# contract. A user who only ever ran `wires update` never received a
 # prefix-policy change and had no way to find out.
 @test "a matching checksum reaches the installer, through the update door" {
     a_build 2026.08.04.1+aaaa aaaaaaaa 2026-08-06T10:00:00Z wine-11.13
@@ -418,7 +418,7 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
     a_manifest stable bbbbbbbb 2026-08-07T10:00:00Z wine-11.13 x.run "$sha"
     mv "$PUB/manifest.txt" "$PUB/moved/manifest.txt"
 
-    WORKS_MANIFEST_URL="file://$PUB/moved/manifest.txt" run "$UPD" --yes
+    WIRES_MANIFEST_URL="file://$PUB/moved/manifest.txt" run "$UPD" --yes
     [ "$status" -eq 0 ]
     [[ "$output" == *"FROM MOVED"* ]]
 }
@@ -528,7 +528,7 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
     run "$UPD" --help
     [ "$status" -eq 0 ]
     last="$(printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | tail -1)"
-    [[ "$last" == "  works update"* ]] \
+    [[ "$last" == "  wires update"* ]] \
         || { echo "help trails into prose: $last" >&2; false; }
 }
 
@@ -539,26 +539,26 @@ point_at()   { ln -sfn "$2" "$STORE/$1"; }
     done
 }
 
-# guards: WORKS_RUNTIME is the outermost say in every resolver, and a pinned
+# guards: WIRES_RUNTIME is the outermost say in every resolver, and a pinned
 # machine opts out of channels. This used to read the channel and the store as
 # usual and then install flat to the pin with a dated rollback, never touching
 # the channel — reporting a channel it had not changed. Refusing before any
 # fetch is the honest answer, and the message says what a pinned machine that
 # really means it should do instead.
-@test "a pinned WORKS_RUNTIME is refused before any fetch" {
+@test "a pinned WIRES_RUNTIME is refused before any fetch" {
     a_build 2026.08.04.1+aaaa aaaaaaaa 2026-08-06T10:00:00Z wine-11.13
     point_at stable 2026.08.04.1+aaaa
     on_channel stable
 
-    run env WORKS_RUNTIME="$STORE/2026.08.04.1+aaaa" "$UPD" --yes
+    run env WIRES_RUNTIME="$STORE/2026.08.04.1+aaaa" "$UPD" --yes
     [ "$status" -ne 0 ]
     [[ "$output" == *"pinned"* ]]
-    [[ "$output" == *"WORKS_RUNTIME_TARBALL"* ]]
+    [[ "$output" == *"WIRES_RUNTIME_TARBALL"* ]]
     [[ "$output" != *"== channel:"* ]] \
         || { echo "it went on to consult the channel anyway" >&2; false; }
 }
 
-# guards: same measurement as works-runtime's same-base tests - by stamp alone
+# guards: same measurement as wires-runtime's same-base tests - by stamp alone
 # the no-download channel switch to a newer build of the same base would demand
 # the base-change consent on every routine catch-up. Labels equal means Wine
 # re-runs its prefix update exactly as every update always made it do.

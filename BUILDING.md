@@ -21,8 +21,8 @@ Run:
 ./build.sh
 ./scripts/install.sh
 ./scripts/setup-prefix.sh
-WINEPREFIX="$HOME/works/plugs/studio" \
-  "$(works runtime path)/bin/wine" \
+WINEPREFIX="$HOME/wires/plugs/studio" \
+  "$(wires runtime path)/bin/wine" \
   "/path/to/Ableton Live 12 Suite Installer.exe"
 ableton-live
 ```
@@ -81,10 +81,10 @@ make verify
 
 ## Environment variables
 
-- `WORKS_RUNTIME` selects the Wine runtime. The default is
-  `$(works runtime path)`.
-- `WORKS_PLUG` selects the Wine prefix. The default is
-  `~/works/plugs/studio`.
+- `WIRES_RUNTIME` selects the Wine runtime. The default is
+  `$(wires runtime path)`.
+- `WIRES_PLUG` selects the Wine prefix. The default is
+  `~/wires/plugs/studio`.
 - `ABLETON_LIVE_VERSION=11|12` selects a Live major version.
 - `ABLETON_LIVE_EXE` selects one exact Live executable.
 - `ABLETON_SHORTCUTS=take` temporarily turns off exact Ctrl+Alt+Up and

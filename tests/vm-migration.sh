@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Does a real machine in the shipped layout end up correct in ~/works?
+# Does a real machine in the shipped layout end up correct in ~/wires?
 #
 # Runs on a guest with two kits beside it: the published release (flat layout,
 # what every user has today) and the candidate. Installs the first, asserts the
@@ -32,7 +32,7 @@ printf 'the user work that must not be lost\n' > "$HOME/.wine-ableton/drive_c/us
 echo "-- the old world, before migrating:"
 check "flat runtime at the legacy path"      '[ -d "$HOME/.local/opt/wine-d2d1-nspa-11.13" ]'
 check "prefix at the legacy path"            '[ -d "$HOME/.wine-ableton" ]'
-check "no ~/works yet"                       '[ ! -e "$HOME/works" ]'
+check "no ~/wires yet"                       '[ ! -e "$HOME/wires" ]'
 
 echo
 echo "== [2/4] install the candidate over it =="
@@ -42,7 +42,7 @@ grep -E '^   (layout|plug):' /tmp/new-install.log | sed 's/^/  /'
 
 echo
 echo "== [3/4] the new world =="
-store="$HOME/works/runtimes"
+store="$HOME/wires/runtimes"
 # Two builds is the right answer, not one: the release migrated in and the one
 # just installed are different builds of the same version, and keeping the old
 # one is exactly what makes rollback possible.
@@ -55,17 +55,17 @@ check "stable points at the build just installed" '[ -d "$entry" ] && grep -q "$
 check "the runtime executes"                 '"$entry/bin/wine" --version'
 check "the legacy runtime path is gone"      '[ ! -e "$HOME/.local/opt/wine-d2d1-nspa-11.13" ]'
 
-plug="$HOME/works/plugs/studio"
+plug="$HOME/wires/plugs/studio"
 check "the prefix became a Plug"             '[ -d "$plug" ]'
 check "the legacy prefix path is gone"       '[ ! -e "$HOME/.wine-ableton" ]'
 check "the user's work survived"             '[ "$(cat "$plug/drive_c/users/$USER/my-set.als")" = "the user work that must not be lost" ]'
 check "dosdevices/c: still resolves"         '[ "$(readlink "$plug/dosdevices/c:")" = "../drive_c" ]'
 check "the outward symlink still resolves"   '[ -d "$plug/drive_c/users/$USER/Documents-host" ]'
 
-check "the shared toolkit is in lib/"        '[ -r "$HOME/works/lib/runtime-env.sh" ]'
-check "Ableton's payload is in apps/"        '[ -x "$HOME/works/apps/ableton-live/ableton-linkd" ]'
+check "the shared toolkit is in lib/"        '[ -r "$HOME/wires/lib/runtime-env.sh" ]'
+check "Ableton's payload is in apps/"        '[ -x "$HOME/wires/apps/ableton-live/ableton-linkd" ]'
 check "the launcher is on PATH"              '[ -x "$HOME/.local/bin/ableton-live" ]'
-check "the launcher resolves the new store"  'grep -q works "$HOME/.local/bin/ableton-live"'
+check "the launcher resolves the new store"  'grep -q wires "$HOME/.local/bin/ableton-live"'
 
 echo
 echo "== [4/4] re-running the installer is a no-op, not a second migration =="

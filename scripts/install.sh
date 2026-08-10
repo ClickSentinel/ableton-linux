@@ -8,21 +8,21 @@ set -euo pipefail
 export LC_ALL=C.UTF-8
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
-# The Works files sit beside this script in a kit (the kit is flat) and in
-# works/ in a checkout. Resolved once; every stage below uses it.
-works_src="$here"; [ -f "$works_src/works" ] || works_src="$root/works"
+# The Wires files sit beside this script in a kit (the kit is flat) and in
+# wires/ in a checkout. Resolved once; every stage below uses it.
+wires_src="$here"; [ -f "$wires_src/wires" ] || wires_src="$root/wires"
 
 BIN="$HOME/.local/bin"
 APPS="$HOME/.local/share/applications"
 # Runtime naming, path resolution, tarball selection and the process scan all
-# resolve in one place; see works/runtime-env.sh.
-for _l in "$(dirname "$0")/runtime-env.sh" "$root/works/runtime-env.sh"; do
-    # shellcheck source=works/runtime-env.sh
+# resolve in one place; see wires/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" "$root/wires/runtime-env.sh"; do
+    # shellcheck source=wires/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
-command -v works_runtime_path >/dev/null 2>&1 || {
+command -v wires_runtime_path >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
-NAME="$(works_runtime_name)"
+NAME="$(wires_runtime_name)"
 verb_spoke=0
 
 cleanup()
@@ -39,12 +39,12 @@ cleanup()
 trap cleanup EXIT
 
 # tarball: prefer dist/ (freshly built), else a release tarball dropped in root
-if [ -n "${WORKS_RUNTIME_TARBALL:-}" ]; then
-    tarball="$WORKS_RUNTIME_TARBALL"
-    [ -f "$tarball" ] || { echo "!! WORKS_RUNTIME_TARBALL is not a file: $tarball" >&2; exit 1; }
+if [ -n "${WIRES_RUNTIME_TARBALL:-}" ]; then
+    tarball="$WIRES_RUNTIME_TARBALL"
+    [ -f "$tarball" ] || { echo "!! WIRES_RUNTIME_TARBALL is not a file: $tarball" >&2; exit 1; }
 else
-    tarball="$(works_pick_tarball "$root/dist")"
-    [ -n "$tarball" ] || tarball="$(works_pick_tarball "$root")"
+    tarball="$(wires_pick_tarball "$root/dist")"
+    [ -n "$tarball" ] || tarball="$(wires_pick_tarball "$root")"
 fi
 [ -n "$tarball" ] || { echo "!! no ${NAME}-*.tar.zst found: run ./build.sh first, or drop a release tarball in $root/dist/"; exit 1; }
 
@@ -56,7 +56,7 @@ else
 fi
 
 # --- the infrastructure gate --------------------------------------------------
-# Decided by Works itself: works/install-works.sh owns both the arbitration and
+# Decided by Wires itself: wires/install-wires.sh owns both the arbitration and
 # the write, because the infrastructure is not this application's to version.
 # check runs here - before anything is stopped or moved, since two of its
 # outcomes are refusals and a refusal this early leaves the machine untouched -
@@ -69,9 +69,9 @@ fi
 # The floor this kit's application declares is read from its own launcher and
 # passed in: which generation the app needs is app knowledge, and the gate
 # should not know where any application keeps it.
-kit_app_min="$(works_abi_field "$here/ableton-live" WORKS_ABI_MIN 2>/dev/null || echo 1)"
+kit_app_min="$(wires_abi_field "$here/ableton-live" WIRES_ABI_MIN 2>/dev/null || echo 1)"
 gate_rc=0
-"$works_src/install-works.sh" check --app-min "$kit_app_min" || gate_rc=$?
+"$wires_src/install-wires.sh" check --app-min "$kit_app_min" || gate_rc=$?
 # 3 (keep the newer infrastructure) proceeds like 0: the write step re-derives
 # the same decision and keeps it, so nothing here needs to remember which.
 case "$gate_rc" in 0|3) ;; *) exit 1 ;; esac
@@ -123,28 +123,28 @@ if command -v readelf >/dev/null; then
 fi
 
 # The store lifecycle - stop, migrate, stage, guard, promote, prune, and the
-# rollback if any of it fails - is Works' own: `works runtime install` owns it
+# rollback if any of it fails - is Wires' own: `wires runtime install` owns it
 # whole, and this application vouches for the build's contents through the
-# validator it passes in. WORKS_RUNTIME reaches the verb through the
+# validator it passes in. WIRES_RUNTIME reaches the verb through the
 # environment and keeps its meaning: pinned installs are flat, with a dated
 # rollback and no channel.
 verb_spoke=1
-"$works_src/works-runtime" install "$tarball" --channel "$CHANNEL" \
+"$wires_src/wires-runtime" install "$tarball" --channel "$CHANNEL" \
     --validate "$here/validate-runtime.sh"
 
-echo "== install launcher -> ~/works/apps/ableton-live =="
-mkdir -p "$BIN" "$HOME/works/apps/ableton-live" "$HOME/works/bin" "$HOME/works/lib"
+echo "== install launcher -> ~/wires/apps/ableton-live =="
+mkdir -p "$BIN" "$HOME/wires/apps/ableton-live" "$HOME/wires/bin" "$HOME/wires/lib"
 # The launcher belongs to the application, so it lives with it and ~/.local/bin
 # holds a link. Anything else means the app's directory does not contain the app:
-# backing up ~/works would miss its entry point, and removing the app directory
+# backing up ~/wires would miss its entry point, and removing the app directory
 # would leave a working command behind pointing at nothing.
-install -m755 "$here/ableton-live" "$HOME/works/apps/ableton-live/ableton-live"
-ln -sfn "$HOME/works/apps/ableton-live/ableton-live" "$BIN/ableton-live"
+install -m755 "$here/ableton-live" "$HOME/wires/apps/ableton-live/ableton-live"
+ln -sfn "$HOME/wires/apps/ableton-live/ableton-live" "$BIN/ableton-live"
 
 # The infrastructure write, exactly as `check` decided it up top: the command,
 # the verbs, the shared library, the PATH link, and the legacy cleanup all live
-# in works/install-works.sh, because none of it is this application's.
-"$works_src/install-works.sh" install
+# in wires/install-wires.sh, because none of it is this application's.
+"$wires_src/install-wires.sh" install
 
 # Dated copies of the launcher accumulated here on every install, one per run,
 # with nothing to prune them - the same defect the version store exists to end,
@@ -152,25 +152,25 @@ ln -sfn "$HOME/works/apps/ableton-live/ableton-live" "$BIN/ableton-live"
 # from the kit, so the copies bought nothing. Clear out any left behind.
 rm -f "$BIN"/ableton-live.rollback-* 2>/dev/null || true
 
-echo "== install the shared toolkit -> ~/works/lib =="
+echo "== install the shared toolkit -> ~/wires/lib =="
 # The launcher sources these on every start (DPI auto-calibration, light/dark
 # theme sync, and crash-safe GNOME shortcut holding).
 # Two directories because they hold two different things: the toolkit any
 # application sources, and this application's own payload.
-mkdir -p "$HOME/works/lib" "$HOME/works/apps/ableton-live"
+mkdir -p "$HOME/wires/lib" "$HOME/wires/apps/ableton-live"
 # The app toolkit lives with the app, not in lib: lib is generation-locked by
 # the infrastructure gate, so app payload there would skip its own update
 # whenever a newer infrastructure is kept - and the app's directory should
 # contain the app. The launcher sources these as siblings.
-install -m644 "$here/detect-scale.sh" "$HOME/works/apps/ableton-live/detect-scale.sh"
-install -m644 "$here/detect-theme.sh" "$HOME/works/apps/ableton-live/detect-theme.sh"
-install -m644 "$here/shortcut-hold.sh" "$HOME/works/apps/ableton-live/shortcut-hold.sh"
+install -m644 "$here/detect-scale.sh" "$HOME/wires/apps/ableton-live/detect-scale.sh"
+install -m644 "$here/detect-theme.sh" "$HOME/wires/apps/ableton-live/detect-theme.sh"
+install -m644 "$here/shortcut-hold.sh" "$HOME/wires/apps/ableton-live/shortcut-hold.sh"
 # setsyscolors.exe repaints the top bar mid-session when the Live theme changes;
 # without it the colors still apply on the next launch. Kit stages it next to
 # these scripts; a repo checkout carries it in tools/.
 for f in "$here/setsyscolors.exe" "$root/tools/setsyscolors.exe"; do
     if [ -f "$f" ]; then
-        install -m644 "$f" "$HOME/works/apps/ableton-live/setsyscolors.exe"
+        install -m644 "$f" "$HOME/wires/apps/ableton-live/setsyscolors.exe"
         break
     fi
 done
@@ -179,7 +179,7 @@ done
 # manual splitter nudge once per session.
 for f in "$here/learnheal.exe" "$root/tools/learnheal.exe"; do
     if [ -f "$f" ]; then
-        install -m644 "$f" "$HOME/works/apps/ableton-live/learnheal.exe"
+        install -m644 "$f" "$HOME/wires/apps/ableton-live/learnheal.exe"
         break
     fi
 done
@@ -197,22 +197,22 @@ if systemctl --user is-active --quiet ableton-linkd.service 2>/dev/null; then
     systemctl --user stop ableton-linkd.service 2>/dev/null || true
 fi
 pkill -x ableton-linkd 2>/dev/null || true   # launcher-started instance, no unit
-install -m755 "$linkd" "$HOME/works/apps/ableton-live/ableton-linkd"
-install -m644 "$linkd_unit" "$HOME/works/apps/ableton-live/ableton-linkd.service"
+install -m755 "$linkd" "$HOME/wires/apps/ableton-live/ableton-linkd"
+install -m644 "$linkd_unit" "$HOME/wires/apps/ableton-live/ableton-linkd.service"
 if [ "$linkd_active" -eq 1 ]; then
     systemctl --user start ableton-linkd.service 2>/dev/null || true
 fi
 # Keep the setup command installed for retries after a firewall or
 # hook-removal failure.
-install -m755 "$here/setup-link.sh" "$HOME/works/apps/ableton-live/setup-link.sh"
+install -m755 "$here/setup-link.sh" "$HOME/wires/apps/ableton-live/setup-link.sh"
 
 # The prefix setup belongs to this application, not to the runtime: it seeds
 # fonts, winetricks components and registry policy for Live specifically. It has
 # only ever been run out of the unpacked kit, which the .run deletes on the way
-# out - so it existed on no installed machine, `works plug new` printed a path to
+# out - so it existed on no installed machine, `wires plug new` printed a path to
 # it that could not work, and there was no supported way to set a second Plug up
 # at all. That is what blocked the documented recovery for a 32-bit prefix.
-install -m755 "$here/setup-prefix.sh" "$HOME/works/apps/ableton-live/setup-prefix.sh"
+install -m755 "$here/setup-prefix.sh" "$HOME/wires/apps/ableton-live/setup-prefix.sh"
 
 # Where this application's kit came from, so an updater can ask the right channel
 # for the right application without a table of URLs in the library every
@@ -221,7 +221,7 @@ install -m755 "$here/setup-prefix.sh" "$HOME/works/apps/ableton-live/setup-prefi
 # no origin to record.
 for _o in "$here/../origin" "$root/dist/origin"; do
     [ -r "$_o" ] || continue
-    install -m644 "$_o" "$HOME/works/apps/ableton-live/origin"
+    install -m644 "$_o" "$HOME/wires/apps/ableton-live/origin"
     break
 done
 
@@ -230,7 +230,7 @@ done
 # discriminator, and an application listing that shows a runtime id in its
 # VERSION column is reporting the wrong object's version.
 _v="$(cat "$root/VERSION" 2>/dev/null || echo unknown)"
-printf '%s\n' "${_v%%+*}" > "$HOME/works/apps/ableton-live/VERSION"
+printf '%s\n' "${_v%%+*}" > "$HOME/wires/apps/ableton-live/VERSION"
 
 echo "== install desktop entries -> $APPS =="
 mkdir -p "$APPS"
@@ -241,7 +241,7 @@ mkdir -p "$APPS"
 live_name="Ableton Live"
 live_icon="live-suite"
 live_wmclass=""
-live_prefix="$(works_plug_path)"
+live_prefix="$(wires_plug_path)"
 newest=""
 for exe in "$live_prefix"/drive_c/ProgramData/Ableton/Live*/Program/Ableton\ Live*.exe; do
     [ -e "$exe" ] || continue
@@ -276,12 +276,12 @@ fi
 # copies are staged for the launcher's start-time repair.
 # See notes/ABLETON-WINE-ONLINE-AUTH.md.
 for d in wine-protocol-ableton wine-extension-auz; do
-    sed "s#@HOME@#$HOME#g" "$root/desktop/$d.desktop.in" > "$HOME/works/apps/ableton-live/$d.desktop"
+    sed "s#@HOME@#$HOME#g" "$root/desktop/$d.desktop.in" > "$HOME/wires/apps/ableton-live/$d.desktop"
     if [ -e "$APPS/$d.desktop" ] && grep -qF "$BIN/ableton-live" "$APPS/$d.desktop"; then
         echo "   preserving existing $APPS/$d.desktop"
     else
         [ ! -e "$APPS/$d.desktop" ] || echo "   replacing $APPS/$d.desktop (it does not route through the launcher)"
-        cp "$HOME/works/apps/ableton-live/$d.desktop" "$APPS/$d.desktop"
+        cp "$HOME/wires/apps/ableton-live/$d.desktop" "$APPS/$d.desktop"
     fi
 done
 update-desktop-database "$APPS" 2>/dev/null || true
@@ -370,9 +370,9 @@ trap - EXIT
 echo
 # The verb owns rollback either way: the store keeps previous builds, a pinned
 # install keeps a dated sibling.
-if [ -n "${WORKS_RUNTIME:-}" ]; then
+if [ -n "${WIRES_RUNTIME:-}" ]; then
     echo "OK. A dated rollback of the previous runtime sits beside the pin."
 else
-    echo "OK. Previous builds stay in the store: works runtime list"
+    echo "OK. Previous builds stay in the store: wires runtime list"
 fi
 echo "Next: ./scripts/setup-prefix.sh"

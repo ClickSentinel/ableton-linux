@@ -15,7 +15,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 #   <kit>/scripts/setup-prefix.sh        -> vendor at $here/../vendor (repo, extracted .run kit)
 #   <dir>/setup-prefix.sh + <dir>/vendor -> vendor at $here/vendor
 # Resolved lazily so --refresh (which skips the winetricks pass) never trips this;
-# install.sh deliberately does not install vendor/ into ~/works/apps/ableton-live.
+# install.sh deliberately does not install vendor/ into ~/wires/apps/ableton-live.
 root=""
 kit_root() {
     [ -n "$root" ] && return 0
@@ -53,15 +53,15 @@ case "${ABLETON_LIVE_VERSION:-12}" in
     *) echo "!! ABLETON_LIVE_VERSION must be 11 or 12 (got '$ABLETON_LIVE_VERSION')" >&2; exit 2 ;;
 esac
 
-# Runtime and prefix paths resolve in one place; see works/runtime-env.sh.
+# Runtime and prefix paths resolve in one place; see wires/runtime-env.sh.
 for _l in "$(dirname "$0")/runtime-env.sh" \
-          "$(dirname "$0")/../works/runtime-env.sh" \
-          "$HOME/works/lib/runtime-env.sh"; do
+          "$(dirname "$0")/../wires/runtime-env.sh" \
+          "$HOME/wires/lib/runtime-env.sh"; do
     [ -r "$_l" ] && . "$_l" && break
 done
-command -v works_runtime_path >/dev/null 2>&1 || {
-    echo "!! runtime-env.sh not found next to $0 or in ~/works/apps/ableton-live" >&2; exit 1; }
-works_bind_runtime
+command -v wires_runtime_path >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/wires/apps/ableton-live" >&2; exit 1; }
+wires_bind_runtime
 # Only this script clears the sync backends: folding them into the shared
 # binder would start dropping a user's WINEESYNC on every launch.
 unset WINEESYNC WINEFSYNC
@@ -82,8 +82,8 @@ export WINEDEBUG=-all
 # only safe version of "yes" is "close it first", so that is what it says.
 # ABLETON_SKIP_BUSY_CHECK exists for the automation that has already stopped
 # things itself, and is not documented for users.
-if [ "${ABLETON_SKIP_BUSY_CHECK:-0}" != "1" ] && works_runtime_busy; then
-    echo "!! $(works_runtime_pids | wc -l) process(es) are running from this runtime." >&2
+if [ "${ABLETON_SKIP_BUSY_CHECK:-0}" != "1" ] && wires_runtime_busy; then
+    echo "!! $(wires_runtime_pids | wc -l) process(es) are running from this runtime." >&2
     echo "   Close Live (and Max) before setting up the prefix -- this rewrites it." >&2
     echo "   The installer stops them for you; running this script on its own does not." >&2
     exit 1
@@ -317,16 +317,16 @@ echo "== [1/5] initialise prefix at $WINEPREFIX =="
 #
 # A prefix that *declares* #arch=win32 is a different object - genuinely 32-bit,
 # and not ours to convert. The absence of the line is what is unambiguous.
-if [ -e "$WINEPREFIX/system.reg" ] && ! works_is_prefix "$WINEPREFIX"; then
-    _arch="$(works_prefix_arch "$WINEPREFIX" 2>/dev/null || true)"
+if [ -e "$WINEPREFIX/system.reg" ] && ! wires_is_prefix "$WINEPREFIX"; then
+    _arch="$(wires_prefix_arch "$WINEPREFIX" 2>/dev/null || true)"
     if [ -n "$_arch" ]; then
         # It says what it is. A 32-bit prefix cannot be converted in place and
         # is not ours to replace - Live is 64-bit, so this one cannot be used.
         echo "!! the prefix at $WINEPREFIX is a $_arch installation, and Live is 64-bit." >&2
         echo "   Wine cannot convert one in place and nothing here will delete it." >&2
         echo "   Make a Plug for this install and point at it:" >&2
-        echo "     works plug new studio64 && works plug use studio64" >&2
-        echo "   or set WORKS_PLUG to a prefix you want to use." >&2
+        echo "     wires plug new studio64 && wires plug use studio64" >&2
+        echo "   or set WIRES_PLUG to a prefix you want to use." >&2
         exit 1
     fi
     # Nothing declares an architecture anywhere, so wineboot never finished.

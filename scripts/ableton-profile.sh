@@ -16,15 +16,15 @@ ABLETON_LIVE_VERSIONS="11 12"
 ABLETON_LIVE_EDITIONS="Suite Standard Intro Lite Trial"
 
 # The prefix these paths hang off. WINEPREFIX when a caller has already bound
-# one, else the resolver's answer — which honours WORKS_PLUG and then the
-# `default` symlink `works plug use` writes. This was a literal
-# ~/works/plugs/studio in both functions below, so the profiler described a Plug
+# one, else the resolver's answer — which honours WIRES_PLUG and then the
+# `default` symlink `wires plug use` writes. This was a literal
+# ~/wires/plugs/studio in both functions below, so the profiler described a Plug
 # the launcher was not running whenever the machine had selected another. The
 # last fallback is for the sourced-in-isolation case; nothing shipped hits it.
 ableton_profile_prefix() {
     if [ -n "${WINEPREFIX:-}" ]; then printf '%s\n' "$WINEPREFIX"; return; fi
-    if command -v works_plug_path >/dev/null 2>&1; then works_plug_path; return; fi
-    printf '%s\n' "$HOME/works/plugs/studio"
+    if command -v wires_plug_path >/dev/null 2>&1; then wires_plug_path; return; fi
+    printf '%s\n' "$HOME/wires/plugs/studio"
 }
 
 # ableton_profile_for MAJOR EDITION — set ABLETON_{MAJOR,EDITION,EXE,FOLDER,

@@ -1,27 +1,27 @@
 #!/usr/bin/env bats
 #
-# works/works — the dispatcher.
+# wires/wires — the dispatcher.
 #
 # It does two things worth testing: it finds its verbs, and it refuses what is
 # not a command. Finding them is the part with a trap in it — PATH holds a
 # symlink to this file, so $0 is the link's own path and the verbs are not
 # beside it — and nothing exercised the installed shape until now.
 #
-#   ./tests/run.sh tests/unit/works.bats
+#   ./tests/run.sh tests/unit/wires.bats
 
 bats_require_minimum_version 1.5.0
 
 load ../helpers/common
 
-W() { bash "$REPO/works/works" "$@"; }
+W() { bash "$REPO/wires/wires" "$@"; }
 
 setup() {
     HOME="$BATS_TEST_TMPDIR/home"
-    export WORKS_HOME="$BATS_TEST_TMPDIR/opt"
-    unset WORKS_RUNTIME
-    mkdir -p "$HOME" "$WORKS_HOME"
-    . "$REPO/works/runtime-env.sh"
-    C="$(works_runtime_store)"
+    export WIRES_HOME="$BATS_TEST_TMPDIR/opt"
+    unset WIRES_RUNTIME
+    mkdir -p "$HOME" "$WIRES_HOME"
+    . "$REPO/wires/runtime-env.sh"
+    C="$(wires_runtime_store)"
 }
 
 a_build() {
@@ -35,27 +35,27 @@ store() { a_build 2026.06.01.1+bbbbbbb; ln -sfn "2026.06.01.1+bbbbbbb" "$C/stabl
 
 # --- finding the verbs --------------------------------------------------------
 
-# guards: the installed shape is a symlink on PATH pointing into works/bin, with
-# the verbs in works/lib. Resolving $0 with dirname alone looks for ../lib beside
+# guards: the installed shape is a symlink on PATH pointing into wires/bin, with
+# the verbs in wires/lib. Resolving $0 with dirname alone looks for ../lib beside
 # the *link*, which is ~/.local/lib and holds nothing.
-@test "works resolves its verbs through a symlink on PATH" {
-    mkdir -p "$WORKS_HOME/bin" "$WORKS_HOME/lib" "$BATS_TEST_TMPDIR/pathdir"
-    install -m755 "$REPO/works/works"          "$WORKS_HOME/bin/works"
-    install -m755 "$REPO/works/works-runtime"  "$WORKS_HOME/lib/works-runtime"
-    install -m755 "$REPO/works/works-update"   "$WORKS_HOME/lib/works-update"
-    install -m644 "$REPO/works/runtime-env.sh" "$WORKS_HOME/lib/runtime-env.sh"
-    ln -sfn "$WORKS_HOME/bin/works" "$BATS_TEST_TMPDIR/pathdir/works"
+@test "wires resolves its verbs through a symlink on PATH" {
+    mkdir -p "$WIRES_HOME/bin" "$WIRES_HOME/lib" "$BATS_TEST_TMPDIR/pathdir"
+    install -m755 "$REPO/wires/wires"          "$WIRES_HOME/bin/wires"
+    install -m755 "$REPO/wires/wires-runtime"  "$WIRES_HOME/lib/wires-runtime"
+    install -m755 "$REPO/wires/wires-update"   "$WIRES_HOME/lib/wires-update"
+    install -m644 "$REPO/wires/runtime-env.sh" "$WIRES_HOME/lib/runtime-env.sh"
+    ln -sfn "$WIRES_HOME/bin/wires" "$BATS_TEST_TMPDIR/pathdir/wires"
     store
 
-    run "$BATS_TEST_TMPDIR/pathdir/works" runtime path
+    run "$BATS_TEST_TMPDIR/pathdir/wires" runtime path
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [ "$output" = "$C/2026.06.01.1+bbbbbbb" ]
 }
 
-@test "works says so when the verbs are missing rather than failing obscurely" {
+@test "wires says so when the verbs are missing rather than failing obscurely" {
     mkdir -p "$BATS_TEST_TMPDIR/alone"
-    install -m755 "$REPO/works/works" "$BATS_TEST_TMPDIR/alone/works"
-    run "$BATS_TEST_TMPDIR/alone/works" runtime list
+    install -m755 "$REPO/wires/wires" "$BATS_TEST_TMPDIR/alone/wires"
+    run "$BATS_TEST_TMPDIR/alone/wires" runtime list
     [ "$status" -ne 0 ]
     [[ "$output" == *"cannot find its verbs"* ]]
 }
@@ -69,12 +69,12 @@ store() { a_build 2026.06.01.1+bbbbbbb; ln -sfn "2026.06.01.1+bbbbbbb" "$C/stabl
     [ "$output" = "$C/2026.06.01.1+bbbbbbb" ]
 }
 
-# guards: `works stop` is the documented spelling and has to arrive at the same
-# place as `works runtime stop`, arguments intact
+# guards: `wires stop` is the documented spelling and has to arrive at the same
+# place as `wires runtime stop`, arguments intact
 @test "update is delegated" {
     run W update --help
     [ "$status" -eq 0 ]
-    [[ "$output" == *"works update"* ]]
+    [[ "$output" == *"wires update"* ]]
 }
 
 @test "stop is delegated to the runtime verb" {
@@ -86,14 +86,14 @@ store() { a_build 2026.06.01.1+bbbbbbb; ln -sfn "2026.06.01.1+bbbbbbb" "$C/stabl
 
 # --- refusals -----------------------------------------------------------------
 
-# guards: someone who typed `works` to find out what it does wants the shape,
+# guards: someone who typed `wires` to find out what it does wants the shape,
 # with the alternatives inline the way every other CLI writes them - not the
-# full per-option list, which is what `works help` is for
+# full per-option list, which is what `wires help` is for
 @test "no command at all prints the short usage" {
     run W
     [ "$status" -eq 0 ]
-    [[ "$output" == *"works runtime {list|path|use}"* ]]
-    [[ "$output" == *"works help"* ]]
+    [[ "$output" == *"wires runtime {list|path|use}"* ]]
+    [[ "$output" == *"wires help"* ]]
 }
 
 # guards: a wrong word should not answer with the whole manual
@@ -101,7 +101,7 @@ store() { a_build 2026.06.01.1+bbbbbbb; ln -sfn "2026.06.01.1+bbbbbbb" "$C/stabl
     run W nonsense
     [ "$status" -ne 0 ]
     [[ "$output" == *"no such command: nonsense"* ]]
-    [[ "$output" == *"works runtime {list|path|use}"* ]]
+    [[ "$output" == *"wires runtime {list|path|use}"* ]]
     [[ "$output" != *"the runtime root, for scripts and docs"* ]] \
         || { echo "the error printed the long form" >&2; false; }
 }
@@ -123,10 +123,10 @@ store() { a_build 2026.06.01.1+bbbbbbb; ln -sfn "2026.06.01.1+bbbbbbb" "$C/stabl
     run W --help
     [ "$status" -eq 0 ]
     last="$(printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | tail -1)"
-    [[ "$last" == "  works "* ]] || { echo "help trails into prose: $last" >&2; false; }
+    [[ "$last" == "  wires "* ]] || { echo "help trails into prose: $last" >&2; false; }
 }
 
-# guards: `works help` is the spelling a person reaches for before they know the
+# guards: `wires help` is the spelling a person reaches for before they know the
 # flags, and it has to reach the same place as --help
 @test "help is spelled three ways and they agree" {
     run W help
@@ -146,27 +146,27 @@ store() { a_build 2026.06.01.1+bbbbbbb; ln -sfn "2026.06.01.1+bbbbbbb" "$C/stabl
 
 @test "help names every command it dispatches" {
     run W --help
-    for c in "works runtime" "works update" "works stop"; do
+    for c in "wires runtime" "wires update" "wires stop"; do
         [[ "$output" == *"$c"* ]] || { echo "help omits $c" >&2; false; }
     done
     run W -h
     [ "$status" -eq 0 ]
-    [[ "$output" == *"works runtime"* ]]
+    [[ "$output" == *"wires runtime"* ]]
 }
 
 @test "app is reachable through the dispatcher" {
-    run bash "$REPO/works/works" app list
+    run bash "$REPO/wires/wires" app list
     [ "$status" -eq 0 ]
     [[ "$output" == *"APP"* ]]
 }
 
-# guards: the plural is what fingers type after `works app list` teaches the
+# guards: the plural is what fingers type after `wires app list` teaches the
 # pattern; each noun answers to both
 @test "the plural nouns alias to the singular" {
-    run bash "$REPO/works/works" plugs list
+    run bash "$REPO/wires/wires" plugs list
     [ "$status" -eq 0 ]
-    run bash "$REPO/works/works" runtimes list
+    run bash "$REPO/wires/wires" runtimes list
     [ "$status" -eq 0 ]
-    run bash "$REPO/works/works" apps list
+    run bash "$REPO/wires/wires" apps list
     [ "$status" -eq 0 ]
 }

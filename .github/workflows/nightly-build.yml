@@ -77,7 +77,7 @@ jobs:
           # date appears once and the id keeps its single separator:
           #   dist-version  2026.08.06.1
           #   directory     2026.08.06.1+nightly.badafaf
-          # See works_runtime_id.
+          # See wires_runtime_id.
           dist="$(date -u +%Y.%m.%d).1"
           printf 'dist=%s\n'  "$dist" >> "$GITHUB_OUTPUT"
           printf 'label=%s+nightly.%s\n' "$dist" "${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
@@ -127,7 +127,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # WORKS_DIST_VERSION and WORKS_BUILD_KIND go to the build, not just to
+      # WIRES_DIST_VERSION and WIRES_BUILD_KIND go to the build, not just to
       # the packaging: they land in the runtime's own BUILD-INFO, which is what
       # names the installed directory and what the updater compares against.
       # Stamping only the installer would leave the tree a user actually runs
@@ -135,7 +135,7 @@ jobs:
       - name: Build Wine + PipeASIO + ableton-linkd
         run: |
           ENGINE=docker JOBS="$(nproc)" \
-          WORKS_DIST_VERSION="$DIST" WORKS_BUILD_KIND=nightly \
+          WIRES_DIST_VERSION="$DIST" WIRES_BUILD_KIND=nightly \
           ./build.sh
 
       # container-build.sh writes dist/ and .ccache/ as the container's root
@@ -148,17 +148,17 @@ jobs:
         run: ./scripts/build-audit.sh
 
       # ENGINE because make-installer.sh defaults to podman and the runner has
-      # docker; WORKS_DIST_LABEL so the installer is named and stamped for
+      # docker; WIRES_DIST_LABEL so the installer is named and stamped for
       # this build without touching the committed VERSION.
-      # WORKS_CHANNEL_PUBLISH stamps the kit's own `channel` marker, so
+      # WIRES_CHANNEL_PUBLISH stamps the kit's own `channel` marker, so
       # installing this promotes into `nightly` and leaves `stable` alone.
-      # WORKS_PUBLISH_AS names the fixed asset the manifest must point at:
+      # WIRES_PUBLISH_AS names the fixed asset the manifest must point at:
       # the labelled .run's URL changes every night, this one does not.
       - name: Assemble the installer
         run: |
-          ENGINE=docker WORKS_DIST_LABEL="$LABEL" \
-          WORKS_CHANNEL_PUBLISH=nightly \
-          WORKS_PUBLISH_AS=install-ableton-nightly.run \
+          ENGINE=docker WIRES_DIST_LABEL="$LABEL" \
+          WIRES_CHANNEL_PUBLISH=nightly \
+          WIRES_PUBLISH_AS=install-ableton-nightly.run \
           ./scripts/make-installer.sh
 
       # The suite executes the checkout's install.sh; nothing executed the
@@ -187,7 +187,7 @@ jobs:
           cp "$run" dist/install-ableton-nightly.run
           ( cd dist && sha256sum install-ableton-nightly.run > install-ableton-nightly.run.sha256 )
 
-          # The manifest is what `works-update` reads to answer "is there a
+          # The manifest is what `wires-update` reads to answer "is there a
           # newer nightly". It has to be checked here rather than trusted:
           # published without it, or with a checksum that does not match the
           # asset beside it, the updater refuses every build on this channel and

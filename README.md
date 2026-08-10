@@ -180,13 +180,13 @@ There are two common ways to install Windows plugins:
 2. Open a terminal window and run:
 
    ```bash
-   WINEPREFIX="$HOME/works/plugs/studio" \
-     "$(works runtime path)/bin/wine" \
+   WINEPREFIX="$HOME/wires/plugs/studio" \
+     "$(wires runtime path)/bin/wine" \
      "/path/to/PluginInstaller.exe"
    ```
 
 3. Your installer should install directly into your Ableton environment. By
-   default, this is `~/works/plugs/studio`.
+   default, this is `~/wires/plugs/studio`.
 
 You can also use the command in step 2 to run patches, software updaters, and
 copy-protection tools.
@@ -196,7 +196,7 @@ copy-protection tools.
 You can install Windows `.vst3` bundles by copying them directly into:
 
 ```text
-~/works/plugs/studio/drive_c/Program Files/Common Files/VST3/
+~/wires/plugs/studio/drive_c/Program Files/Common Files/VST3/
 ```
 
 ### If you have a Linux VST or CLAP instrument or effect

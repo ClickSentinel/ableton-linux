@@ -11,16 +11,16 @@
 set -uo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-for _l in "$here/runtime-env.sh" "$HOME/works/lib/runtime-env.sh" \
-          "$here/../works/runtime-env.sh"; do
-    # shellcheck source=works/runtime-env.sh
+for _l in "$here/runtime-env.sh" "$HOME/wires/lib/runtime-env.sh" \
+          "$here/../wires/runtime-env.sh"; do
+    # shellcheck source=wires/runtime-env.sh
     [ -r "$_l" ] && . "$_l" && break
 done
-command -v works_runtime_path >/dev/null 2>&1 || {
-    echo "!! runtime-env.sh not found next to $0 or in ~/works/lib" >&2; exit 1; }
+command -v wires_runtime_path >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/wires/lib" >&2; exit 1; }
 
-container="$(works_runtime_store)"
-channel="$container/$(works_channel)"
+container="$(wires_runtime_store)"
+channel="$container/$(wires_channel)"
 
 # Entries only: a directory the id reader can name. Quarantined trees
 # (superseded-*, failed-*) and the channel link are not builds you can choose.
@@ -29,8 +29,8 @@ entries() {
     [ -d "$container" ] || return 0
     for d in "$container"/*; do
         [ -d "$d" ] && [ ! -L "$d" ] || continue
-        works_is_quarantine "$d" && continue
-        [ -n "$(works_runtime_id "$d")" ] || continue
+        wires_is_quarantine "$d" && continue
+        [ -n "$(wires_runtime_id "$d")" ] || continue
         printf '%s\n' "${d##*/}"
     done
 }
@@ -42,8 +42,8 @@ sorted() {
     local e at ver
     while read -r e; do
         [ -n "$e" ] || continue
-        at="$(works_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
-        ver="$(works_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
+        at="$(wires_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+        ver="$(wires_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
         if [ -n "$at" ]; then printf '1 %s\t%s\n' "$at" "$e"
         else                  printf '0 %s\t%s\n' "$ver" "$e"; fi
     done < <(entries) | sort -rV | cut -f2
@@ -63,7 +63,7 @@ ask_tty() {
 }
 
 cmd_path() {
-    local r; r="$(works_runtime_path)"
+    local r; r="$(wires_runtime_path)"
     [ -n "$r" ] || { echo "!! no runtime resolved" >&2; return 1; }
     printf '%s\n' "$r"
 }
@@ -71,17 +71,17 @@ cmd_path() {
 # The Wine base is not in the entry name and should not be - it is derivable,
 # and one runtime release is built on one base. But it is the fact that decides
 # whether switching is safe for a Plug, so it belongs in front of anyone
-# choosing. This is the label; works_base_move is the decision, and the two are
+# choosing. This is the label; wires_base_move is the decision, and the two are
 # deliberately not the same read: a label can be missing from a BUILD-INFO and
 # still leave a perfectly answerable question about the prefix.
-base_of() { works_buildinfo_field "$container/$1/ABLETON-WINE-BUILD-INFO.txt" wine; }
+base_of() { wires_buildinfo_field "$container/$1/ABLETON-WINE-BUILD-INFO.txt" wine; }
 
 cmd_list() {
     local live e at base path n=0
     live="$(readlink -f "$channel" 2>/dev/null || true)"
     if [ ! -d "$container" ]; then
         echo "No version store yet — this install predates it."
-        echo "  runtime: $(works_runtime_path)"
+        echo "  runtime: $(wires_runtime_path)"
         return 0
     fi
     # The path is spelled out per build rather than left implied by the store
@@ -93,7 +93,7 @@ cmd_list() {
     while read -r e; do
         [ -n "$e" ] || continue
         n=$((n+1))
-        at="$(works_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+        at="$(wires_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
         base="$(base_of "$e")"
         path="$container/$e"
         case "$path" in "$HOME"/*) path="~${path#"$HOME"}" ;; esac
@@ -105,18 +105,18 @@ cmd_list() {
     aside=0
     for e in "$container"/*; do
         [ -d "$e" ] && [ ! -L "$e" ] || continue
-        works_is_quarantine "$e" && aside=$((aside+1))
+        wires_is_quarantine "$e" && aside=$((aside+1))
     done
     [ "$aside" -eq 0 ] || echo "  ($aside set-aside director$([ "$aside" = 1 ] && echo y || echo ies) not shown; nothing was deleted)"
 }
 
-# Stop everything Works is running. install.sh does this internally before it
+# Stop everything Wires is running. install.sh does this internally before it
 # replaces a runtime; this is the same thing a person can reach, because the
 # refusals that send them here say "close it" about processes with no window to
 # close - Wine's services.exe and rpcss.exe outlive Live and hold the prefix.
 cmd_stop() {
     local pids n ans
-    pids="$(works_all_pids | sort -un)"
+    pids="$(wires_all_pids | sort -un)"
     [ -n "$pids" ] || { echo "Nothing is running from the runtime or any Plug."; return 0; }
     n="$(printf '%s\n' "$pids" | grep -c .)"
 
@@ -140,15 +140,15 @@ cmd_stop() {
     echo "Stopping $n process(es)."
     printf '%s\n' "$pids" | xargs -r kill 2>/dev/null || true
     for _ in $(seq 1 10); do
-        [ -n "$(works_all_pids | sort -un)" ] || { echo "Stopped."; return 0; }
+        [ -n "$(wires_all_pids | sort -un)" ] || { echo "Stopped."; return 0; }
         sleep 0.5
     done
     # Wine's own services do not answer TERM once their server is gone.
-    works_all_pids | sort -un | xargs -r kill -9 2>/dev/null || true
+    wires_all_pids | sort -un | xargs -r kill -9 2>/dev/null || true
     sleep 1
-    if [ -n "$(works_all_pids | sort -un)" ]; then
+    if [ -n "$(wires_all_pids | sort -un)" ]; then
         echo "!! still running after SIGKILL:" >&2
-        works_all_pids | sort -un | sed 's/^/     /' >&2
+        wires_all_pids | sort -un | sed 's/^/     /' >&2
         return 1
     fi
     echo "Stopped."
@@ -164,14 +164,14 @@ cmd_pick() {
     [ "${#names[@]}" -gt 0 ] || { echo "!! no installed builds" >&2; return 1; }
     if ! { : >/dev/tty; } 2>/dev/null; then
         echo "!! no terminal to ask on; name a build instead:" >&2
-        for e in "${names[@]}"; do echo "     works runtime use $e" >&2; done
+        for e in "${names[@]}"; do echo "     wires runtime use $e" >&2; done
         return 1
     fi
     for e in "${names[@]}"; do
         i=$((i+1))
         cur=""; [ "$container/$e" = "$live" ] && cur="  (current)"
         printf '  %2d) %-32s %-12s %s%s\n' "$i" "$e" "$(base_of "$e")" \
-            "$(works_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)" "$cur"
+            "$(wires_buildinfo_field "$container/$e/ABLETON-WINE-BUILD-INFO.txt" built-at)" "$cur"
     done
     local ans=""
     printf 'Which build? [1-%d, or q to cancel] ' "${#names[@]}" > /dev/tty
@@ -186,7 +186,7 @@ cmd_pick() {
 
 cmd_use() {
     local want="${1:-}" force="${2:-}" live cur from to
-    [ -n "$want" ] || { echo "!! usage: works runtime use <name>|--previous" >&2; return 1; }
+    [ -n "$want" ] || { echo "!! usage: wires runtime use <name>|--previous" >&2; return 1; }
     [ -d "$container" ] || { echo "!! no version store; nothing to switch between" >&2; return 1; }
 
     if [ "$want" = "--previous" ]; then
@@ -199,7 +199,7 @@ cmd_use() {
         echo "!! no such build: $want" >&2
         echo "   installed:" >&2; sorted | sed 's/^/     /' >&2
         return 1; }
-    [ -n "$(works_runtime_id "$container/$want")" ] || {
+    [ -n "$(wires_runtime_id "$container/$want")" ] || {
         echo "!! $want has no readable BUILD-INFO and is not a runtime you can select" >&2
         return 1; }
     [ -x "$container/$want/bin/wine" ] || {
@@ -218,7 +218,7 @@ cmd_use() {
     local -a back=() fwd=() roll=(); local p move
     while read -r p; do
         [ -n "$p" ] || continue
-        move="$(works_base_move "$container/$want" "$(works_plugs_dir)/$p")" || {
+        move="$(wires_base_move "$container/$want" "$(wires_plugs_dir)/$p")" || {
             echo "!! $p has been booted but will not say which Wine base bootstrapped it," >&2
             echo "   so whether this build would take it backward cannot be answered." >&2
             echo "   Refusing rather than guessing." >&2
@@ -232,7 +232,7 @@ cmd_use() {
             forward)  fwd+=("$p") ;;
             rollback) roll+=("$p") ;;
         esac
-    done < <(works_plugs_following "$(works_channel)")
+    done < <(wires_plugs_following "$(wires_channel)")
 
     if [ "${#roll[@]}" -gt 0 ]; then
         echo "note: an older build of the same Wine base; going back for: ${roll[*]}"
@@ -261,11 +261,11 @@ cmd_use() {
         fi
     fi
 
-    # Before the retarget. works_runtime_busy resolves through the channel, so
+    # Before the retarget. wires_runtime_busy resolves through the channel, so
     # asking afterwards asks whether anything is running from the build being
     # switched *to* — while the note is about the one being switched from.
     local was_busy=""
-    works_runtime_busy && was_busy=1
+    wires_runtime_busy && was_busy=1
     ln -sfn "$want" "$channel"
     echo "channel -> $want"
     if [ -n "$was_busy" ]; then
@@ -276,9 +276,9 @@ cmd_use() {
 
 # Install a runtime build: stop what runs from the current one, migrate a
 # legacy layout, stage and check the tarball, guard every Plug's Wine base,
-# promote, prune. Works files and guards the build; the caller vouches for its
+# promote, prune. Wires files and guards the build; the caller vouches for its
 # contents through --validate, run against the staged tree before anything is
-# promoted. Pinned (WORKS_RUNTIME set) the install is flat with a dated
+# promoted. Pinned (WIRES_RUNTIME set) the install is flat with a dated
 # rollback and no channel - the pin exists for tests, regression VMs and
 # bisecting a build.
 #
@@ -317,28 +317,28 @@ cmd_install() {
     # moved, so a machine is never disturbed for a build that is not there,
     # is already installed, or does not verify.
     if [ -z "$tarball" ]; then
-        [ -n "$chan" ] || chan="$(works_channel)"
+        [ -n "$chan" ] || chan="$(wires_channel)"
         local url want_commit have_commit rtname rtsha got
-        url="$(works_manifest_url "$chan")" || { echo "!! no manifest URL for $chan" >&2; exit 1; }
+        url="$(wires_manifest_url "$chan")" || { echo "!! no manifest URL for $chan" >&2; exit 1; }
         dltmp="$(mktemp -d)"
         echo "== channel: $chan =="
         echo "   $url"
         curl -fsSL --retry 2 --max-time 60 -o "$dltmp/manifest.txt" "$url" || {
             echo "!! could not fetch the manifest. Offline, or the channel has published nothing yet." >&2
             rm -rf "$dltmp"; exit 1; }
-        works_manifest_valid "$dltmp/manifest.txt" || {
+        wires_manifest_valid "$dltmp/manifest.txt" || {
             echo "!! the manifest is incomplete; refusing to act on it" >&2
             rm -rf "$dltmp"; exit 1; }
-        rtname="$(works_buildinfo_field "$dltmp/manifest.txt" runtime)"
-        rtsha="$(works_buildinfo_field "$dltmp/manifest.txt" runtime-sha256)"
+        rtname="$(wires_buildinfo_field "$dltmp/manifest.txt" runtime)"
+        rtsha="$(wires_buildinfo_field "$dltmp/manifest.txt" runtime-sha256)"
         if [ -z "$rtname" ] || [ -z "$rtsha" ]; then
             echo "!! this channel's manifest predates runtime-only installs." >&2
-            echo "   Use \`works update\` for the full installer, or pass a tarball." >&2
+            echo "   Use \`wires update\` for the full installer, or pass a tarball." >&2
             rm -rf "$dltmp"; exit 1
         fi
         case "$rtname" in */*|*..*) echo "!! the manifest names an unusable runtime path" >&2; rm -rf "$dltmp"; exit 1 ;; esac
-        want_commit="$(works_buildinfo_field "$dltmp/manifest.txt" source-commit)"
-        have_commit="$(works_buildinfo_field "$(works_runtime_path)/ABLETON-WINE-BUILD-INFO.txt" source-commit 2>/dev/null || true)"
+        want_commit="$(wires_buildinfo_field "$dltmp/manifest.txt" source-commit)"
+        have_commit="$(wires_buildinfo_field "$(wires_runtime_path)/ABLETON-WINE-BUILD-INFO.txt" source-commit 2>/dev/null || true)"
         if [ -n "$want_commit" ] && [ "$want_commit" = "$have_commit" ]; then
             echo "You already have this build."
             rm -rf "$dltmp"; exit 0
@@ -346,7 +346,7 @@ cmd_install() {
         echo "== downloading $rtname =="
         local progress="-sS"; [ -t 2 ] && progress="--progress-bar"
         curl -fL --retry 2 $progress -o "$dltmp/$rtname" \
-            "$(works_manifest_installer_url "$url" "$rtname")" || {
+            "$(wires_manifest_installer_url "$url" "$rtname")" || {
             echo "!! download failed" >&2; rm -rf "$dltmp"; exit 1; }
         got="$(sha256sum "$dltmp/$rtname" | cut -d' ' -f1)"
         [ "$got" = "$rtsha" ] || {
@@ -358,8 +358,8 @@ cmd_install() {
         tarball="$dltmp/$rtname"
     fi
     [ -n "$chan" ] || chan=stable
-    NAME="$(works_runtime_name)"
-    WINE_ROOT="$(works_runtime_path)"
+    NAME="$(wires_runtime_name)"
+    WINE_ROOT="$(wires_runtime_path)"
     WINE_ROOT_DIR="$(dirname "$WINE_ROOT")"
     stamp="$(date -u +%Y%m%dT%H%M%SZ)"
     stage=""; backup=""; replaced=""; replaced_orig=""; promoted=0; migrated=0
@@ -398,7 +398,7 @@ cmd_install() {
             elif [ "$migrated" -eq 1 ]; then
                 # The migration is deliberately not undone - it only moves
                 # trees that stay valid, and rerunning continues from it. A
-                # message claiming nothing changed after ~/works has appeared
+                # message claiming nothing changed after ~/wires has appeared
                 # would send whoever is investigating the wrong way.
                 echo "!! install aborted; the layout migration had already completed and" >&2
                 echo "   stands - rerunning will continue from it" >&2
@@ -428,9 +428,9 @@ cmd_install() {
     # application declaring its process signature.)
     local live_up=0 ans
     [ -z "$(ableton_live_pids)" ] || live_up=1
-    if works_runtime_busy; then
+    if wires_runtime_busy; then
         echo "== stop processes using the installed runtime =="
-        echo "   $(works_runtime_pids | wc -l) found"
+        echo "   $(wires_runtime_pids | wc -l) found"
         # Closing Live discards unsaved work, so require an explicit yes.
         # Opening /dev/tty is the only honest terminal test; anything but y -
         # a timeout, an EOF, a bare Enter, no terminal - means nobody
@@ -455,24 +455,24 @@ cmd_install() {
             # The prefix as it is now, not where the migration below will put
             # it: on an unmigrated machine the real prefix is still at the
             # legacy path.
-            WINEPREFIX="$(works_plug_path_live)" \
+            WINEPREFIX="$(wires_plug_path_live)" \
                 "$WINE_ROOT/bin/wineserver" -k 2>/dev/null || true
             for _ in $(seq 1 20); do
-                works_anything_busy || break
+                wires_anything_busy || break
                 sleep 0.5
             done
         fi
-        # works_all_pids, not works_runtime_pids: the environ scan is strictly
+        # wires_all_pids, not wires_runtime_pids: the environ scan is strictly
         # larger than the exe scan, and a process holding the prefix without
         # executing from the runtime is invisible to the narrower kill.
-        if works_anything_busy; then
-            works_all_pids | sort -un | xargs -r kill 2>/dev/null || true
+        if wires_anything_busy; then
+            wires_all_pids | sort -un | xargs -r kill 2>/dev/null || true
             pkill -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
             for _ in $(seq 1 10); do
-                works_anything_busy || break
+                wires_anything_busy || break
                 sleep 0.5
             done
-            works_all_pids | sort -un | xargs -r kill -9 2>/dev/null || true
+            wires_all_pids | sort -un | xargs -r kill -9 2>/dev/null || true
             pkill -9 -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
         fi
     fi
@@ -483,20 +483,20 @@ cmd_install() {
     # pre-state: the migrations are no-ops on a migrated machine, and claiming
     # a migration "stands" where nothing moved is the wrong turn the flag
     # exists to prevent.
-    if [ -e "$(works_legacy_root)" ] || [ -L "$(works_legacy_root)" ] || [ -d "$(works_legacy_plug)" ]; then
+    if [ -e "$(wires_legacy_root)" ] || [ -L "$(wires_legacy_root)" ] || [ -d "$(wires_legacy_plug)" ]; then
         migrated=1
     fi
-    works_migrate_layout
-    works_migrate_plug
+    wires_migrate_layout
+    wires_migrate_plug
 
     # Where this lands. Unpinned, always the store - a fresh machine never
     # sees the flat layout. Pinned, exactly the named path, flat.
-    if [ -n "${WORKS_RUNTIME:-}" ]; then
+    if [ -n "${WIRES_RUNTIME:-}" ]; then
         STORE=""
-        WINE_ROOT="$WORKS_RUNTIME"
+        WINE_ROOT="$WIRES_RUNTIME"
         WINE_ROOT_DIR="$(dirname "$WINE_ROOT")"
     else
-        STORE="$(works_runtime_store)"
+        STORE="$(wires_runtime_store)"
         mkdir -p "$STORE"
     fi
 
@@ -505,9 +505,9 @@ cmd_install() {
     stage="$(mktemp -d "${STORE:-$WINE_ROOT_DIR}/.install.XXXXXX")"
     tar -C "$stage" -I zstd -xf "$tarball"
     local candidate="$stage/$NAME"
-    # What Works itself requires of a build: a name, a wine, and the base
+    # What Wires itself requires of a build: a name, a wine, and the base
     # stamp the guard below reads. Component checks are the caller's voucher.
-    [ -n "$(works_runtime_id "$candidate")" ] || {
+    [ -n "$(wires_runtime_id "$candidate")" ] || {
         echo "!! the staged runtime carries no readable BUILD-INFO, so it cannot be named" >&2; exit 1; }
     [ -x "$candidate/bin/wine" ] || { echo "!! the staged runtime has no bin/wine" >&2; exit 1; }
     [ -f "$candidate/share/wine/wine.inf" ] || {
@@ -520,19 +520,19 @@ cmd_install() {
     # The one door every install passes through, so the guard lives here. The
     # staged candidate is a full tree, so the question is answerable before
     # anything is promoted; the comparison is Wine's own. A pinned
-    # WORKS_RUNTIME is exempt: running an old build against a newer prefix is
+    # WIRES_RUNTIME is exempt: running an old build against a newer prefix is
     # what bisecting is.
     local back fwd roll _plug move
-    if [ -z "${WORKS_RUNTIME:-}" ]; then
+    if [ -z "${WIRES_RUNTIME:-}" ]; then
         back=""; fwd=""; roll=""
         while read -r _plug; do
             [ -n "$_plug" ] || continue
-            move="$(works_base_move "$candidate" "$(works_plugs_dir)/$_plug")" || {
+            move="$(wires_base_move "$candidate" "$(wires_plugs_dir)/$_plug")" || {
                 echo "!! $_plug has been booted but will not say which Wine base bootstrapped" >&2
                 echo "   it, so whether this build takes it backward cannot be answered." >&2
-                echo "   Refusing rather than guessing. Set WORKS_ALLOW_BASE_CHANGE=1 to" >&2
+                echo "   Refusing rather than guessing. Set WIRES_ALLOW_BASE_CHANGE=1 to" >&2
                 echo "   install anyway." >&2
-                [ "${WORKS_ALLOW_BASE_CHANGE:-0}" = 1 ] || exit 1
+                [ "${WIRES_ALLOW_BASE_CHANGE:-0}" = 1 ] || exit 1
                 move=""; }
             # refresh - a newer build of the same base - is the ordinary
             # update and passes in silence.
@@ -541,7 +541,7 @@ cmd_install() {
                 forward)  fwd="$fwd $_plug" ;;
                 rollback) roll="$roll $_plug" ;;
             esac
-        done < <(works_plugs_following "$chan")
+        done < <(wires_plugs_following "$chan")
 
         # Going back to an older build of the same base is what the store is
         # for. A note, not a question: wineboot re-runs against the same
@@ -555,18 +555,18 @@ cmd_install() {
             echo "!! This build is on an OLDER Wine base than the Plug(s) it would run:$back" >&2
             echo "   Wine cannot take a prefix back. Those Plugs were bootstrapped against" >&2
             echo "   a newer base and would break." >&2
-            if [ "${WORKS_ALLOW_BASE_CHANGE:-0}" != 1 ]; then
-                echo "   Refusing. Keep a copy of the Plug and set WORKS_ALLOW_BASE_CHANGE=1" >&2
+            if [ "${WIRES_ALLOW_BASE_CHANGE:-0}" != 1 ]; then
+                echo "   Refusing. Keep a copy of the Plug and set WIRES_ALLOW_BASE_CHANGE=1" >&2
                 echo "   if you mean it, or pick a newer build." >&2
                 exit 1
             fi
-            echo "   (WORKS_ALLOW_BASE_CHANGE=1 given)"
+            echo "   (WIRES_ALLOW_BASE_CHANGE=1 given)"
         fi
         # Forward is supported and is what every base bump is: inform and ask.
         # No terminal proceeds with the notice printed - refusing would break
         # every scripted install the first time a base moves, and there is no
         # unsaved work at stake.
-        if [ -n "$fwd" ] && [ "${WORKS_ALLOW_BASE_CHANGE:-0}" != 1 ]; then
+        if [ -n "$fwd" ] && [ "${WIRES_ALLOW_BASE_CHANGE:-0}" != 1 ]; then
             echo "== this build changes the Wine base =="
             echo "   Re-bootstrapped on next launch, and not reversible:$fwd"
             if { : >/dev/tty; } 2>/dev/null; then
@@ -588,7 +588,7 @@ cmd_install() {
     local id
     if [ -n "$STORE" ]; then
         echo "== promote runtime into the store =="
-        id="$(works_runtime_id "$candidate")"
+        id="$(wires_runtime_id "$candidate")"
         if [ -e "$STORE/$id" ]; then
             # Same build already present. Set it aside rather than write over
             # it, so a failure before the retarget can be undone.
@@ -609,11 +609,11 @@ cmd_install() {
         # Follow what was last installed: downloading this kit was the choice,
         # and nobody should also have to edit a file to make it stick.
         local _cf
-        _cf="$(works_channel_file)"
+        _cf="$(wires_channel_file)"
         mkdir -p "$(dirname "$_cf")" && printf '%s\n' "$chan" > "$_cf"
         # After the promote, never before: an earlier failure must not leave a
         # user with neither the new runtime nor the old one.
-        works_prune_runtimes
+        wires_prune_runtimes
     else
         echo "== promote runtime with dated rollback =="
         if [ -e "$WINE_ROOT" ]; then
@@ -632,13 +632,13 @@ cmd_install() {
 # with a line range, which rots the moment the comment above it is edited.
 short_usage() {
     cat <<'EOF'
-usage: works runtime {list|path|use|install|stop}   `works runtime help` for detail
+usage: wires runtime {list|path|use|install|stop}   `wires runtime help` for detail
 
-  works runtime list              every installed build, newest first
-  works runtime path              the runtime root, for scripts and docs
-  works runtime use [id]          switch the channel to another build
-  works runtime install [tarball] this channel's current build, or a local one
-  works runtime stop [-y]         stop everything running from the runtime or a Plug
+  wires runtime list              every installed build, newest first
+  wires runtime path              the runtime root, for scripts and docs
+  wires runtime use [id]          switch the channel to another build
+  wires runtime install [tarball] this channel's current build, or a local one
+  wires runtime stop [-y]         stop everything running from the runtime or a Plug
 EOF
 }
 
@@ -646,18 +646,18 @@ long_usage() {
     cat <<'EOF'
 Which build of the runtime is in use, and switching between them.
 
-  works runtime list              every installed build, newest first
-  works runtime path              the runtime root, for scripts and docs
-  works runtime use               choose from a numbered list
-  works runtime use <id>          point the channel at a different build
-  works runtime use --previous    the last build that is not the current one
-  works runtime use <id> --force  accept a Wine base change unattended
-  works runtime install [tarball] [--channel c] [--validate cmd]
+  wires runtime list              every installed build, newest first
+  wires runtime path              the runtime root, for scripts and docs
+  wires runtime use               choose from a numbered list
+  wires runtime use <id>          point the channel at a different build
+  wires runtime use --previous    the last build that is not the current one
+  wires runtime use <id> --force  accept a Wine base change unattended
+  wires runtime install [tarball] [--channel c] [--validate cmd]
                                   no tarball: fetch the channel's manifest,
                                   compare, download and verify, then install;
                                   a tarball skips the web entirely.
                                   --validate runs against the staged tree
-  works runtime stop [-y]         stop everything running from the runtime or a Plug
+  wires runtime stop [-y]         stop everything running from the runtime or a Plug
 EOF
 }
 

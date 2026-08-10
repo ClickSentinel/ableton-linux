@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Ableton Live launcher for the patched Wine stack. Runs whichever Live edition
 # (Intro/Lite/Standard/Suite/Trial, any major version) is installed in the prefix.
-# Overrides: WORKS_RUNTIME=/usr (stock wine), ABLETON_VDESK=2560x1600 (virtual desktop),
+# Overrides: WIRES_RUNTIME=/usr (stock wine), ABLETON_VDESK=2560x1600 (virtual desktop),
 #            ABLETON_LIVE_EXE=/path/into/prefix/.../Ableton Live NN Edition.exe (pick one install),
 #            ABLETON_LIVE_VERSION=11|12 (restrict discovery to one major version),
 #            ABLETON_RT=off (skip the realtime probe; run Live under normal scheduling),
@@ -35,39 +35,39 @@ else
     echo "ableton-live: cannot write diagnostics to $diagnostic_dir/live.log" >&2
 fi
 
-# The oldest Works contract this launcher is written against. Read by
+# The oldest Wires contract this launcher is written against. Read by
 # install.sh's infrastructure gate before it upgrades the shared library, so an
 # upgrade that would strand this application is named before it happens rather
 # than discovered as a function error on the next launch.
-WORKS_ABI_MIN=1
+WIRES_ABI_MIN=1
 
 # Clear inherited Wine variables so this launch uses only the patched build.
-# Runtime and prefix paths resolve in one place; see works/runtime-env.sh.
+# Runtime and prefix paths resolve in one place; see wires/runtime-env.sh.
 for _l in "$(dirname "$0")/runtime-env.sh" \
-          "$(dirname "$0")/../works/runtime-env.sh" \
-          "$HOME/works/lib/runtime-env.sh"; do
+          "$(dirname "$0")/../wires/runtime-env.sh" \
+          "$HOME/wires/lib/runtime-env.sh"; do
     [ -r "$_l" ] && . "$_l" && break
 done
-command -v works_runtime_path >/dev/null 2>&1 || {
-    echo "!! runtime-env.sh not found next to $0 or in ~/works/apps/ableton-live" >&2; exit 1; }
+command -v wires_runtime_path >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/wires/apps/ableton-live" >&2; exit 1; }
 # The other half of the install-time gate, at the moment of use: the gate can be
 # bypassed (a hand-copied lib, a future kit forced past the prompt), and what a
 # stranded launcher does without this line is die partway through on whichever
 # missing function it reaches first, which reads as a crash rather than a
 # version conflict. An infrastructure old enough to predate the contract
 # declares nothing and is generation 1.
-if [ "${WORKS_ABI_OLDEST:-1}" -gt "$WORKS_ABI_MIN" ]; then
-    echo "ableton-live: the installed Works infrastructure (generation ${WORKS_ABI:-?}," >&2
-    echo "  oldest supported ${WORKS_ABI_OLDEST:-?}) no longer supports this launcher" >&2
-    echo "  (written against generation $WORKS_ABI_MIN). Update Ableton Live with its" >&2
+if [ "${WIRES_ABI_OLDEST:-1}" -gt "$WIRES_ABI_MIN" ]; then
+    echo "ableton-live: the installed Wires infrastructure (generation ${WIRES_ABI:-?}," >&2
+    echo "  oldest supported ${WIRES_ABI_OLDEST:-?}) no longer supports this launcher" >&2
+    echo "  (written against generation $WIRES_ABI_MIN). Update Ableton Live with its" >&2
     echo "  current installer." >&2
     exit 1
 fi
-works_bind_runtime
+wires_bind_runtime
 # Where this launcher actually lives, symlink resolved: ~/.local/bin holds only
 # a link. The app toolkit is installed beside the launcher - the application's
 # directory contains the application - and the same sibling relation holds in
-# a checkout. The ~/works/lib fallbacks cover installs that predate the
+# a checkout. The ~/wires/lib fallbacks cover installs that predate the
 # toolkit living here; they can go a release later.
 appdir="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # Disable Wine debug logging; fixme spam from the D3D poll loop stalls Live's UI thread.
@@ -119,7 +119,7 @@ repair_handler_entries() {
     local apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
     local staged d repaired=0
     for d in wine-protocol-ableton wine-extension-auz; do
-        staged="$HOME/works/apps/ableton-live/$d.desktop"
+        staged="$HOME/wires/apps/ableton-live/$d.desktop"
         [ -f "$staged" ] || continue
         if [ ! -f "$apps/$d.desktop" ] \
             || grep -qE '^Exec=env .*WINEPREFIX=.* wine start ' "$apps/$d.desktop"; then
@@ -299,7 +299,7 @@ if ! pgrep -af "Ableton Live.*\.exe" 2>/dev/null | grep "ProgramData" >/dev/null
     dpi_mode="${ABLETON_DPI_MODE:-auto}"
     dpi_family=""; dpi_scale=""
     dpi_lib="$appdir/detect-scale.sh"
-    [ -r "$dpi_lib" ] || dpi_lib="$HOME/works/lib/detect-scale.sh"
+    [ -r "$dpi_lib" ] || dpi_lib="$HOME/wires/lib/detect-scale.sh"
     [ -r "$dpi_lib" ] && . "$dpi_lib"
     if ! declare -F ableton_dpi_block_values >/dev/null 2>&1; then
         # no (or an older) detect-scale.sh: the two legacy blocks still resolve inline
@@ -531,7 +531,7 @@ theme_watch_prefs_cfg() {
     [ -n "$dir" ] && printf '%s\n' "$dir/Preferences.cfg"
 }
 theme_watch_loop() {
-    local apply="$HOME/works/apps/ableton-live/setsyscolors.exe"
+    local apply="$HOME/wires/apps/ableton-live/setsyscolors.exe"
     local lock="$WINEPREFIX/.ableton-theme-watch.lock" cfg last="" cur bar_bg bar_fg
     local applied=""    # last color set actually broadcast; skip re-firing when unchanged
     local major have_inotify=0 f
@@ -845,7 +845,7 @@ if ! pgrep -af "Ableton Live.*\.exe" 2>/dev/null | grep "ProgramData" >/dev/null
     # Sourced outside the auto branch: the topbar color detection below wants the lib
     # even when ABLETON_THEME_MODE pins the scheme.
     theme_lib="$appdir/detect-theme.sh"
-    [ -r "$theme_lib" ] || theme_lib="$HOME/works/lib/detect-theme.sh"
+    [ -r "$theme_lib" ] || theme_lib="$HOME/wires/lib/detect-theme.sh"
     [ -r "$theme_lib" ] && . "$theme_lib"
     theme_mode="${ABLETON_THEME_MODE:-auto}"
     if [ "$theme_mode" = auto ]; then
@@ -901,7 +901,7 @@ fi
 # other window until the last opted-in Live exits.  See the shortcut support note.
 shortcut_lib=""
 for f in "$appdir/shortcut-hold.sh" \
-         "$HOME/works/lib/shortcut-hold.sh"; do
+         "$HOME/wires/lib/shortcut-hold.sh"; do
     if [ -r "$f" ]; then shortcut_lib="$f"; break; fi
 done
 ableton_shortcuts_active=0
@@ -974,7 +974,7 @@ fi
 # peers (ABLETON_LINKD_LINGER overrides; the user unit runs --linger 0 for an
 # always-on anchor). Daemon mode logs to ~/.log/ableton-linkd/.
 # ABLETON_LINKD overrides the binary path. See notes/ABLETON-WINE-LINK.md.
-LINKD="${ABLETON_LINKD:-$HOME/works/apps/ableton-live/ableton-linkd}"
+LINKD="${ABLETON_LINKD:-$HOME/wires/apps/ableton-live/ableton-linkd}"
 if [ -x "$LINKD" ] && ! pgrep -x ableton-linkd >/dev/null 2>&1; then
     "$LINKD" --daemon || echo "ableton-live: ableton-linkd failed to start" >&2
 fi
@@ -993,7 +993,7 @@ fi
 # a pane to hold a stable rect before poking (bind-time pokes leave Chromium
 # resize-deaf) and exits on its own after Live is gone. No-op when the helper
 # is not installed.
-learnheal="$HOME/works/apps/ableton-live/learnheal.exe"
+learnheal="$HOME/wires/apps/ableton-live/learnheal.exe"
 if [ -n "$EXE" ] && [ -f "$learnheal" ]; then
     ( "$WINE_ROOT/bin/wine" "$learnheal" ) </dev/null >/dev/null 2>&1 &
     disown

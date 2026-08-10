@@ -16,14 +16,14 @@
 # the current shell to the runtime is opt-in; only the launchers need it.
 #
 #   . "$here/runtime-env.sh"
-#   WINE_ROOT="$(works_runtime_path)"           # just the path
-#   works_bind_runtime                       # the full launcher binding
+#   WINE_ROOT="$(wires_runtime_path)"           # just the path
+#   wires_bind_runtime                       # the full launcher binding
 
-# The compatibility contract, as a range. WORKS_ABI is the library's current
-# interface generation; WORKS_ABI_OLDEST is the oldest still supported; each
-# launcher declares the WORKS_ABI_MIN it was written against.
+# The compatibility contract, as a range. WIRES_ABI is the library's current
+# interface generation; WIRES_ABI_OLDEST is the oldest still supported; each
+# launcher declares the WIRES_ABI_MIN it was written against.
 #
-#   compatible  <=>  WORKS_ABI_OLDEST <= WORKS_ABI_MIN <= WORKS_ABI
+#   compatible  <=>  WIRES_ABI_OLDEST <= WIRES_ABI_MIN <= WIRES_ABI
 #
 # Applications are forward compatible and the infrastructure backward: an app
 # built against MIN keeps working until OLDEST rises past it, and raising
@@ -34,7 +34,7 @@
 #
 # The ABI answers compatibility and nothing else: two files can speak the same
 # interface and be different implementations of it, one carrying fixes the
-# other does not. WORKS_VERSION orders them - a monotonic counter bumped on
+# other does not. WIRES_VERSION orders them - a monotonic counter bumped on
 # every change to this directory, so the gate can tell a newer implementation
 # from an older one at equal ABI. Without it, equal-ABI installs were
 # last-writer-wins, and an older kit silently replaced a newer library.
@@ -43,25 +43,25 @@
 # LINK_SETUP_VERSION shape: a variable inside the file it describes.
 #
 # shellcheck disable=SC2034  # read from outside; nothing here consumes them
-WORKS_VERSION=1
+WIRES_VERSION=1
 # shellcheck disable=SC2034
-WORKS_ABI=1
+WIRES_ABI=1
 # Policy: stays 1. Stranding an application is a breaking release, taken
-# deliberately or not at all; the strand prompt in install-works.sh names the
+# deliberately or not at all; the strand prompt in install-wires.sh names the
 # casualties if this line ever moves.
 # shellcheck disable=SC2034
-WORKS_ABI_OLDEST=1
+WIRES_ABI_OLDEST=1
 
 # --- de-Ableton inventory ------------------------------------------------------
-# works/ is the future standalone repository; the exit test is `grep -ci
+# wires/ is the future standalone repository; the exit test is `grep -ci
 # ableton` over it reaching zero, counting code rather than this list. What
 # remains, and its exit - each a migration or an expiry, never a plain edit:
-#   * works_runtime_name's default          the app passes WORKS_RUNTIME_NAME
-#   * works_legacy_root / works_legacy_plug frozen history; leaves when
+#   * wires_runtime_name's default          the app passes WIRES_RUNTIME_NAME
+#   * wires_legacy_root / wires_legacy_plug frozen history; leaves when
 #                                           migration is install-time only
 #   * ABLETON-WINE-BUILD-INFO.txt           artifact format; compat-window rename
 #   * the TEMPORARY fenced rename compat    deleted whole, on schedule
-#   * works_manifest_url's URLs             per-app `origin`, once the updater
+#   * wires_manifest_url's URLs             per-app `origin`, once the updater
 #                                           takes an app argument
 #   * ableton_live_pids / "Ableton Live"    the app declares its process
 #                                           signature, or it derives from the
@@ -70,18 +70,18 @@ WORKS_ABI_OLDEST=1
 
 # ========================= TEMPORARY: RENAME COMPAT ==========================
 # DELETE this whole fenced block, fences included, in the first release after
-# one has shipped with the WORKS_* names.
+# one has shipped with the WIRES_* names.
 #
 # The two override names the released world documents: ABLETON_WINE_ROOT and
 # ABLETON_WINEPREFIX shipped, are in users' profiles and in ableton-vm-tools,
 # and are read for one release after the rename, with a single note. Only
 # infrastructure renames belong here - ABLETON_DPI_MODE and the rest configure
 # the application and keep their names.
-works_env_compat() {
+wires_env_compat() {
     local _pair _old _new
     for _pair in \
-        ABLETON_WINE_ROOT:WORKS_RUNTIME \
-        ABLETON_WINEPREFIX:WORKS_PLUG
+        ABLETON_WINE_ROOT:WIRES_RUNTIME \
+        ABLETON_WINEPREFIX:WIRES_PLUG
     do
         _old="${_pair%%:*}"; _new="${_pair##*:}"
         # The new name is preferred: both set means the caller has migrated and
@@ -91,29 +91,29 @@ works_env_compat() {
         echo "   note: $_old is now $_new, and will stop being read after the next release" >&2
     done
 }
-works_env_compat
+wires_env_compat
 # ======================= END TEMPORARY: RENAME COMPAT ========================
 
 # The directory installs live under. A seam for the tests; nothing else sets it.
-works_home() {
-    printf '%s\n' "${WORKS_HOME:-$HOME/works}"
+wires_home() {
+    printf '%s\n' "${WIRES_HOME:-$HOME/wires}"
 }
 
 # The runtime's build name - the application's to declare, because the artifact
-# is the application's. WORKS_RUNTIME_NAME is the seam; the default is the one
+# is the application's. WIRES_RUNTIME_NAME is the seam; the default is the one
 # application this repository ships, and is on the de-Ableton inventory below.
-works_runtime_name() {
-    printf '%s\n' "${WORKS_RUNTIME_NAME:-wine-d2d1-nspa-11.13}"
+wires_runtime_name() {
+    printf '%s\n' "${WIRES_RUNTIME_NAME:-wine-d2d1-nspa-11.13}"
 }
 
 
 # A tree set aside rather than a build anyone can choose. Three names reach the
-# store and only the first two were ever filtered: works_store_absorb writes
+# store and only the first two were ever filtered: wires_store_absorb writes
 # superseded-<stamp>/ and failed-<stamp>/ as prefixes, while a failed install
 # leaves <id>.failed-<stamp> *beside* the entry it was replacing - a suffix, so
 # a prefix match never saw it. It was offered as a selectable build, with an
 # empty BUILT column and a name long enough to shove the table out of line.
-works_is_quarantine() {
+wires_is_quarantine() {
     case "${1##*/}" in
         superseded-*|failed-*|*.failed-*|.replaced-*|*-rollback-*) return 0 ;;
     esac
@@ -121,53 +121,36 @@ works_is_quarantine() {
 }
 
 # The directory holding every installed runtime, one per build.
-works_runtime_store() {
-    printf '%s\n' "$(works_home)/runtimes"
+wires_runtime_store() {
+    printf '%s\n' "$(wires_home)/runtimes"
 }
 
 # Where installs used to live. This is a fact about the past, not a path
-# derived from where things live now: derive it from works_home() and the
-# migration looks inside ~/works, finds nothing, and silently orphans every
+# derived from where things live now: derive it from wires_home() and the
+# migration looks inside ~/wires, finds nothing, and silently orphans every
 # existing install instead of moving it. It stays frozen when the store moves.
-works_legacy_root() {
-    # Spelled out, never derived from works_runtime_name: that name grew a seam
-    # (WORKS_RUNTIME_NAME), and a renamed artifact deriving this path would
+wires_legacy_root() {
+    # Spelled out, never derived from wires_runtime_name: that name grew a seam
+    # (WIRES_RUNTIME_NAME), and a renamed artifact deriving this path would
     # un-find every existing install.
     printf '%s\n' "$HOME/.local/opt/wine-d2d1-nspa-11.13"
 }
 
-# The installed runtime. WORKS_RUNTIME overrides it — the tests, the
-# regression VMs and anyone bisecting a build rely on that, so it stays the
-# outermost say.
-#
-# Returns what the channel points at, never the channel path itself. Two things
-# turn on that, and both were measured rather than argued:
-#
-# /proc/PID/exe reports a path with symlinks already resolved, so a process
-# launched through <container>/stable/bin/wine appears under the build's own
-# name. Compare against the channel and works_runtime_pids matches nothing:
-# the confirmation before force-closing Live never fires, the targeted kills
-# reach nothing, and only the pgrep fallback PR #120 added the scan to replace
-# still works — while install.sh goes on to rename the directory.
-#
-# And a caller that resolved once keeps the build it resolved. A channel switch
-# part-way through a session cannot move the runtime under a process already
-# executing from it.
+# Where the followed channel is recorded. One function, because a reader and a
+# writer that spell this differently disagree silently until an update goes to
+# the wrong channel.
+wires_channel_file() {
+    printf '%s\n' "${WIRES_CHANNEL_FILE:-$(wires_runtime_store)/.channel}"
+}
+
 # Which channel this machine follows. One word, validated against an allowlist
 # rather than trusted: it selects a symlink name and, for the updater, part of a
 # URL - and configuration the build does not control must not shape a request.
 # That is the same constraint that ended the source-repo experiment.
-# Where the followed channel is recorded. One function, because a reader and a
-# writer that spell this differently disagree silently until an update goes to
-# the wrong channel.
-works_channel_file() {
-    printf '%s\n' "${WORKS_CHANNEL_FILE:-$(works_runtime_store)/.channel}"
-}
-
-works_channel() {
+wires_channel() {
     local _f _c
-    _f="$(works_channel_file)"
-    _c="${WORKS_CHANNEL:-}"
+    _f="$(wires_channel_file)"
+    _c="${WIRES_CHANNEL:-}"
     [ -n "$_c" ] || { [ -r "$_f" ] && _c="$(head -1 "$_f" 2>/dev/null | tr -d '[:space:]')"; }
     case "$_c" in
         stable|nightly) printf '%s\n' "$_c" ;;
@@ -177,7 +160,7 @@ works_channel() {
     esac
 }
 
-# The installed runtime. WORKS_RUNTIME overrides it — the tests, the
+# The installed runtime. WIRES_RUNTIME overrides it — the tests, the
 # regression VMs and anyone bisecting a build rely on that, so it stays the
 # outermost say.
 #
@@ -186,7 +169,7 @@ works_channel() {
 #
 # /proc/PID/exe reports a path with symlinks already resolved, so a process
 # launched through <container>/stable/bin/wine appears under the build's own
-# name. Compare against the channel and works_runtime_pids matches nothing:
+# name. Compare against the channel and wires_runtime_pids matches nothing:
 # the confirmation before force-closing Live never fires, the targeted kills
 # reach nothing, and only the pgrep fallback PR #120 added the scan to replace
 # still works — while install.sh goes on to rename the directory.
@@ -194,13 +177,13 @@ works_channel() {
 # And a caller that resolved once keeps the build it resolved. A channel switch
 # part-way through a session cannot move the runtime under a process already
 # executing from it.
-works_runtime_path() {
+wires_runtime_path() {
     local _chan _target
-    if [ -n "${WORKS_RUNTIME:-}" ]; then
-        printf '%s\n' "$WORKS_RUNTIME"
+    if [ -n "${WIRES_RUNTIME:-}" ]; then
+        printf '%s\n' "$WIRES_RUNTIME"
         return
     fi
-    _chan="$(works_runtime_store)/$(works_channel)"
+    _chan="$(wires_runtime_store)/$(wires_channel)"
     if [ -e "$_chan" ]; then
         _target="$(readlink -f "$_chan" 2>/dev/null || true)"
         if [ -n "$_target" ]; then
@@ -210,25 +193,25 @@ works_runtime_path() {
     fi
     # No container yet: an install that predates the migration still has to
     # resolve and launch.
-    works_legacy_root
+    wires_legacy_root
 }
 
 # Where Plugs live. There is no registry: the directory is the list, so a Plug
 # exists because its prefix does and stops existing when it is removed.
-works_plugs_dir() {
-    printf '%s\n' "$(works_home)/plugs"
+wires_plugs_dir() {
+    printf '%s\n' "$(wires_home)/plugs"
 }
 
 # The Ableton prefix. Separate from the runtime on purpose: a channel switch
 # would change both, but a test or a clone changes only this one.
 #
-# Selection is WORKS_PLUG, then the `default` symlink, then studio. The symlink
-# is the one thing `works plug use` writes; studio is the name the migration
+# Selection is WIRES_PLUG, then the `default` symlink, then studio. The symlink
+# is the one thing `wires plug use` writes; studio is the name the migration
 # lands on, so an install that predates Plugs still resolves without one.
-works_plug_path() {
+wires_plug_path() {
     local _d _t
-    if [ -n "${WORKS_PLUG:-}" ]; then printf '%s\n' "$WORKS_PLUG"; return; fi
-    _d="$(works_plugs_dir)"
+    if [ -n "${WIRES_PLUG:-}" ]; then printf '%s\n' "$WIRES_PLUG"; return; fi
+    _d="$(wires_plugs_dir)"
     if [ -L "$_d/default" ]; then
         _t="$(readlink -f "$_d/default" 2>/dev/null || true)"
         # A dangling default is a Plug someone removed by hand. Falling back is
@@ -243,7 +226,7 @@ works_plug_path() {
 # seen with an empty system.reg and #arch=win32 in user.reg and userdef.reg,
 # which reading system.reg alone reports as "no marker" and so as unfinished.
 # It was not unfinished; it was 32-bit, and Wine refused it accordingly.
-works_prefix_arch() {
+wires_prefix_arch() {
     local _p="${1%/}" _f _a
     for _f in system.reg user.reg userdef.reg; do
         _a="$(grep -m1 '^#arch=' "$_p/$_f" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
@@ -255,8 +238,8 @@ works_prefix_arch() {
 # A prefix Wine will open for a 64-bit application. Anything else - a declared
 # win32 prefix, or one so incomplete that nothing declares an architecture at
 # all - is not one, and the two are not the same problem.
-works_is_prefix() {
-    [ "$(works_prefix_arch "${1%/}" 2>/dev/null)" = win64 ]
+wires_is_prefix() {
+    [ "$(wires_prefix_arch "${1%/}" 2>/dev/null)" = win64 ]
 }
 
 # Never finished: no registry file declares an architecture, and nothing of
@@ -264,59 +247,59 @@ works_is_prefix() {
 # skeleton is directories only, so one file anywhere under drive_c means someone
 # put it there. An earlier version keyed on the top-level names and would have
 # deleted a set sitting in drive_c/users.
-works_is_stub_prefix() {
+wires_is_stub_prefix() {
     local _p="${1%/}"
     [ -d "$_p" ] || return 1
-    works_prefix_arch "$_p" >/dev/null 2>&1 && return 1
+    wires_prefix_arch "$_p" >/dev/null 2>&1 && return 1
     [ -e "$_p/system.reg" ] || return 1
     [ -z "$(find "$_p/drive_c" -type f -print -quit 2>/dev/null)" ]
 }
 
 # The pre-container prefix path, named once rather than spelled out at each use.
-works_legacy_plug() {
+wires_legacy_plug() {
     printf '%s\n' "$HOME/.wine-ableton"
 }
 
 # The prefix as it stands *right now*, for anything acting on it before
-# works_migrate_plug has moved it. works_plug_path names where the prefix will
+# wires_migrate_plug has moved it. wires_plug_path names where the prefix will
 # live; on an unmigrated machine that directory does not exist yet and the real
 # one is still at the legacy path. Handing the wrong path to `wineserver -k` is
 # a no-op that reports success, which is how a running Live survives the stop
 # and then gets SIGKILLed - the registry corruption the migration exists to
 # avoid.
-works_plug_path_live() {
+wires_plug_path_live() {
     local _p
-    _p="$(works_plug_path)"
-    if [ ! -d "$_p" ] && [ -d "$(works_legacy_plug)" ]; then
-        works_legacy_plug
+    _p="$(wires_plug_path)"
+    if [ ! -d "$_p" ] && [ -d "$(wires_legacy_plug)" ]; then
+        wires_legacy_plug
         return
     fi
     printf '%s\n' "$_p"
 }
 
-# Anything running at all, from either scan. works_runtime_busy answers only for
-# the runtime scan, which is strictly narrower than the guard works_migrate_plug
+# Anything running at all, from either scan. wires_runtime_busy answers only for
+# the runtime scan, which is strictly narrower than the guard wires_migrate_plug
 # applies - so a stop gated on it finishes "successfully" while leaving exactly
 # the process that then refuses the migration, and no number of reruns clears it.
-works_anything_busy() {
-    [ -n "$(works_all_pids 2>/dev/null | sort -un | head -1)" ]
+wires_anything_busy() {
+    [ -n "$(wires_all_pids 2>/dev/null | sort -un | head -1)" ]
 }
 
 # What a Plug is bound to. A symlink into the store at either a channel or a
-# build: pointing it at the channel is how a Plug follows `works runtime use`,
+# build: pointing it at the channel is how a Plug follows `wires runtime use`,
 # pointing it at a build is how one stays where it is. Resolving either is the
 # same readlink, which is also what retention walks.
-works_plug_binding() {
+wires_plug_binding() {
     local _p="${1:-}"
-    [ -n "$_p" ] || _p="$(works_plug_path)"
-    printf '%s\n' "${_p%/}/.works-runtime"
+    [ -n "$_p" ] || _p="$(wires_plug_path)"
+    printf '%s\n' "${_p%/}/.wires-runtime"
 }
 
 # The build a Plug resolves to, or nothing if it is unbound. Unbound is the
 # normal state for every Plug that predates this, and means "follow the channel".
-works_plug_runtime() {
+wires_plug_runtime() {
     local _b _t
-    _b="$(works_plug_binding "${1:-}")"
+    _b="$(wires_plug_binding "${1:-}")"
     [ -L "$_b" ] || return 1
     _t="$(readlink -f "$_b" 2>/dev/null || true)"
     [ -n "$_t" ] && [ -d "$_t" ] || return 1
@@ -331,19 +314,19 @@ works_plug_runtime() {
 # share/wine/wine.inf and runs `wineboot --update` when they differ. Forward it
 # does. Back it does not support.
 #
-# Until this existed every guard for that asked the *runtime* - `works runtime
+# Until this existed every guard for that asked the *runtime* - `wires runtime
 # use` compared the channel's current target against the incoming build, and
-# `works update` compared the installed runtime against the manifest. Neither
+# `wires update` compared the installed runtime against the manifest. Neither
 # ever asked a Plug what had bootstrapped it, so a Plug pinned to a build while
 # the channel moved on, a clone carrying a binding but no history, and the
-# WORKS_RUNTIME escape hatch the VMs use for bisecting were all unguarded.
+# WIRES_RUNTIME escape hatch the VMs use for bisecting were all unguarded.
 #
 # Nothing new is recorded to answer it. The prefix already carries the fact, and
 # these two reads are the same comparison Wine itself makes - so the granularity
 # is right by construction: two builds whose wine.inf did not change compare
 # equal, which is correct, because Wine considers such a prefix current.
-works_plug_base() {
-    local _p="${1:-}"; [ -n "$_p" ] || _p="$(works_plug_path)"
+wires_plug_base() {
+    local _p="${1:-}"; [ -n "$_p" ] || _p="$(wires_plug_path)"
     _p="${_p%/}"
     [ -r "$_p/.update-timestamp" ] || return 1
     # One line, an epoch second. Anything else means a prefix we cannot reason
@@ -354,8 +337,8 @@ works_plug_base() {
     printf '%s\n' "$_v"
 }
 
-works_runtime_base() {
-    local _r="${1:-}"; [ -n "$_r" ] || _r="$(works_runtime_path)"
+wires_runtime_base() {
+    local _r="${1:-}"; [ -n "$_r" ] || _r="$(wires_runtime_path)"
     _r="${_r%/}"
     # tar restores mtimes, so this is the same number on every machine that
     # unpacked the same tarball - which is what makes it an identity rather than
@@ -371,18 +354,18 @@ works_runtime_base() {
 # warn people away from a switch that cannot reach them. Unbound follows the
 # channel, because that is what unbound means.
 #
-# Here rather than in works-runtime because install.sh needs the same set: the
+# Here rather than in wires-runtime because install.sh needs the same set: the
 # guard holds at every door, and two copies of this predicate is how the doors
 # drift apart.
-works_plugs_following() {
+wires_plugs_following() {
     local _chan="${1:-}" _n _b
-    [ -n "$_chan" ] || _chan="$(works_channel)"
+    [ -n "$_chan" ] || _chan="$(wires_channel)"
     while read -r _n; do
         [ -n "$_n" ] || continue
-        _b="$(readlink "$(works_plugs_dir)/$_n/.works-runtime" 2>/dev/null || true)"
+        _b="$(readlink "$(wires_plugs_dir)/$_n/.wires-runtime" 2>/dev/null || true)"
         [ -z "$_b" ] || [ "${_b##*/}" = "$_chan" ] || continue
         printf '%s\n' "$_n"
-    done < <(works_plug_names)
+    done < <(wires_plug_names)
 }
 
 # The runtime that bootstrapped a Plug, recovered rather than recorded: the
@@ -390,13 +373,13 @@ works_plugs_following() {
 # whichever installed tree still carries that exact mtime. Walks the store and
 # the legacy root; a booter that has been pruned or set aside is simply not
 # found, and the caller falls back to strict.
-works_plug_base_runtime() {
+wires_plug_base_runtime() {
     local _p="${1:-}" _pb _e _rb
-    _pb="$(works_plug_base "$_p")" || return 1
-    for _e in "$(works_runtime_store)"/* "$(works_legacy_root)"; do
+    _pb="$(wires_plug_base "$_p")" || return 1
+    for _e in "$(wires_runtime_store)"/* "$(wires_legacy_root)"; do
         [ -d "$_e" ] && [ ! -L "$_e" ] || continue
-        works_is_quarantine "$_e" && continue
-        _rb="$(works_runtime_base "$_e" 2>/dev/null)" || continue
+        wires_is_quarantine "$_e" && continue
+        _rb="$(wires_runtime_base "$_e" 2>/dev/null)" || continue
         [ "$_rb" = "$_pb" ] || continue
         printf '%s\n' "$_e"
         return 0
@@ -425,17 +408,17 @@ works_plug_base_runtime() {
 # yesterday's nightly would read as the unsupported case and be refused. So the
 # stamp gives the direction, and the *severity* comes from comparing the wine:
 # label of the candidate against the label of the runtime that actually booted
-# the Plug, recovered via works_plug_base_runtime. When that runtime is gone or
+# the Plug, recovered via wires_plug_base_runtime. When that runtime is gone or
 # either label is unreadable, the move stays forward/backward - strict, which
 # preserves the rule that an unanswerable question is a refusal, not a skip.
 #
 # Returns 1 without printing when the candidate or the Plug cannot be read.
-works_base_move() {
+wires_base_move() {
     local _r="${1:-}" _p="${2:-}" _rb _pb _dir _boot _bl _cl
-    [ -n "$_p" ] || _p="$(works_plug_path)"
+    [ -n "$_p" ] || _p="$(wires_plug_path)"
     _p="${_p%/}"
-    _rb="$(works_runtime_base "$_r")" || return 1
-    if ! _pb="$(works_plug_base "$_p")"; then
+    _rb="$(wires_runtime_base "$_r")" || return 1
+    if ! _pb="$(wires_plug_base "$_p")"; then
         # No stamp: fresh or tampered, told apart by -s, not -e. wineboot
         # writes registry content in its first moments, so an empty system.reg
         # means it never started, and fresh is the honest answer; content
@@ -447,9 +430,9 @@ works_base_move() {
     fi
     if [ "$_rb" -eq "$_pb" ]; then printf 'same\n'; return 0; fi
     [ "$_rb" -gt "$_pb" ] && _dir=forward || _dir=backward
-    if _boot="$(works_plug_base_runtime "$_p")"; then
-        _bl="$(works_buildinfo_field "$_boot/ABLETON-WINE-BUILD-INFO.txt" wine)"
-        _cl="$(works_buildinfo_field "${_r%/}/ABLETON-WINE-BUILD-INFO.txt" wine)"
+    if _boot="$(wires_plug_base_runtime "$_p")"; then
+        _bl="$(wires_buildinfo_field "$_boot/ABLETON-WINE-BUILD-INFO.txt" wine)"
+        _cl="$(wires_buildinfo_field "${_r%/}/ABLETON-WINE-BUILD-INFO.txt" wine)"
         if [ -n "$_bl" ] && [ "$_bl" = "$_cl" ]; then
             [ "$_dir" = forward ] && printf 'refresh\n' || printf 'rollback\n'
             return 0
@@ -459,17 +442,17 @@ works_base_move() {
 }
 
 # Every Plug, by name. Two markers, because a Plug exists before Wine has ever
-# run in it: system.reg is Wine's own "this is a prefix", and .works-runtime is
+# run in it: system.reg is Wine's own "this is a prefix", and .wires-runtime is
 # ours for one created but not yet booted. Requiring either keeps a stray
 # directory under plugs/ from being offered as a Plug.
-works_plug_names() {
+wires_plug_names() {
     local _d _p
-    _d="$(works_plugs_dir)"
+    _d="$(wires_plugs_dir)"
     [ -d "$_d" ] || return 0
     for _p in "$_d"/*/; do
         _p="${_p%/}"
         [ -d "$_p" ] && [ ! -L "$_p" ] || continue     # skips the default link
-        [ -e "$_p/system.reg" ] || [ -L "$_p/.works-runtime" ] || continue
+        [ -e "$_p/system.reg" ] || [ -L "$_p/.wires-runtime" ] || continue
         printf '%s\n' "${_p##*/}"
     done
 }
@@ -478,9 +461,9 @@ works_plug_names() {
 # application exists because its payload directory does. No registry, for the
 # same reason Plugs have none - a list beside the filesystem is a list that can
 # disagree with it.
-works_app_names() {
+wires_app_names() {
     local _d _a
-    _d="$(works_home)/apps"
+    _d="$(wires_home)/apps"
     [ -d "$_d" ] || return 0
     for _a in "$_d"/*/; do
         _a="${_a%/}"
@@ -489,12 +472,12 @@ works_app_names() {
     done
 }
 
-# A WORKS_ABI* declaration read out of a file without sourcing it. Sourcing is
+# A WIRES_ABI* declaration read out of a file without sourcing it. Sourcing is
 # exactly wrong here: the reader usually holds one generation of this library in
 # scope already and is asking about another, and executing the other to ask it a
 # number would execute the file under evaluation. Digits only - a
 # clever value is treated as no value.
-works_abi_field() {
+wires_abi_field() {
     local _v
     _v="$(sed -n "s/^${2}=//p" "$1" 2>/dev/null | head -1 | tr -cd '0-9')"
     [ -n "$_v" ] || return 1
@@ -509,14 +492,14 @@ works_abi_field() {
 # nothing can ever appear here, which is the point: raising OLDEST is the only
 # act that puts an application at risk, and this names the casualties before it
 # happens rather than after.
-works_apps_below_min() {
+wires_apps_below_min() {
     local _oldest="$1" _a _l _m
     while read -r _a; do
         [ -n "$_a" ] || continue
-        _l="$(works_home)/apps/$_a/$_a"
-        _m="$(works_abi_field "$_l" WORKS_ABI_MIN 2>/dev/null)" || _m=1
+        _l="$(wires_home)/apps/$_a/$_a"
+        _m="$(wires_abi_field "$_l" WIRES_ABI_MIN 2>/dev/null)" || _m=1
         [ "$_m" -lt "$_oldest" ] && printf '%s\n' "$_a"
-    done < <(works_app_names)
+    done < <(wires_app_names)
     return 0
 }
 
@@ -535,9 +518,9 @@ works_apps_below_min() {
 # That list is platform knowledge (the runtime's own support payloads), not
 # tenant knowledge: the smell being avoided is application vendors named in
 # shared code, and no application is named here.
-works_plug_tenants() {
+wires_plug_tenants() {
     local _p _f
-    _p="${1:-}"; [ -n "$_p" ] || _p="$(works_plug_path)"
+    _p="${1:-}"; [ -n "$_p" ] || _p="$(wires_plug_path)"
     _p="${_p%/}"
     {
         for _f in system.reg user.reg; do
@@ -574,19 +557,19 @@ works_plug_tenants() {
 # at its own call site: folding them in here would silently start dropping a
 # user's WINEESYNC on every launch, which is a behaviour change wearing a
 # refactor's clothes.
-works_bind_runtime() {
+wires_bind_runtime() {
     unset WINELOADER WINEDLLPATH WINEDLLOVERRIDES WINEARCH
-    WINEPREFIX="$(works_plug_path)"
+    WINEPREFIX="$(wires_plug_path)"
     # A Plug's own binding wins over the channel: that is what lets two Plugs on
-    # one machine run different builds. WORKS_RUNTIME still wins over both, as
+    # one machine run different builds. WIRES_RUNTIME still wins over both, as
     # the outermost say the VMs and anyone bisecting depend on. Deliberately
-    # only here and not in works_runtime_path - install.sh resolves the runtime
+    # only here and not in wires_runtime_path - install.sh resolves the runtime
     # it is installing *into* through that, and a Plug's binding must not move
     # it.
-    if [ -n "${WORKS_RUNTIME:-}" ]; then
-        WINE_ROOT="$WORKS_RUNTIME"
+    if [ -n "${WIRES_RUNTIME:-}" ]; then
+        WINE_ROOT="$WIRES_RUNTIME"
     else
-        WINE_ROOT="$(works_plug_runtime "$WINEPREFIX" 2>/dev/null || works_runtime_path)"
+        WINE_ROOT="$(wires_plug_runtime "$WINEPREFIX" 2>/dev/null || wires_runtime_path)"
     fi
     WINESERVER="$WINE_ROOT/bin/wineserver"
     PATH="$WINE_ROOT/bin:$PATH"
@@ -612,9 +595,9 @@ works_bind_runtime() {
 # nightly channel publishes <name>-<version>+nightly.<sha>.tar.zst, and refusing
 # that meant the one artifact a nightly actually ships could not be packed or
 # installed. `-debug` stays refused — that is a different tree, not a label.
-works_is_runtime_tarball() {
+wires_is_runtime_tarball() {
     local _b="${1##*/}" _nm _re
-    _nm="$(works_runtime_name)"
+    _nm="$(wires_runtime_name)"
     _re="^${_nm//./\\.}-[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]+(\\+[A-Za-z0-9][A-Za-z0-9.]*)?\\.tar\\.zst\$"
     [[ "$_b" =~ $_re ]]
 }
@@ -628,14 +611,14 @@ works_is_runtime_tarball() {
 # release, because `sort -V` orders `2026.08.04.1+nightly.bf76bb2` *after*
 # `2026.08.04.1` — so a directory holding a release and a nightly would hand
 # back the nightly, which is the same way round the `-debug` defect went. A
-# labelled build is opt-in, and WORKS_RUNTIME_TARBALL is how you opt in.
-works_pick_tarball() {
+# labelled build is opt-in, and WIRES_RUNTIME_TARBALL is how you opt in.
+wires_pick_tarball() {
     local _dir="$1" _nm _f
-    _nm="$(works_runtime_name)"
+    _nm="$(wires_runtime_name)"
     local -a _found=() _labelled=()
     for _f in "$_dir"/"$_nm"-*.tar.zst; do
         [ -e "$_f" ] || continue          # no match: the glob came back literal
-        works_is_runtime_tarball "$_f" || continue
+        wires_is_runtime_tarball "$_f" || continue
         case "${_f##*/}" in
             *+*) _labelled+=("$_f") ;;
             *)   _found+=("$_f") ;;
@@ -651,8 +634,8 @@ works_pick_tarball() {
 # The process table to read. Only the tests set this, pointing it at a fixture
 # tree of fake exe symlinks; /proc cannot be stubbed through PATH the way pgrep
 # can, so without a seam the accurate implementation is the untestable one.
-works_proc_root() {
-    printf '%s\n' "${WORKS_PROC_ROOT:-/proc}"
+wires_proc_root() {
+    printf '%s\n' "${WIRES_PROC_ROOT:-/proc}"
 }
 
 # Every pid whose binary lives under the runtime. From PR #120, which found the
@@ -662,10 +645,10 @@ works_proc_root() {
 # The exe link is the real binary — bin/wineserver, or the wine-preloader every
 # in-prefix process runs from — so the match is exact and scoped to this
 # runtime rather than any Wine on the machine.
-works_runtime_pids() {
+wires_runtime_pids() {
     local proc root d
-    root="$(works_runtime_path)"
-    proc="$(works_proc_root)"
+    root="$(wires_runtime_path)"
+    proc="$(wires_proc_root)"
     for d in "$proc"/[0-9]*; do
         case "$(readlink "$d/exe" 2>/dev/null)" in
             "$root"/*) printf '%s\n' "${d##*/}" ;;
@@ -676,8 +659,8 @@ works_runtime_pids() {
 # Anything at all using the runtime: the predicate to ask before replacing its
 # files. The name match stays as a second opinion because failing open here
 # means installing over a running runtime.
-works_runtime_busy() {
-    [ -n "$(works_runtime_pids)" ] || \
+wires_runtime_busy() {
+    [ -n "$(wires_runtime_pids)" ] || \
         pgrep -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1
 }
 
@@ -685,8 +668,8 @@ works_runtime_busy() {
 # prompt is about unsaved work, and only Live has any.
 ableton_live_pids() {
     local proc p cmd
-    proc="$(works_proc_root)"
-    for p in $(works_runtime_pids); do
+    proc="$(wires_proc_root)"
+    for p in $(wires_runtime_pids); do
         # A process can exit between the scan above and this read — during an
         # install that is common, because the stop is what made them exit. The
         # shell reports a failed redirection itself, before tr ever runs, so
@@ -708,7 +691,7 @@ ableton_live_running() {
 # One field out of a tree's ABLETON-WINE-BUILD-INFO.txt. The file pads its
 # values to a column, so the separator is a colon followed by any amount of
 # space, not ": ".
-works_buildinfo_field() {
+wires_buildinfo_field() {
     local _file="$1" _key="$2" _v
     [ -r "$_file" ] || return 0
     _v="$(sed -n "s/^${_key}:[[:space:]]*//p" "$_file" | head -1)"
@@ -728,24 +711,24 @@ works_buildinfo_field() {
 # dist-version alone cannot serve. On that machine 2026.07.29.1 appears four
 # times under two different patch stacks, and 2026.07.23.1 covers both the 11.11
 # and the 11.14 tree — keyed on version they would collide.
-works_runtime_id() {
+wires_runtime_id() {
     local _dir="$1" _info _ver _disc _kind
     _info="$_dir/ABLETON-WINE-BUILD-INFO.txt"
     [ -r "$_info" ] || return 0
 
-    _ver="$(works_buildinfo_field "$_info" dist-version)"
+    _ver="$(wires_buildinfo_field "$_info" dist-version)"
     [ -n "$_ver" ] || return 0
 
-    _disc="$(works_buildinfo_field "$_info" source-commit)"
-    [ -n "$_disc" ] || _disc="$(works_buildinfo_field "$_info" patch-stack)"
+    _disc="$(wires_buildinfo_field "$_info" source-commit)"
+    [ -n "$_disc" ] || _disc="$(wires_buildinfo_field "$_info" patch-stack)"
     [ -n "$_disc" ] || return 0
     # A nightly says so here rather than in dist-version. That field is the date
     # the build happened, for every build, which is the one question a directory
     # name has to answer -- putting the kind there too would mean either a second
     # date or a second separator, and the id is <version>+<discriminator> with
     # exactly one. So: 2026.08.06.1+nightly.badafaf.
-    _kind="$(works_buildinfo_field "$_info" build-kind)"
-    works_compose_id "$_ver" "$_disc" "$_kind"
+    _kind="$(wires_buildinfo_field "$_info" build-kind)"
+    wires_compose_id "$_ver" "$_disc" "$_kind"
 }
 
 # version, discriminator, kind -> the id, or nothing.
@@ -754,7 +737,7 @@ works_runtime_id() {
 # BUILD-INFO, and the updater's report of what a channel is offering, from a
 # manifest. Those disagreeing would mean the updater naming a directory other
 # than the one the install produces.
-works_compose_id() {
+wires_compose_id() {
     local _ver="$1" _disc="${2:0:7}" _kind="${3:-}"
     [ -n "$_ver" ] && [ -n "$_disc" ] || return 0
     [ -z "$_kind" ] || _disc="$_kind.$_disc"
@@ -778,13 +761,13 @@ works_compose_id() {
 # otherwise. Runtimes built before built-at existed have only the version, which
 # ties across every nightly between two releases — that is why the field was
 # added, and why this answers "no" rather than guessing when it cannot tell.
-works_build_is_newer() {
+wires_build_is_newer() {
     local _a="$1" _b="$2" _av _bv
-    _av="$(works_buildinfo_field "$_a/ABLETON-WINE-BUILD-INFO.txt" built-at)"
-    _bv="$(works_buildinfo_field "$_b/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+    _av="$(wires_buildinfo_field "$_a/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+    _bv="$(wires_buildinfo_field "$_b/ABLETON-WINE-BUILD-INFO.txt" built-at)"
     if [ -z "$_av" ] || [ -z "$_bv" ]; then
-        _av="$(works_buildinfo_field "$_a/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
-        _bv="$(works_buildinfo_field "$_b/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
+        _av="$(wires_buildinfo_field "$_a/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
+        _bv="$(wires_buildinfo_field "$_b/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
     fi
     [ -n "$_av" ] && [ -n "$_bv" ] || return 1
     [ "$_av" != "$_bv" ] || return 1
@@ -795,10 +778,10 @@ works_build_is_newer() {
 # whose name is already taken, is set aside under <container>/<kind>-<stamp>/
 # rather than deleted — these are multi-gigabyte runtimes and nothing here
 # removes one behind the user's back.
-works_store_absorb() {
+wires_store_absorb() {
     local _dir="$1" _stamp="$2" _container _id _aside
-    _container="$(works_runtime_store)"
-    _id="$(works_runtime_id "$_dir")"
+    _container="$(wires_runtime_store)"
+    _id="$(wires_runtime_id "$_dir")"
     if [ -n "$_id" ] && [ ! -e "$_container/$_id" ]; then
         mv "$_dir" "$_container/$_id"
         printf '%s\n' "$_id"
@@ -814,18 +797,18 @@ works_store_absorb() {
 
 
 # What is holding it, for a refusal that can be acted on rather than puzzled at.
-# Every pid Works is running, from either direction. The two scans genuinely
+# Every pid Wires is running, from either direction. The two scans genuinely
 # differ: the runtime scan resolves /proc/PID/exe, so it cannot see a process
 # whose runtime directory has since been removed, and the Plug scan reads
 # WINEPREFIX out of the environment, so it finds exactly those orphans. Wine
 # leaves services.exe, rpcss.exe and friends behind under names no `pkill
 # wineserver` will ever match, and they hold the prefix until something asks.
-works_all_pids() {
+wires_all_pids() {
     local _p _d
-    works_runtime_pids 2>/dev/null || true
-    for _d in "$(works_home)"/plugs/*/ "$(works_legacy_plug)"; do
+    wires_runtime_pids 2>/dev/null || true
+    for _d in "$(wires_home)"/plugs/*/ "$(wires_legacy_plug)"; do
         [ -d "$_d" ] || continue
-        works_plug_holders "${_d%/}" 2>/dev/null | awk '{print $1}'
+        wires_plug_holders "${_d%/}" 2>/dev/null | awk '{print $1}'
     done
 }
 
@@ -857,11 +840,11 @@ works_all_pids() {
 # renaming a prefix out from under a live wineserver corrupts its registry.
 # Wine puts WINEPREFIX in the environment of everything it starts, so the
 # environment is where the answer is.
-works_plug_busy() {
+wires_plug_busy() {
     local _plug _p
-    _plug="${1:-$(works_plug_path)}"
+    _plug="${1:-$(wires_plug_path)}"
     _plug="${_plug%/}"
-    for _p in "$(works_proc_root)"/[0-9]*; do
+    for _p in "$(wires_proc_root)"/[0-9]*; do
         # Unlike cmdline, environ is mode 400 *and* gated by ptrace_may_access,
         # so `[ -r ]` passes on our own processes where the read still fails -
         # systemd --user is one. The shell reports a failed redirection itself,
@@ -874,24 +857,24 @@ works_plug_busy() {
     return 1
 }
 
-works_plug_holders() {
+wires_plug_holders() {
     local _plug _p _cmd
-    _plug="${1:-$(works_plug_path)}"
+    _plug="${1:-$(wires_plug_path)}"
     _plug="${_plug%/}"
-    for _p in "$(works_proc_root)"/[0-9]*; do
+    for _p in "$(wires_proc_root)"/[0-9]*; do
         { tr '\0' '\n' < "$_p/environ" | grep -qxF "WINEPREFIX=$_plug"; } 2>/dev/null || continue
         _cmd="$( { tr -s '\0' ' ' < "$_p/cmdline"; } 2>/dev/null )" || continue
         printf '%s  %s\n' "${_p##*/}" "${_cmd:0:70}"
     done
 }
 
-works_migrate_plug() {
+wires_migrate_plug() {
     local legacy dest
-    legacy="$(works_legacy_plug)"
-    dest="$(works_plug_path)"
+    legacy="$(wires_legacy_plug)"
+    dest="$(wires_plug_path)"
 
-    if [ -n "${WORKS_PLUG:-}" ]; then
-        echo "   plug: WORKS_PLUG is set; leaving the prefix where it is"
+    if [ -n "${WIRES_PLUG:-}" ]; then
+        echo "   plug: WIRES_PLUG is set; leaving the prefix where it is"
         return 0
     fi
     [ "$legacy" != "$dest" ] || return 0
@@ -906,22 +889,22 @@ works_migrate_plug() {
     # Before anything moves. install.sh stops what runs from the runtime, which
     # is not the same set: this catches a Live started from another build, or a
     # bare wine pointed at the prefix.
-    if works_plug_busy "$legacy"; then
+    if wires_plug_busy "$legacy"; then
         echo "!! something is still running from $legacy, so moving it now would" \
-             "corrupt its registry. Close it, or run \`works stop\`, then rerun:" >&2
-        works_plug_holders "$legacy" | sed 's/^/     /' >&2
+             "corrupt its registry. Close it, or run \`wires stop\`, then rerun:" >&2
+        wires_plug_holders "$legacy" | sed 's/^/     /' >&2
         return 1
     fi
 
     # A prefix already at the destination means this machine is on the new
-    # layout: works_plug_path resolves there, the launcher opens it, and what is
+    # layout: wires_plug_path resolves there, the launcher opens it, and what is
     # still sitting at the legacy path is not being used by anything. There is
     # nothing to migrate, so say what is there and carry on - refusing would
     # abort an install over a directory nothing reads. This matches how the
     # runtime migration treats the same shape: an older installer writing to the
     # old path is a normal action on a machine holding an older installer, not
     # corruption.
-    if works_is_prefix "$dest"; then
+    if wires_is_prefix "$dest"; then
         echo "   plug: already at $dest; $legacy is left over from before the" \
              "move and is not in use - remove it when you like"
         return 0
@@ -933,7 +916,7 @@ works_migrate_plug() {
     if [ -e "$dest" ]; then
         if [ -d "$dest" ] && [ -z "$(ls -A "$dest" 2>/dev/null)" ]; then
             rmdir "$dest" 2>/dev/null || true
-        elif works_is_stub_prefix "$dest"; then
+        elif wires_is_stub_prefix "$dest"; then
             # Set aside, never removed. The store does the same with a runtime
             # it cannot use, and a prefix is worth more than a runtime: one can
             # be downloaded again and the other cannot.
@@ -975,15 +958,15 @@ works_migrate_plug() {
     echo "   plug: moved the prefix to $dest"
 }
 
-works_migrate_layout() {
+wires_migrate_layout() {
     local legacy container chan stamp id other d absorbed
-    legacy="$(works_legacy_root)"
-    container="$(works_runtime_store)"
-    chan="$container/$(works_channel)"
+    legacy="$(wires_legacy_root)"
+    container="$(wires_runtime_store)"
+    chan="$container/$(wires_channel)"
     stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 
-    if [ -n "${WORKS_RUNTIME:-}" ]; then
-        echo "   layout: WORKS_RUNTIME is set; leaving the install where it is"
+    if [ -n "${WIRES_RUNTIME:-}" ]; then
+        echo "   layout: WIRES_RUNTIME is set; leaving the install where it is"
         return 0
     fi
 
@@ -994,14 +977,14 @@ works_migrate_layout() {
     if [ -L "$chan" ]; then
         if [ -d "$legacy" ] && [ ! -L "$legacy" ]; then
             other="$(readlink -f "$chan" 2>/dev/null || true)"
-            if [ -z "$(works_runtime_id "$legacy")" ] && \
-               { [ -z "$other" ] || [ -z "$(works_runtime_id "$other")" ]; }; then
+            if [ -z "$(wires_runtime_id "$legacy")" ] && \
+               { [ -z "$other" ] || [ -z "$(wires_runtime_id "$other")" ]; }; then
                 echo "!! neither $legacy nor $chan can be identified from its" \
                      "BUILD-INFO; remove whichever is stale and rerun" >&2
                 return 1
             fi
-            id="$(works_store_absorb "$legacy" "$stamp")"
-            if [ -n "$id" ] && [ -n "$other" ] && works_build_is_newer "$container/$id" "$other"; then
+            id="$(wires_store_absorb "$legacy" "$stamp")"
+            if [ -n "$id" ] && [ -n "$other" ] && wires_build_is_newer "$container/$id" "$other"; then
                 ln -sfn "$id" "$chan"
                 echo "   layout: adopted the newer $id from $legacy"
             else
@@ -1023,7 +1006,7 @@ works_migrate_layout() {
         return 1
     fi
 
-    id="$(works_runtime_id "$legacy")"
+    id="$(wires_runtime_id "$legacy")"
     [ -n "$id" ] || {
         echo "!! $legacy carries no readable ABLETON-WINE-BUILD-INFO.txt, so it" \
              "cannot be named; installing over it would be a guess" >&2
@@ -1034,9 +1017,9 @@ works_migrate_layout() {
     # happens whenever the channel symlink is genuinely absent rather than
     # dangling - mv lands the legacy tree *inside* it, where retention and the
     # container-scoped uninstall both stop seeing it while the channel quietly
-    # points at the incumbent. works_store_absorb is the guard the already-
+    # points at the incumbent. wires_store_absorb is the guard the already-
     # migrated branch above and install.sh both already use.
-    absorbed="$(works_store_absorb "$legacy" "$stamp")"
+    absorbed="$(wires_store_absorb "$legacy" "$stamp")"
     ln -sfn "$id" "$chan"
 
     # The dated rollbacks travel too, and become readable in the process: each
@@ -1046,7 +1029,7 @@ works_migrate_layout() {
     # gigabytes apiece.
     for d in "$legacy"-rollback-* "$legacy".failed-*; do
         [ -e "$d" ] || continue
-        works_store_absorb "$d" "$stamp" >/dev/null
+        wires_store_absorb "$d" "$stamp" >/dev/null
     done
     if [ -n "$absorbed" ]; then
         echo "   layout: moved the runtime to $container/$id"
@@ -1062,8 +1045,8 @@ works_migrate_layout() {
 # Keep this many entries per channel. A count rather than a policy: a channel
 # that turns over nightly wants a smaller one than a channel that turns over
 # monthly, and an unpacked runtime is ~392M against a 40-minute rebuild.
-works_runtime_keep() {
-    local _n="${WORKS_RUNTIME_KEEP:-10}"
+wires_runtime_keep() {
+    local _n="${WIRES_RUNTIME_KEEP:-10}"
     case "$_n" in ''|*[!0-9]*) _n=10 ;; esac      # nonsense reverts to the default
     [ "$_n" -ge 1 ] || _n=1                       # never prune to nothing
     printf '%s\n' "$_n"
@@ -1081,11 +1064,11 @@ works_runtime_keep() {
 # What the channel points at is never removed, whatever the count says. A
 # channel pointing at a pruned entry is a broken install produced by
 # housekeeping.
-works_prune_runtimes() {
+wires_prune_runtimes() {
     local _container _keep _live _e _id _at _ver _key
-    _container="$(works_runtime_store)"
+    _container="$(wires_runtime_store)"
     [ -d "$_container" ] || return 0
-    _keep="$(works_runtime_keep)"
+    _keep="$(wires_runtime_keep)"
     # Every channel's target, not just this machine's. A second channel pointing
     # at an entry pruned on behalf of the first is a broken install produced by
     # housekeeping - the rule has to hold for all of them.
@@ -1102,9 +1085,9 @@ works_prune_runtimes() {
     local _pl
     while read -r _pl; do
         [ -n "$_pl" ] || continue
-        _live="$(works_plug_runtime "$(works_plugs_dir)/$_pl" 2>/dev/null || true)"
+        _live="$(wires_plug_runtime "$(wires_plugs_dir)/$_pl" 2>/dev/null || true)"
         [ -n "$_live" ] && _pinned+=("$_live")
-    done < <(works_plug_names)
+    done < <(wires_plug_names)
 
     local -a _victims=()
     while IFS=$'\t' read -r _key _e; do
@@ -1113,10 +1096,10 @@ works_prune_runtimes() {
     done < <(
         for _e in "$_container"/*; do
             [ -d "$_e" ] && [ ! -L "$_e" ] || continue
-            _id="$(works_runtime_id "$_e")"
+            _id="$(wires_runtime_id "$_e")"
             [ -n "$_id" ] || continue        # quarantine directories are not entries
-            _at="$(works_buildinfo_field "$_e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
-            _ver="$(works_buildinfo_field "$_e/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
+            _at="$(wires_buildinfo_field "$_e/ABLETON-WINE-BUILD-INFO.txt" built-at)"
+            _ver="$(wires_buildinfo_field "$_e/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
             if [ -n "$_at" ]; then printf '1 %s\t%s\n' "$_at" "$_e"
             else                   printf '0 %s\t%s\n' "$_ver" "$_e"; fi
         done | sort -V | head -n -"$_keep"
@@ -1140,23 +1123,23 @@ works_prune_runtimes() {
 # runtimes are, and because deleting trees is worth testing - which needs a
 # function with a seam, not inline code in a script that also stops systemd
 # units and rewrites the desktop database.
-works_remove_runtimes() {
+wires_remove_runtimes() {
     local _container _legacy _d
-    if [ -n "${WORKS_RUNTIME:-}" ]; then
+    if [ -n "${WIRES_RUNTIME:-}" ]; then
         # The user pinned a path; remove that and nothing else - but check what
         # it names first. This runs `rm -rf` on a variable, and a stale exported
         # value left from a test session would otherwise remove whatever it
         # happens to point at.
-        case "$WORKS_RUNTIME" in
+        case "$WIRES_RUNTIME" in
             ""|/|"$HOME"|"$HOME"/)
-                echo "!! WORKS_RUNTIME is '$WORKS_RUNTIME'; refusing to remove that" >&2
+                echo "!! WIRES_RUNTIME is '$WIRES_RUNTIME'; refusing to remove that" >&2
                 return 1 ;;
         esac
-        [ -d "$WORKS_RUNTIME/bin" ] || {
-            echo "!! $WORKS_RUNTIME has no bin/ and does not look like a runtime;" \
+        [ -d "$WIRES_RUNTIME/bin" ] || {
+            echo "!! $WIRES_RUNTIME has no bin/ and does not look like a runtime;" \
                  "refusing to remove it" >&2
             return 1; }
-        rm -rf "$WORKS_RUNTIME" && echo "removed $WORKS_RUNTIME"
+        rm -rf "$WIRES_RUNTIME" && echo "removed $WIRES_RUNTIME"
         return 0
     fi
 
@@ -1164,13 +1147,13 @@ works_remove_runtimes() {
     # this is a single removal rather than a sibling glob. That glob is what
     # would orphan multi-gigabyte directories the moment any suffix joined the
     # runtime name - and the store's names are nothing but suffixes.
-    _container="$(works_runtime_store)"
+    _container="$(wires_runtime_store)"
     [ ! -e "$_container" ] || { rm -rf "$_container" && echo "removed $_container"; }
 
     # An install that never migrated still has the flat layout. -L as well as
     # -e so a dangling link from an older layout is cleared rather than left;
     # rm -rf on a symlink removes the link, never its target.
-    _legacy="$(works_legacy_root)"
+    _legacy="$(wires_legacy_root)"
     if [ -e "$_legacy" ] || [ -L "$_legacy" ]; then
         rm -rf "$_legacy" && echo "removed $_legacy"
     fi
@@ -1186,7 +1169,7 @@ works_remove_runtimes() {
 # the single decision behind the selector defect, the packing defect, the
 # retention tie and the update prompt having nothing to compare.
 #
-# Same `key: value` shape as BUILD-INFO, so works_buildinfo_field reads it and
+# Same `key: value` shape as BUILD-INFO, so wires_buildinfo_field reads it and
 # nothing needs jq:
 #
 #   channel:       stable
@@ -1199,13 +1182,13 @@ works_remove_runtimes() {
 
 # Where a channel's manifest lives. A table rather than string-building from the
 # channel name: the value is user configuration, and the one thing it must never
-# do is choose a host. WORKS_MANIFEST_URL overrides it for testing.
-works_manifest_url() {
-    local _c="${1:-$(works_channel)}"
-    [ -z "${WORKS_MANIFEST_URL:-}" ] || { printf '%s\n' "$WORKS_MANIFEST_URL"; return; }
+# do is choose a host. WIRES_MANIFEST_URL overrides it for testing.
+wires_manifest_url() {
+    local _c="${1:-$(wires_channel)}"
+    [ -z "${WIRES_MANIFEST_URL:-}" ] || { printf '%s\n' "$WIRES_MANIFEST_URL"; return; }
     # Both point at the project, never at a fork. A fork is where nightlies are
     # tested, and pointing the shipped default there would send every user's
-    # daily channel to whoever happened to build it. WORKS_MANIFEST_URL is how
+    # daily channel to whoever happened to build it. WIRES_MANIFEST_URL is how
     # a fork tests its own; that override is deliberately not a channel.
     #
     # stable resolves through /releases/latest/, which excludes prereleases, so
@@ -1219,7 +1202,7 @@ works_manifest_url() {
 
 # The installer a manifest names, resolved against the manifest's own location.
 # Relative, so moving a release does not strand it.
-works_manifest_installer_url() {
+wires_manifest_installer_url() {
     local _manifest="$1" _name="$2"
     printf '%s/%s\n' "${_manifest%/*}" "$_name"
 }
@@ -1239,7 +1222,7 @@ works_manifest_installer_url() {
 # wrong reason.
 #
 # Half a second on a 60 MB tarball, at package time only.
-works_tarball_buildinfo() {
+wires_tarball_buildinfo() {
     local _t="$1"
     [ -f "$_t" ] || return 1
     zstd -dc --long=27 "$_t" 2>/dev/null \
@@ -1248,11 +1231,11 @@ works_tarball_buildinfo() {
 
 # Write one. Called by the publish step; kept here so the writer and the reader
 # cannot drift apart.
-works_manifest_write() {
+wires_manifest_write() {
     local _channel="$1" _info="$2" _installer="$3" _sha="$4" _runtime="${5:-}" _runtime_sha="${6:-}" _k
     [ -r "$_info" ] || { echo "!! no BUILD-INFO at $_info" >&2; return 1; }
     printf 'channel:        %s\n' "$_channel"
-    printf 'dist-version:   %s\n' "$(works_buildinfo_field "$_info" dist-version)"
+    printf 'dist-version:   %s\n' "$(wires_buildinfo_field "$_info" dist-version)"
     printf 'installer:      %s\n' "$_installer"
     printf 'sha256:         %s\n' "$_sha"
     # Optional: the runtime tarball published beside the installer, for
@@ -1262,30 +1245,30 @@ works_manifest_write() {
         printf 'runtime:        %s\n' "$_runtime"
         printf 'runtime-sha256: %s\n' "$_runtime_sha"
     fi
-    printf 'source-commit:  %s\n' "$(works_buildinfo_field "$_info" source-commit)"
-    printf 'built-at:       %s\n' "$(works_buildinfo_field "$_info" built-at)"
+    printf 'source-commit:  %s\n' "$(wires_buildinfo_field "$_info" source-commit)"
+    printf 'built-at:       %s\n' "$(wires_buildinfo_field "$_info" built-at)"
     # Optional, and absent for a release. Carried so the updater can report the
     # id a build will land under rather than only its version.
-    _k="$(works_buildinfo_field "$_info" build-kind)"
+    _k="$(wires_buildinfo_field "$_info" build-kind)"
     [ -z "$_k" ] || printf 'build-kind:     %s\n' "$_k"
-    printf 'wine:           %s\n' "$(works_buildinfo_field "$_info" wine)"
+    printf 'wine:           %s\n' "$(wires_buildinfo_field "$_info" wine)"
 }
 
 # Is a manifest usable? Refuses rather than half-applying: a field missing here
 # means the updater cannot answer "is this newer" or "will this change the Wine
 # base", which are the two questions it exists to answer.
-works_manifest_valid() {
+wires_manifest_valid() {
     local _f="$1" _k
     [ -r "$_f" ] || return 1
-    # `wine` is required because a safety refusal reads it: works-update compares
+    # `wine` is required because a safety refusal reads it: wires-update compares
     # bases and declines a one-way re-bootstrap, but guards that on the field
     # being non-empty. A manifest published without it turns that refusal off
     # rather than tripping it, and this is the gate standing in front of users.
     for _k in channel dist-version installer sha256 source-commit built-at wine; do
-        [ -n "$(works_buildinfo_field "$_f" "$_k")" ] || return 1
+        [ -n "$(wires_buildinfo_field "$_f" "$_k")" ] || return 1
     done
     # The installer name reaches a URL and a filename. Nothing else in it.
-    case "$(works_buildinfo_field "$_f" installer)" in
+    case "$(wires_buildinfo_field "$_f" installer)" in
         */*|*..*|"") return 1 ;;
     esac
     return 0

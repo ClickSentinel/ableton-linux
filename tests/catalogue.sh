@@ -36,12 +36,12 @@ SUITES=(
     tests/unit/run-header.bats
     tests/unit/manifest.bats
     tests/unit/migrate-layout.bats
-    tests/unit/works.bats
-    tests/unit/works-app.bats
+    tests/unit/wires.bats
+    tests/unit/wires-app.bats
     tests/unit/promote.bats
-    tests/unit/works-runtime.bats
-    tests/unit/works-plug.bats
-    tests/unit/works-update.bats
+    tests/unit/wires-runtime.bats
+    tests/unit/wires-plug.bats
+    tests/unit/wires-update.bats
     tests/unit/runtime-env.bats
     tests/patch-stack.bats
 )

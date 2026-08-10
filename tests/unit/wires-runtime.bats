@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# works/works-runtime — choosing which build is live.
+# wires/wires-runtime — choosing which build is live.
 #
 # The store made rollback possible and nothing exposed it: switching meant
 # `ln -sfn` against a name you had to look up. These cover the two things that
@@ -8,29 +8,29 @@
 # launch, and that `path` answers on both layouts, because scripts and docs
 # resolve through it instead of naming a directory.
 #
-#   ./tests/run.sh tests/unit/works-runtime.bats
+#   ./tests/run.sh tests/unit/wires-runtime.bats
 
 bats_require_minimum_version 1.5.0
 
 load ../helpers/common
 
-RT() { bash "$REPO/works/works-runtime" "$@"; }
+RT() { bash "$REPO/wires/wires-runtime" "$@"; }
 
 setup() {
     HOME="$BATS_TEST_TMPDIR/home"
-    export WORKS_HOME="$BATS_TEST_TMPDIR/opt"
-    unset WORKS_RUNTIME
-    mkdir -p "$HOME" "$WORKS_HOME"
-    . "$REPO/works/runtime-env.sh"
-    C="$(works_runtime_store)"
-    LEGACY="$(works_legacy_root)"
+    export WIRES_HOME="$BATS_TEST_TMPDIR/opt"
+    unset WIRES_RUNTIME
+    mkdir -p "$HOME" "$WIRES_HOME"
+    . "$REPO/wires/runtime-env.sh"
+    C="$(wires_runtime_store)"
+    LEGACY="$(wires_legacy_root)"
 }
 
 # fake_live backgrounds a process from the test shell, so a test that fails
 # before stopping it would leave it running for the length of its sleep.
 #
 # The wait matters as much as the kill: its argv is a Windows-style Live path,
-# which is exactly what works_runtime_busy's pgrep fallback matches. Left
+# which is exactly what wires_runtime_busy's pgrep fallback matches. Left
 # unreaped it is visible to every later test file that does not stub pgrep, and
 # the failure lands over there rather than here.
 teardown() {
@@ -68,7 +68,7 @@ plant() {
 # moves, and a pinned one is deliberately not asked about.
 a_plug() {   # name, base-label, [stamp]
     local d n stamp="${3:-}"
-    d="$(works_plugs_dir)/$1"
+    d="$(wires_plugs_dir)/$1"
     mkdir -p "$d/drive_c"
     : > "$d/system.reg"
     n="$(printf '%s' "${2:-wine-11.13}" | tr -cd '0-9')"
@@ -102,7 +102,7 @@ store() {
 
 @test "path honours an explicit pin" {
     store
-    WORKS_RUNTIME="$BATS_TEST_TMPDIR/pinned" run RT path
+    WIRES_RUNTIME="$BATS_TEST_TMPDIR/pinned" run RT path
     [ "$output" = "$BATS_TEST_TMPDIR/pinned" ]
 }
 
@@ -126,7 +126,7 @@ store() {
     [[ "$output" == *"/runtimes/2026.06.01.1+bbbbbbb"* ]]
     [[ "$output" == *"/runtimes/2026.01.01.1+aaaaaaa"* ]]
     # under $HOME it is written ~/..., never the expanded home directory
-    [[ "$output" != *"$HOME/works"* ]] || { echo "home was not abbreviated" >&2; false; }
+    [[ "$output" != *"$HOME/wires"* ]] || { echo "home was not abbreviated" >&2; false; }
 }
 
 # guards: names tie across nightlies, so ordering is by built-at
@@ -240,7 +240,7 @@ store() {
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
     # setsid detaches the controlling terminal. Without it this inherits the
     # terminal of whoever ran the suite, takes the interactive branch, and blocks.
-    run setsid bash "$REPO/works/works-runtime" use 2026.07.01.1+ddddddd
+    run setsid bash "$REPO/wires/wires-runtime" use 2026.07.01.1+ddddddd
     [ "$status" -ne 0 ]
     [[ "$output" == *"different Wine base"* ]]
     [[ "$output" == *"--force"* ]]
@@ -263,7 +263,7 @@ store() {
     plant "$C/2026.01.01.1+aaaaaaa" 2026.01.01.1 aaaaaaaxxx 2026-01-01T00:00:00Z wine-11.13
     ln -s "2026.07.01.1+ddddddd" "$C/stable"
     a_plug studio wine-11.14
-    run setsid bash "$REPO/works/works-runtime" use 2026.01.01.1+aaaaaaa
+    run setsid bash "$REPO/wires/wires-runtime" use 2026.01.01.1+aaaaaaa
     [[ "$output" == *"DOWNGRADE"* ]]
     [[ "$output" == *"does not support"* ]]
     [[ "$output" == *"studio"* ]] \
@@ -277,9 +277,9 @@ store() {
 @test "a Plug pinned to a build is not warned about" {
     store
     a_plug studio wine-11.13
-    ln -sfn "../../runtimes/2026.06.01.1+bbbbbbb" "$(works_plugs_dir)/studio/.works-runtime"
+    ln -sfn "../../runtimes/2026.06.01.1+bbbbbbb" "$(wires_plugs_dir)/studio/.wires-runtime"
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
-    run setsid bash "$REPO/works/works-runtime" use 2026.07.01.1+ddddddd
+    run setsid bash "$REPO/wires/wires-runtime" use 2026.07.01.1+ddddddd
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" != *"different Wine base"* ]]
     [ "$(readlink "$C/stable")" = "2026.07.01.1+ddddddd" ]
@@ -293,10 +293,10 @@ store() {
 @test "a booted Plug that cannot name its base is a refusal, not a skip" {
     store
     a_plug studio wine-11.13
-    printf 'WINE REGISTRY Version 2\n' > "$(works_plugs_dir)/studio/system.reg"
-    rm -f "$(works_plugs_dir)/studio/.update-timestamp"
+    printf 'WINE REGISTRY Version 2\n' > "$(wires_plugs_dir)/studio/system.reg"
+    rm -f "$(wires_plugs_dir)/studio/.update-timestamp"
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
-    run setsid bash "$REPO/works/works-runtime" use 2026.07.01.1+ddddddd
+    run setsid bash "$REPO/wires/wires-runtime" use 2026.07.01.1+ddddddd
     [ "$status" -ne 0 ]
     [[ "$output" == *"will not say which Wine base"* ]]
     [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]
@@ -309,10 +309,10 @@ store() {
 @test "a Plug with an empty system.reg and no stamp is fresh, not a refusal" {
     store
     a_plug studio wine-11.13
-    : > "$(works_plugs_dir)/studio/system.reg"
-    rm -f "$(works_plugs_dir)/studio/.update-timestamp"
+    : > "$(wires_plugs_dir)/studio/system.reg"
+    rm -f "$(wires_plugs_dir)/studio/.update-timestamp"
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.14
-    run setsid bash "$REPO/works/works-runtime" use 2026.07.01.1+ddddddd
+    run setsid bash "$REPO/wires/wires-runtime" use 2026.07.01.1+ddddddd
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" != *"will not say"* ]]
     [ "$(readlink "$C/stable")" = "2026.07.01.1+ddddddd" ]
@@ -323,15 +323,15 @@ store() {
 # guards: a script calling `use` with no argument must fail, not block forever
 @test "use with no argument refuses when there is no terminal" {
     store
-    run setsid bash "$REPO/works/works-runtime" use
+    run setsid bash "$REPO/wires/wires-runtime" use
     [ "$status" -ne 0 ]
     [[ "$output" == *"no terminal"* ]]
-    [[ "$output" == *"works runtime use 2026"* ]]
+    [[ "$output" == *"wires runtime use 2026"* ]]
 }
 
 @test "use with no argument leaves the channel alone" {
     store
-    setsid bash "$REPO/works/works-runtime" use || true
+    setsid bash "$REPO/wires/wires-runtime" use || true
     [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]
 }
 
@@ -398,7 +398,7 @@ fake_live() {
 @test "stop refuses a running Live with no terminal to confirm on" {
     store
     fake_live
-    run setsid bash "$REPO/works/works-runtime" stop
+    run setsid bash "$REPO/wires/wires-runtime" stop
     [ "$status" -ne 0 ]
     [[ "$output" == *"pass -y"* ]]
     kill -0 "$FAKE_LIVE"        # and it is still running
@@ -410,7 +410,7 @@ fake_live() {
 @test "stop -y stops a running Live without asking" {
     store
     fake_live
-    run setsid bash "$REPO/works/works-runtime" stop -y
+    run setsid bash "$REPO/wires/wires-runtime" stop -y
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" == *"Stopped."* ]]
     # wait reaps it too: a killed child is a zombie until then, and kill -0
@@ -424,18 +424,18 @@ fake_live() {
 @test "stop --yes is the same flag spelled out" {
     store
     fake_live
-    run setsid bash "$REPO/works/works-runtime" stop --yes
+    run setsid bash "$REPO/wires/wires-runtime" stop --yes
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     rc=0; wait "$FAKE_LIVE" 2>/dev/null || rc=$?
     [ "$rc" -gt 128 ]
 }
 
-# guards: `works stop` is the documented spelling, and it crosses two dispatchers
+# guards: `wires stop` is the documented spelling, and it crosses two dispatchers
 # before the flag is read
-@test "works stop -y reaches the flag through the top-level dispatcher" {
+@test "wires stop -y reaches the flag through the top-level dispatcher" {
     store
     fake_live
-    run setsid bash "$REPO/works/works" stop -y
+    run setsid bash "$REPO/wires/wires" stop -y
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     rc=0; wait "$FAKE_LIVE" 2>/dev/null || rc=$?
     [ "$rc" -gt 128 ]
@@ -450,24 +450,24 @@ fake_live() {
     run RT --help
     [ "$status" -eq 0 ]
     last="$(printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | tail -1)"
-    [[ "$last" == "  works runtime"* ]] \
+    [[ "$last" == "  wires runtime"* ]] \
         || { echo "help trails into prose: $last" >&2; false; }
 }
 
 @test "runtime help names every verb it dispatches" {
     run RT --help
     for v in list path use stop; do
-        [[ "$output" == *"works runtime $v"* ]] || { echo "help omits $v" >&2; false; }
+        [[ "$output" == *"wires runtime $v"* ]] || { echo "help omits $v" >&2; false; }
     done
 }
 
 @test "runtime help answers to -h and help as well" {
     run RT -h
     [ "$status" -eq 0 ]
-    [[ "$output" == *"works runtime list"* ]]
+    [[ "$output" == *"wires runtime list"* ]]
     run RT help
     [ "$status" -eq 0 ]
-    [[ "$output" == *"works runtime list"* ]]
+    [[ "$output" == *"wires runtime list"* ]]
 }
 
 
@@ -485,7 +485,7 @@ fake_live() {
     store
     a_plug studio wine-11.13
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.13 1501113500
-    run setsid bash "$REPO/works/works-runtime" use 2026.07.01.1+ddddddd
+    run setsid bash "$REPO/wires/wires-runtime" use 2026.07.01.1+ddddddd
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" != *"different Wine base"* ]]
     [[ "$output" != *"Continue"* ]]
@@ -497,7 +497,7 @@ fake_live() {
     plant "$C/2026.07.01.1+ddddddd" 2026.07.01.1 dddddddxxx 2026-07-01T00:00:00Z wine-11.13 1501113500
     ln -sfn "2026.07.01.1+ddddddd" "$C/stable"
     a_plug studio wine-11.13 1501113500       # booted by the newer build
-    run setsid bash "$REPO/works/works-runtime" use 2026.06.01.1+bbbbbbb
+    run setsid bash "$REPO/wires/wires-runtime" use 2026.06.01.1+bbbbbbb
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" == *"older build of the same Wine base"* ]]
     [[ "$output" != *"DOWNGRADE"* ]]
@@ -510,14 +510,14 @@ fake_live() {
 @test "a rollback whose booting runtime is gone stays a refusal" {
     store
     a_plug studio wine-11.13 1501113999      # a stamp no store entry carries
-    run setsid bash "$REPO/works/works-runtime" use 2026.01.01.1+aaaaaaa
+    run setsid bash "$REPO/wires/wires-runtime" use 2026.01.01.1+aaaaaaa
     [ "$status" -ne 0 ]
     [[ "$output" == *"DOWNGRADE"* ]]
     [ "$(readlink "$C/stable")" = "2026.06.01.1+bbbbbbb" ]
 }
 
 # --- install from the web -------------------------------------------------------
-# The gesture is `works runtime install` with nothing after it: almost nobody has
+# The gesture is `wires runtime install` with nothing after it: almost nobody has
 # a tarball, and the channel's manifest already says what is current. The network
 # work happens before anything is stopped or moved, so a machine is never
 # disturbed for a build that is absent, already installed, or unverifiable.
@@ -529,9 +529,9 @@ fake_live() {
 
 published() {   # commit, [runtime-name], [sha-override]
     PUB="$BATS_TEST_TMPDIR/pub"; mkdir -p "$PUB"
-    export WORKS_MANIFEST_URL="file://$PUB/manifest.txt"
+    export WIRES_MANIFEST_URL="file://$PUB/manifest.txt"
     local name="${2:-wine-d2d1-nspa-11.13-2026.09.01.1.tar.zst}"
-    local t="$BATS_TEST_TMPDIR/build/$(works_runtime_name)"
+    local t="$BATS_TEST_TMPDIR/build/$(wires_runtime_name)"
     rm -rf "$BATS_TEST_TMPDIR/build"; mkdir -p "$t/bin" "$t/share/wine"
     printf '#!/bin/sh\necho wine-11.13\n' > "$t/bin/wine"; chmod +x "$t/bin/wine"
     : > "$t/share/wine/wine.inf"; touch -d '@1700000000' "$t/share/wine/wine.inf"
@@ -549,10 +549,10 @@ published() {   # commit, [runtime-name], [sha-override]
 @test "install with no tarball takes the channel's current build" {
     setup_stubs; stub pgrep 1
     published aaaaaaaa
-    run bash "$REPO/works/works-runtime" install
+    run bash "$REPO/wires/wires-runtime" install
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [ -L "$C/stable" ]
-    [ "$(works_buildinfo_field "$C/$(readlink "$C/stable")/ABLETON-WINE-BUILD-INFO.txt" source-commit)" = aaaaaaaa ]
+    [ "$(wires_buildinfo_field "$C/$(readlink "$C/stable")/ABLETON-WINE-BUILD-INFO.txt" source-commit)" = aaaaaaaa ]
     [[ "$output" == *"downloading"* ]]
 }
 
@@ -561,8 +561,8 @@ published() {   # commit, [runtime-name], [sha-override]
 @test "install says so and stops when the build is already here" {
     setup_stubs; stub pgrep 1
     published aaaaaaaa
-    bash "$REPO/works/works-runtime" install >/dev/null 2>&1
-    run bash "$REPO/works/works-runtime" install
+    bash "$REPO/wires/wires-runtime" install >/dev/null 2>&1
+    run bash "$REPO/wires/wires-runtime" install
     [ "$status" -eq 0 ]
     [[ "$output" == *"already have this build"* ]]
     [[ "$output" != *"downloading"* ]]
@@ -570,21 +570,21 @@ published() {   # commit, [runtime-name], [sha-override]
 
 # guards: manifests published before runtime-only installs name no tarball, and
 # guessing an asset name off the installer's would be inventing a URL
-@test "a manifest without runtime fields is refused, pointing at works update" {
+@test "a manifest without runtime fields is refused, pointing at wires update" {
     setup_stubs; stub pgrep 1
     published aaaaaaaa
     grep -v '^runtime' "$PUB/manifest.txt" > "$PUB/m2" && mv "$PUB/m2" "$PUB/manifest.txt"
-    run bash "$REPO/works/works-runtime" install
+    run bash "$REPO/wires/wires-runtime" install
     [ "$status" -ne 0 ]
     [[ "$output" == *"predates runtime-only installs"* ]]
-    [[ "$output" == *"works update"* ]]
+    [[ "$output" == *"wires update"* ]]
     [ ! -e "$C/stable" ]
 }
 
 @test "a checksum mismatch refuses before anything is staged" {
     setup_stubs; stub pgrep 1
     published aaaaaaaa wine-d2d1-nspa-11.13-2026.09.01.1.tar.zst notthesha
-    run bash "$REPO/works/works-runtime" install
+    run bash "$REPO/wires/wires-runtime" install
     [ "$status" -ne 0 ]
     [[ "$output" == *"checksum mismatch"* ]]
     [ ! -e "$C/stable" ]
@@ -596,7 +596,7 @@ published() {   # commit, [runtime-name], [sha-override]
 @test "a named tarball skips the web entirely" {
     setup_stubs; stub pgrep 1; stub curl 1
     published aaaaaaaa
-    run bash "$REPO/works/works-runtime" install "$PUB/wine-d2d1-nspa-11.13-2026.09.01.1.tar.zst"
+    run bash "$REPO/wires/wires-runtime" install "$PUB/wine-d2d1-nspa-11.13-2026.09.01.1.tar.zst"
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" != *"channel:"* ]]
     [ -L "$C/stable" ]

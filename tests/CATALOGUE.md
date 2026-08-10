@@ -23,12 +23,12 @@ for which run on a PR.
 - [tests/unit/run-header.bats](#run-header) — 12 test(s)
 - [tests/unit/manifest.bats](#manifest) — 23 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 42 test(s)
-- [tests/unit/works.bats](#works) — 14 test(s)
-- [tests/unit/works-app.bats](#works-app) — 7 test(s)
+- [tests/unit/wires.bats](#wires) — 14 test(s)
+- [tests/unit/wires-app.bats](#wires-app) — 7 test(s)
 - [tests/unit/promote.bats](#promote) — 11 test(s)
-- [tests/unit/works-runtime.bats](#works-runtime) — 43 test(s)
-- [tests/unit/works-plug.bats](#works-plug) — 45 test(s)
-- [tests/unit/works-update.bats](#works-update) — 37 test(s)
+- [tests/unit/wires-runtime.bats](#wires-runtime) — 43 test(s)
+- [tests/unit/wires-plug.bats](#wires-plug) — 45 test(s)
+- [tests/unit/wires-update.bats](#wires-update) — 37 test(s)
 - [tests/unit/runtime-env.bats](#runtime-env) — 75 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 
@@ -61,7 +61,7 @@ that should run on *every* push, unfiltered by paths.
 | 15 | CI runs the bats tests/run.sh pins, not one of its own | a bats on PATH used to beat the pin, so a checkout ran whatever the |
 | 16 | the vendored bats clone is ignored | .bats-core is a full clone of another project; run.sh's comment said it |
 | 17 | build.sh forwards every variable container-build.sh reads from its environment | the container sees only what build.sh passes with -e, and an unset |
-| 18 | works/ carries no application knowledge beyond the inventory | — |
+| 18 | wires/ carries no application knowledge beyond the inventory | — |
 
 <a id="packaging"></a>
 
@@ -92,7 +92,7 @@ staging list and checks it against what the kit's own scripts reference.
 | 7 | the kit ships the GPL source and licence Ableton Link requires | licence GPLv2+ — Ableton Link has no linking exception, so the source must travel with the binary |
 | 8 | release.yml's asset list matches what make-installer.sh actually produces | — |
 | 9 | every shell function a script calls is actually defined | lifting runtime_pids into the lib renamed it, and a replace that only |
-| 10 | make-installer refuses a tarball the kit's installer cannot select | make-installer accepted WORKS_RUNTIME_TARBALL with only an -f check, |
+| 10 | make-installer refuses a tarball the kit's installer cannot select | make-installer accepted WIRES_RUNTIME_TARBALL with only an -f check, |
 
 <a id="launcher-cli"></a>
 
@@ -103,7 +103,7 @@ scripts/ableton-live — the launch contract, end to end.
 
 The launcher runs for real here: discovery, the single-instance lock, registry
 sync, argument routing, right up to the exec. What it would have exec'd is
-captured instead of run, because WORKS_RUNTIME points at a fake runtime
+captured instead of run, because WIRES_RUNTIME points at a fake runtime
 tree whose `wine` logs its argv and exits (see helpers/launcher.bash).
 
 This is the half that users actually experience — which Live starts, what
@@ -259,7 +259,7 @@ scripts/install.sh — does it run at all, and does it install what it claims?
 This file exists because nothing executed install.sh. The suite sourced
 runtime-env.sh directly and checked the resolvers, which is worth doing and
 says nothing about whether the script that uses them starts. On 2026-08-05 a
-merge reordered install.sh's head so it called works_runtime_name eight
+merge reordered install.sh's head so it called wires_runtime_name eight
 lines before sourcing the file that defines it; under `set -euo pipefail` it
 aborted on that line. 172 tests passed for thirteen commits.
 
@@ -275,7 +275,7 @@ those checks or force them to be weakened, and weakening them is how a debug
 tree ships.
 
   ./tests/run.sh tests/unit/install-runs.bats
-  WORKS_TEST_TARBALL=/path/to/runtime.tar.zst ./tests/run.sh tests/unit/install-runs.bats
+  WIRES_TEST_TARBALL=/path/to/runtime.tar.zst ./tests/run.sh tests/unit/install-runs.bats
 
 | # | Test | Guards |
 | --- | --- | --- |
@@ -298,14 +298,14 @@ tree ships.
 | 17 | setup-prefix gets past the guard when nothing is running | the guard must not block the .run, where install.sh has already |
 | 18 | the launcher lives with the application, and PATH holds a link to it | the app directory must contain the app — a launcher that lives only on |
 | 19 | installing leaves no dated launcher copies behind | one dated copy per install, on the PATH, pruned by nothing — the |
-| 20 | the works command lives outside any application, with its verbs beside the library | — |
+| 20 | the wires command lives outside any application, with its verbs beside the library | — |
 | 21 | a fresh install stamps the infrastructure contract | — |
-| 22 | a newer installed infrastructure is kept, not overwritten | unguarded, whichever kit ran last owned ~/works/lib — installing an |
+| 22 | a newer installed infrastructure is kept, not overwritten | unguarded, whichever kit ran last owned ~/wires/lib — installing an |
 | 23 | a kit below the installed OLDEST is refused whole | the other direction of the same promise — an installed infrastructure |
-| 24 | uninstalling one application keeps the runtimes another still needs | uninstalling one application used to run works_remove_runtimes and take |
+| 24 | uninstalling one application keeps the runtimes another still needs | uninstalling one application used to run wires_remove_runtimes and take |
 | 25 | the verb installs into the store and honours --channel | — |
 | 26 | a refusing validator stops the verb before anything is promoted | the voucher runs before promote, and its refusal aborts with the |
-| 27 | the verb honours a pinned WORKS_RUNTIME with a dated rollback | — |
+| 27 | the verb honours a pinned WIRES_RUNTIME with a dated rollback | — |
 | 28 | an older implementation at the same ABI does not replace a newer one | found in review. The ABI answers compatibility, not recency - two kits |
 | 29 | a higher installed ABI is kept even against a newer implementation | the interface must never go backward even when the kit is newer by |
 
@@ -321,7 +321,7 @@ unit files, and the one script every user actually executes had coverage only
 for "does it exist and may it carry a version literal". Four of the ten defects
 found on 2026-08-09 were in here, and the worst of them — that no unmigrated
 machine was ever offered an update, because the existing-install test looked
-only at ~/works/plugs/studio — would have been caught by the third test below.
+only at ~/wires/plugs/studio — would have been caught by the third test below.
 
 The header is a template with a payload appended, so testing it means building
 one: substitute the placeholders, tar a stub kit, concatenate. The stubs echo
@@ -333,7 +333,7 @@ not what the decision runs.
 | # | Test | Guards |
 | --- | --- | --- |
 | 1 | a genuinely fresh machine is a full install | — |
-| 2 | a machine on the ~/works layout is offered an update | — |
+| 2 | a machine on the ~/wires layout is offered an update | — |
 | 3 | an unmigrated machine is offered an update, not a fresh install | THE defect. Every existing user is on the legacy layout on the day the |
 | 4 | with no terminal the update is taken, not the install | with no terminal nobody can answer, and the header takes the update |
 | 5 | a runtime with no prefix takes the full install, not the update | the marker says an application has been installed here. It does NOT say |
@@ -350,7 +350,7 @@ not what the decision runs.
 ## tests/unit/manifest.bats
 
 
-works/runtime-env.sh — the channel manifest.
+wires/runtime-env.sh — the channel manifest.
 
 A channel publishes one document saying what it points at. Everything before
 this re-derived that by parsing artifact filenames, which is the single
@@ -365,8 +365,8 @@ round-trip them: a manifest this repo writes must be one this repo accepts.
 | # | Test | Guards |
 | --- | --- | --- |
 | 1 | a manifest this repo writes is one it accepts | — |
-| 2 | a manifest with no wine field is refused | found in review. works-update guards its Wine-base refusal on the field |
-| 3 | a manifest with an empty wine field is refused | works_manifest_write emits the key unconditionally but writes whatever |
+| 2 | a manifest with no wine field is refused | found in review. wires-update guards its Wine-base refusal on the field |
+| 3 | a manifest with an empty wine field is refused | wires_manifest_write emits the key unconditionally but writes whatever |
 | 4 | every field survives the round trip | — |
 | 5 | the source commit is carried, not truncated | the updater compares source-commit to decide "do I already have this" |
 | 6 | writing refuses a tree with no BUILD-INFO | — |
@@ -393,7 +393,7 @@ round-trip them: a manifest this repo writes must be one this repo accepts.
 ## tests/unit/migrate-layout.bats
 
 
-works/runtime-env.sh — the flat-to-store migration.
+wires/runtime-env.sh — the flat-to-store migration.
 
 This renames the directory an existing user's Wine runs from, so every row of
 the decision table gets a test, including the ones that must refuse. The rule
@@ -402,7 +402,7 @@ from its own BUILD-INFO means the script cannot know what it is about to
 install over, and guessing wrong swaps a runtime out from under a running
 Live.
 
-Nothing here touches a real install: WORKS_HOME points the resolvers at
+Nothing here touches a real install: WIRES_HOME points the resolvers at
 a throwaway tree.
 
   ./tests/run.sh tests/unit/migrate-layout.bats
@@ -434,7 +434,7 @@ a throwaway tree.
 | 23 | a nonsense retention value reverts to the default rather than pruning all | — |
 | 24 | removal takes the container and everything inside it | — |
 | 25 | removal handles a flat install that never migrated | — |
-| 26 | removal refuses a pinned root that is not a runtime | a stale exported WORKS_RUNTIME from a test session would otherwise |
+| 26 | removal refuses a pinned root that is not a runtime | a stale exported WIRES_RUNTIME from a test session would otherwise |
 | 27 | removal refuses a pinned root of \$HOME | — |
 | 28 | plug: a flat prefix moves into the store | — |
 | 29 | plug: the contents survive the move intact | the prefix is the one thing here that cannot be re-downloaded |
@@ -442,7 +442,7 @@ a throwaway tree.
 | 31 | plug: nothing installed is not an error | — |
 | 32 | plug: a prefix at both paths refuses, naming both | two prefixes can hold different Lives and different authorisations — |
 | 33 | plug: a symlink where the prefix belongs refuses | — |
-| 34 | plug: an explicit WORKS_PLUG is left alone | a pinned prefix is a deliberate choice — the VM harness runs two |
+| 34 | plug: an explicit WIRES_PLUG is left alone | a pinned prefix is a deliberate choice — the VM harness runs two |
 | 35 | plug: a prefix something is running from is not moved | renaming a prefix out from under a live wineserver corrupts its |
 | 36 | plug: a process holding a different prefix does not block the move | — |
 | 37 | plug: an unreadable process entry is skipped, not fatal | — |
@@ -452,49 +452,49 @@ a throwaway tree.
 | 41 | an unfinished prefix at the destination is set aside, not deleted | nothing here deletes a prefix. The store sets a runtime it cannot use |
 | 42 | an empty directory at the destination does not block the move | — |
 
-<a id="works"></a>
+<a id="wires"></a>
 
-## tests/unit/works.bats
+## tests/unit/wires.bats
 
 
-works/works — the dispatcher.
+wires/wires — the dispatcher.
 
 It does two things worth testing: it finds its verbs, and it refuses what is
 not a command. Finding them is the part with a trap in it — PATH holds a
 symlink to this file, so $0 is the link's own path and the verbs are not
 beside it — and nothing exercised the installed shape until now.
 
-  ./tests/run.sh tests/unit/works.bats
+  ./tests/run.sh tests/unit/wires.bats
 
 | # | Test | Guards |
 | --- | --- | --- |
-| 1 | works resolves its verbs through a symlink on PATH | the installed shape is a symlink on PATH pointing into works/bin, with |
-| 2 | works says so when the verbs are missing rather than failing obscurely | — |
+| 1 | wires resolves its verbs through a symlink on PATH | the installed shape is a symlink on PATH pointing into wires/bin, with |
+| 2 | wires says so when the verbs are missing rather than failing obscurely | — |
 | 3 | runtime is delegated | — |
-| 4 | update is delegated | `works stop` is the documented spelling and has to arrive at the same |
+| 4 | update is delegated | `wires stop` is the documented spelling and has to arrive at the same |
 | 5 | stop is delegated to the runtime verb | — |
-| 6 | no command at all prints the short usage | someone who typed `works` to find out what it does wants the shape, |
+| 6 | no command at all prints the short usage | someone who typed `wires` to find out what it does wants the shape, |
 | 7 | an unknown command is refused with the short usage, not the long one | a wrong word should not answer with the whole manual |
 | 8 | a flag where a command belongs says so in its own terms | a flag first is a different mistake from a wrong word, and saying |
 | 9 | help ends on a command, not on prose | the help used to be a fixed line range over the header comment, which |
-| 10 | help is spelled three ways and they agree | `works help` is the spelling a person reaches for before they know the |
+| 10 | help is spelled three ways and they agree | `wires help` is the spelling a person reaches for before they know the |
 | 11 | the long form carries the detail the short form leaves out | — |
 | 12 | help names every command it dispatches | — |
 | 13 | app is reachable through the dispatcher | — |
-| 14 | the plural nouns alias to the singular | the plural is what fingers type after `works app list` teaches the |
+| 14 | the plural nouns alias to the singular | the plural is what fingers type after `wires app list` teaches the |
 
-<a id="works-app"></a>
+<a id="wires-app"></a>
 
-## tests/unit/works-app.bats
+## tests/unit/wires-app.bats
 
 
-works/works-app — the applications installed on this machine.
+wires/wires-app — the applications installed on this machine.
 
 The apps directory is the census, so listing is a walk and removal is a
 directory - and removal must never reach into a Plug: what an application
 installed into a prefix stays until the Plug goes.
 
-  ./tests/run.sh tests/unit/works-app.bats
+  ./tests/run.sh tests/unit/wires-app.bats
 
 | # | Test | Guards |
 | --- | --- | --- |
@@ -533,12 +533,12 @@ naming changes. Every refusal is a state where that promise cannot hold.
 | 10 | a malformed target version is refused before anything is unpacked | — |
 | 11 | a real nightly tarball promotes losslessly | — |
 
-<a id="works-runtime"></a>
+<a id="wires-runtime"></a>
 
-## tests/unit/works-runtime.bats
+## tests/unit/wires-runtime.bats
 
 
-works/works-runtime — choosing which build is live.
+wires/wires-runtime — choosing which build is live.
 
 The store made rollback possible and nothing exposed it: switching meant
 `ln -sfn` against a name you had to look up. These cover the two things that
@@ -546,7 +546,7 @@ matter — that `use` refuses anything that is not a runtime you could actually
 launch, and that `path` answers on both layouts, because scripts and docs
 resolve through it instead of naming a directory.
 
-  ./tests/run.sh tests/unit/works-runtime.bats
+  ./tests/run.sh tests/unit/wires-runtime.bats
 
 | # | Test | Guards |
 | --- | --- | --- |
@@ -581,7 +581,7 @@ resolve through it instead of naming a directory.
 | 29 | stop refuses a running Live with no terminal to confirm on | stopping Live discards unsaved work, so it is the one process here |
 | 30 | stop -y stops a running Live without asking | -y was parsed by cmd_stop but never reached it. The dispatch called |
 | 31 | stop --yes is the same flag spelled out | — |
-| 32 | works stop -y reaches the flag through the top-level dispatcher | `works stop` is the documented spelling, and it crosses two dispatchers |
+| 32 | wires stop -y reaches the flag through the top-level dispatcher | `wires stop` is the documented spelling, and it crosses two dispatchers |
 | 33 | runtime help ends on a command, not on prose | every help here is a fixed line range over the file's header comment, |
 | 34 | runtime help names every verb it dispatches | — |
 | 35 | runtime help answers to -h and help as well | — |
@@ -590,24 +590,24 @@ resolve through it instead of naming a directory.
 | 38 | a rollback whose booting runtime is gone stays a refusal | the label comparison needs the runtime that booted the Plug, and that |
 | 39 | install with no tarball takes the channel's current build | — |
 | 40 | install says so and stops when the build is already here | the comparison happens before the stop, so an up-to-date machine is |
-| 41 | a manifest without runtime fields is refused, pointing at works update | manifests published before runtime-only installs name no tarball, and |
+| 41 | a manifest without runtime fields is refused, pointing at wires update | manifests published before runtime-only installs name no tarball, and |
 | 42 | a checksum mismatch refuses before anything is staged | — |
 | 43 | a named tarball skips the web entirely | a named tarball is a deliberate local act - CI, a bisect, an offline |
 
-<a id="works-plug"></a>
+<a id="wires-plug"></a>
 
-## tests/unit/works-plug.bats
+## tests/unit/wires-plug.bats
 
 
-works/works-plug — the prefixes applications are installed into.
+wires/wires-plug — the prefixes applications are installed into.
 
 A Plug is a directory and one symlink: the name is the directory's name, the
-tenants are whatever is in drive_c, and `.works-runtime` is the only recorded
+tenants are whatever is in drive_c, and `.wires-runtime` is the only recorded
 state. So most of this is about the filesystem being the list — that a Plug
 nobody made is not offered, that a binding survives being walked, and that the
 destructive verbs refuse before they act rather than after.
 
-  ./tests/run.sh tests/unit/works-plug.bats
+  ./tests/run.sh tests/unit/wires-plug.bats
 
 | # | Test | Guards |
 | --- | --- | --- |
@@ -626,7 +626,7 @@ destructive verbs refuse before they act rather than after.
 | 13 | a dangling default is called out rather than left to look deliberate | a default pointing at a removed Plug silently falls back to studio, so |
 | 14 | use retargets the default, relatively | — |
 | 15 | list shows each Plug's path, abbreviated under home | the path is what people copy into a script or a bug report, and it is |
-| 16 | use with no argument refuses when there is no terminal, naming the Plugs | `works runtime use` with no argument offers a numbered list, so this |
+| 16 | use with no argument refuses when there is no terminal, naming the Plugs | `wires runtime use` with no argument offers a numbered list, so this |
 | 17 | use with no argument leaves the default alone | — |
 | 18 | use refuses a Plug that is not there, and lists what is | — |
 | 19 | default is refused as a Plug name | `default` is the selection link itself, so a Plug by that name could |
@@ -651,28 +651,28 @@ destructive verbs refuse before they act rather than after.
 | 38 | rm refuses a Plug that is not there | — |
 | 39 | a Plug's binding decides the runtime a launch binds to | two Plugs running different builds is the whole point of the binding, |
 | 40 | an unbound Plug binds to whatever the channel resolves to | — |
-| 41 | WORKS_RUNTIME still overrides a Plug's binding | the VMs and anyone bisecting a build rely on WORKS_RUNTIME being the |
+| 41 | WIRES_RUNTIME still overrides a Plug's binding | the VMs and anyone bisecting a build rely on WIRES_RUNTIME being the |
 | 42 | retention keeps a build a Plug is bound to | a Plug held deliberately on an older build is exactly what the count |
 | 43 | retention prunes that same build when no Plug is bound to it | — |
 | 44 | help ends on a command, not on prose | — |
 | 45 | plug is reachable through the dispatcher | — |
 
-<a id="works-update"></a>
+<a id="wires-update"></a>
 
-## tests/unit/works-update.bats
+## tests/unit/wires-update.bats
 
 
-works/works-update — deciding whether to replace the runtime.
+wires/wires-update — deciding whether to replace the runtime.
 
 Everything the updater does before it downloads is a refusal: same build,
 unknown channel, incomplete manifest, a Wine base it cannot take a Plug back
 across, a runtime something is still running from. Those refusals are the
 feature — the download is the easy part — so this file is mostly about them.
 
-Nothing here reaches the network. WORKS_MANIFEST_URL points curl at a
+Nothing here reaches the network. WIRES_MANIFEST_URL points curl at a
 file:// URL, which is the same code path a real channel takes.
 
-  ./tests/run.sh tests/unit/works-update.bats
+  ./tests/run.sh tests/unit/wires-update.bats
 
 | # | Test | Guards |
 | --- | --- | --- |
@@ -710,8 +710,8 @@ file:// URL, which is the same code path a real channel takes.
 | 32 | the report's columns line up between available and installed | the two ids differ in length by design -- a nightly carries its kind -- |
 | 33 | update help ends on a command, not on prose | the help is a fixed line range over the header comment, so editing that |
 | 34 | update help names every flag it accepts | — |
-| 35 | a pinned WORKS_RUNTIME is refused before any fetch | WORKS_RUNTIME is the outermost say in every resolver, and a pinned |
-| 36 | a same-base newer build in the store retargets without consent | same measurement as works-runtime's same-base tests - by stamp alone |
+| 35 | a pinned WIRES_RUNTIME is refused before any fetch | WIRES_RUNTIME is the outermost say in every resolver, and a pinned |
+| 36 | a same-base newer build in the store retargets without consent | same measurement as wires-runtime's same-base tests - by stamp alone |
 | 37 | a same-base rollback in the store is noted and allowed | — |
 
 <a id="runtime-env"></a>
@@ -719,7 +719,7 @@ file:// URL, which is the same code path a real channel takes.
 ## tests/unit/runtime-env.bats
 
 
-works/runtime-env.sh — the shared runtime and prefix resolution.
+wires/runtime-env.sh — the shared runtime and prefix resolution.
 
 Seven scripts resolved these paths independently until this existed. The
 resolvers are pure so they can be tested here rather than through a launcher
@@ -730,15 +730,15 @@ sandbox, which is the whole reason they echo instead of assigning.
 | # | Test | Guards |
 | --- | --- | --- |
 | 1 | runtime root: an unmigrated install still resolves where it actually is | — |
-| 2 | runtime root: WORKS_RUNTIME wins, so a bisect or VM run can pin one | — |
-| 3 | prefix: defaults to ~/works/plugs/studio | — |
+| 2 | runtime root: WIRES_RUNTIME wins, so a bisect or VM run can pin one | — |
+| 3 | prefix: defaults to ~/wires/plugs/studio | — |
 | 4 | live prefix: names the legacy path while the destination is absent | found in review. install.sh hands this to `wineserver -k` *before* |
 | 5 | live prefix: names the container path once that exists | — |
 | 6 | live prefix: with neither present it still names where the prefix will go | — |
-| 7 | busy: a prefix holder that never executed from the runtime is still seen | the stop was gated on works_runtime_busy, which resolves /proc/PID/exe |
+| 7 | busy: a prefix holder that never executed from the runtime is still seen | the stop was gated on wires_runtime_busy, which resolves /proc/PID/exe |
 | 8 | a 32-bit prefix declared only in user.reg is not mistaken for unfinished | found on a VM after a fix that did not work. The architecture is |
 | 9 | a finished prefix and an unfinished one are told apart | — |
-| 10 | prefix: WORKS_PLUG wins, which the clone workflow depends on | — |
+| 10 | prefix: WIRES_PLUG wins, which the clone workflow depends on | — |
 | 11 | root and prefix are independent: overriding one leaves the other alone | — |
 | 12 | the resolvers are pure: calling them exports and unsets nothing | — |
 | 13 | binding exports the prefix, the server, and the runtime's bin on PATH | — |
@@ -843,57 +843,57 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 
 | Reference | Tests |
 | --- | --- |
-| `--check is a question, and asking it must not answer it` | works-update: --check does not move a channel even when the build is present |
-| `--check is a question, not an action, so it reports the base change` | works-update: --check reports a base change instead of refusing |
+| `--check is a question, and asking it must not answer it` | wires-update: --check does not move a channel even when the build is present |
+| `--check is a question, not an action, so it reports the base change` | wires-update: --check reports a base change instead of refusing |
 | `--help sliced lines 2-18 of this file's own header comment, and line 18` | run-header: help ends on an option, not on prose about the payload |
-| `-y was parsed by cmd_stop but never reached it. The dispatch called` | works-runtime: stop -y stops a running Live without asking |
+| `-y was parsed by cmd_stop but never reached it. The dispatch called` | wires-runtime: stop -y stops a running Live without asking |
 | `.bats-core is a full clone of another project; run.sh's comment said it` | repo-hygiene: the vendored bats clone is ignored |
 | `/proc/PID/exe reports resolved paths, so a channel-path root matches no` | runtime-env: runtime root: resolves to the build, not to the channel link |
 | `/releases/latest/ excludes prereleases, which is what keeps the nightly` | manifest: stable resolves through latest, nightly through its own tag |
 | `11.11 and 11.14 trees coexist on the development machine and are not` | migrate-layout: runtimes from other Wine bases are left alone |
 | `2026.07.29.1 appears four times on the dev machine under two patch stacks` | runtime-env: two builds of one version under different patch stacks get different ids |
-| `SystemComponent=1 is the Windows convention for hidden support` | works-plug: support packages and platform runtimes are not tenants |
+| `SystemComponent=1 is the Windows convention for hidden support` | wires-plug: support packages and platform runtimes are not tenants |
 | `THE defect. Every existing user is on the legacy layout on the day the` | run-header: an unmigrated machine is offered an update, not a fresh install |
-| `WORKS_RUNTIME is the outermost say in every resolver, and a pinned` | works-update: a pinned WORKS_RUNTIME is refused before any fetch |
-| ``default` is the selection link itself, so a Plug by that name could` | works-plug: default is refused as a Plug name |
-| ``stat -f` reads statfs.f_type, and ext2, ext3 and ext4 all share magic` | works-plug: the clone names the filesystem the mount table reports |
+| `WIRES_RUNTIME is the outermost say in every resolver, and a pinned` | wires-update: a pinned WIRES_RUNTIME is refused before any fetch |
+| ``default` is the selection link itself, so a Plug by that name could` | wires-plug: default is refused as a Plug name |
+| ``stat -f` reads statfs.f_type, and ext2, ext3 and ext4 all share magic` | wires-plug: the clone names the filesystem the mount table reports |
 | ``wineboot -u` rewriting the registry under a live wineserver` | install-runs: setup-prefix refuses while something runs from the runtime |
-| ``works help` is the spelling a person reaches for before they know the` | works: help is spelled three ways and they agree |
-| ``works runtime use` with no argument offers a numbered list, so this` | works-plug: use with no argument refuses when there is no terminal, naming the Plugs |
-| ``works stop` is the documented spelling and has to arrive at the same` | works: update is delegated |
-| ``works stop` is the documented spelling, and it crosses two dispatchers` | works-runtime: works stop -y reaches the flag through the top-level dispatcher |
-| `a Plug bound to the channel link and a Plug pinned to a build resolve` | works-plug: list separates following a channel from being pinned to a build |
-| `a Plug held deliberately on an older build is exactly what the count` | works-plug: retention keeps a build a Plug is bound to |
-| `a Plug pinned to a build does not follow the channel, so a retarget` | works-runtime: a Plug pinned to a build is not warned about |
-| `a Plug with no prefix in it yet still has to appear, or `new` produces` | works-plug: a Plug created but never booted is still listed |
+| ``wires help` is the spelling a person reaches for before they know the` | wires: help is spelled three ways and they agree |
+| ``wires runtime use` with no argument offers a numbered list, so this` | wires-plug: use with no argument refuses when there is no terminal, naming the Plugs |
+| ``wires stop` is the documented spelling and has to arrive at the same` | wires: update is delegated |
+| ``wires stop` is the documented spelling, and it crosses two dispatchers` | wires-runtime: wires stop -y reaches the flag through the top-level dispatcher |
+| `a Plug bound to the channel link and a Plug pinned to a build resolve` | wires-plug: list separates following a channel from being pinned to a build |
+| `a Plug held deliberately on an older build is exactly what the count` | wires-plug: retention keeps a build a Plug is bound to |
+| `a Plug pinned to a build does not follow the channel, so a retarget` | wires-runtime: a Plug pinned to a build is not warned about |
+| `a Plug with no prefix in it yet still has to appear, or `new` produces` | wires-plug: a Plug created but never booted is still listed |
 | `a bats on PATH used to beat the pin, so a checkout ran whatever the` | repo-hygiene: CI runs the bats tests/run.sh pins, not one of its own |
-| `a booted prefix that cannot say what booted it is the case the old` | works-runtime: a booted Plug that cannot name its base is a refusal, not a skip |
-| `a channel names a symlink and selects a URL; it is user configuration` | works-update: an unknown channel is refused before any fetch |
+| `a booted prefix that cannot say what booted it is the case the old` | wires-runtime: a booted Plug that cannot name its base is a refusal, not a skip |
+| `a channel names a symlink and selects a URL; it is user configuration` | wires-update: an unknown channel is refused before any fetch |
 | `a channel pointing at a pruned entry is a broken install produced by` | migrate-layout: retention never removes what the channel points at |
 | `a dangling channel must not resolve to nothing and strand the launcher` | runtime-env: runtime root: a dangling channel falls back rather than resolving empty |
 | `a debug tree rolled back by the selector bug has no dist-version at` | migrate-layout: a rollback that cannot be named moves aside instead of blocking |
-| `a default pointing at a removed Plug silently falls back to studio, so` | works-plug: a dangling default is called out rather than left to look deliberate |
-| `a directory someone dropped under plugs/ is not a prefix, and offering` | works-plug: list does not offer a directory that is not a prefix |
-| `a flag first is a different mistake from a wrong word, and saying` | works: a flag where a command belongs says so in its own terms |
+| `a default pointing at a removed Plug silently falls back to studio, so` | wires-plug: a dangling default is called out rather than left to look deliberate |
+| `a directory someone dropped under plugs/ is not a prefix, and offering` | wires-plug: list does not offer a directory that is not a prefix |
+| `a flag first is a different mistake from a wrong word, and saying` | wires: a flag where a command belongs says so in its own terms |
 | `a fork is where nightlies are tested, and the shipped default pointing` | manifest: no channel resolves to a fork |
-| `a half-read manifest cannot answer "is this newer" or "does this` | works-update: an incomplete manifest is refused |
+| `a half-read manifest cannot answer "is this newer" or "does this` | wires-update: an incomplete manifest is refused |
 | `a kit packed around a name the installer cannot select builds cleanly` | runtime-env: tarball predicate: the dated release form is accepted |
 | `a label is a suffix on the release form, not a licence to accept any` | runtime-env: tarball predicate: a labelled debug tree is still refused |
-| `a named tarball is a deliberate local act - CI, a bisect, an offline` | works-runtime: a named tarball skips the web entirely |
-| `a pinned prefix is a deliberate choice` | migrate-layout: plug: an explicit WORKS_PLUG is left alone |
-| `a release has no kind, and must not grow one` | works-update: a release is reported without a kind |
-| `a retarget under a running Live is safe and must not refuse` | works-update: a channel switch is allowed while something is running, with a note |
-| `a same-named command from anywhere else is not ours to delete` | works-app: rm leaves a foreign PATH command alone |
-| `a script calling `use` with no argument must fail, not block forever` | works-runtime: use with no argument refuses when there is no terminal |
-| `a stale exported WORKS_RUNTIME from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
-| `a switch must move the channel it names, and only that one` | works-update: switching channel leaves the other channel where it was |
-| `a wrong word should not answer with the whole manual` | works: an unknown command is refused with the short usage, not the long one |
-| `an empty value must not silently mean "the channel you are on"` | works-update: --channel with nothing after it is refused, and says so |
+| `a named tarball is a deliberate local act - CI, a bisect, an offline` | wires-runtime: a named tarball skips the web entirely |
+| `a pinned prefix is a deliberate choice` | migrate-layout: plug: an explicit WIRES_PLUG is left alone |
+| `a release has no kind, and must not grow one` | wires-update: a release is reported without a kind |
+| `a retarget under a running Live is safe and must not refuse` | wires-update: a channel switch is allowed while something is running, with a note |
+| `a same-named command from anywhere else is not ours to delete` | wires-app: rm leaves a foreign PATH command alone |
+| `a script calling `use` with no argument must fail, not block forever` | wires-runtime: use with no argument refuses when there is no terminal |
+| `a stale exported WIRES_RUNTIME from a test session would otherwise` | migrate-layout: removal refuses a pinned root that is not a runtime |
+| `a switch must move the channel it names, and only that one` | wires-update: switching channel leaves the other channel where it was |
+| `a wrong word should not answer with the whole manual` | wires: an unknown command is refused with the short usage, not the long one |
+| `an empty value must not silently mean "the channel you are on"` | wires-update: --channel with nothing after it is refused, and says so |
 | `an existing flat install is what nearly every user has` | install-runs: a flat install is migrated by the installer, not just by the library |
-| `an explicit --runtime is a different case from the default binding, and` | works-plug: an explicit --runtime is refused before anything is cloned |
+| `an explicit --runtime is a different case from the default binding, and` | wires-plug: an explicit --runtime is refused before anything is cloned |
 | `an install that predates the migration must still resolve and launch` | runtime-env: runtime root: falls back to the legacy path before migrating |
 | `an older .run over a migrated install writes a flat tree at the legacy` | migrate-layout: an older installer's tree beside a migrated one is adopted when newer |
-| `an unattended run must not hang waiting on a prompt nobody can answer` | works-update: with no terminal to ask on it stops rather than assuming yes |
+| `an unattended run must not hang waiting on a prompt nobody can answer` | wires-update: with no terminal to ask on it stops rather than assuming yes |
 | `bin/ and lib/ with no share/` | runtime-env: tarball predicate: a debug tree is refused |
 | `both in one directory is the nightly builder's own dist/, and the` | runtime-env: tarball selector: the plain release wins over a labelled one beside it |
 | `build-kind becomes a directory name like everything else in the id` | runtime-env: runtime id: a kind with a path separator is refused, not sanitised |
@@ -901,21 +901,21 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `commit f0fc05e` | detect-scale: cosmic probe: a disabled lid never wins when it is marked non-primary<br>detect-scale: cosmic probe: a disabled lid never wins, even with no primary line |
 | `commit f84eaa4` | repo-hygiene: runtime name: every live file agrees on one wine-d2d1-nspa version |
 | `dated rollbacks are the reason the store exists` | migrate-layout: dated rollbacks are renamed by the build they hold |
-| `docs and scripts resolve through this instead of naming a directory,` | works-runtime: path answers on the flat layout |
-| `dosdevices holds relative links back into the Plug and outward ones to` | works-plug: cloning keeps the prefix's symlinks as symlinks |
+| `docs and scripts resolve through this instead of naming a directory,` | wires-runtime: path answers on the flat layout |
+| `dosdevices holds relative links back into the Plug and outward ones to` | wires-plug: cloning keeps the prefix's symlinks as symlinks |
 | `environ is mode 400 and gated by ptrace_may_access, so `[ -r ]` passes` | migrate-layout: plug: an unreadable process entry says nothing on stderr |
-| `every help here is a fixed line range over the file's header comment,` | works-runtime: runtime help ends on a command, not on prose |
+| `every help here is a fixed line range over the file's header comment,` | wires-runtime: runtime help ends on a command, not on prose |
 | `every runtime installed anywhere today predates source-commit` | runtime-env: runtime id: the patch-stack fallback still works with a kind |
-| `forward Wine supports, backward it does not - the wording has to differ` | works-runtime: a downgrade is named as a downgrade |
-| `forward is supported and irreversible, so it takes consent rather than` | works-update: a base change that moves a Plug forward is refused with no terminal |
-| `found by hand on a pre-store machine. The clone landed, the *default*` | works-plug: new --from succeeds on a machine with no version store |
-| `found by hand. With no store there is no channel for a Plug to follow,` | works-plug: a pre-store install is not reported as following a channel |
-| `found by installing. The migration harness fabricates a legacy prefix` | works-runtime: a Plug with an empty system.reg and no stamp is fresh, not a refusal |
+| `forward Wine supports, backward it does not - the wording has to differ` | wires-runtime: a downgrade is named as a downgrade |
+| `forward is supported and irreversible, so it takes consent rather than` | wires-update: a base change that moves a Plug forward is refused with no terminal |
+| `found by hand on a pre-store machine. The clone landed, the *default*` | wires-plug: new --from succeeds on a machine with no version store |
+| `found by hand. With no store there is no channel for a Plug to follow,` | wires-plug: a pre-store install is not reported as following a channel |
+| `found by installing. The migration harness fabricates a legacy prefix` | wires-runtime: a Plug with an empty system.reg and no stamp is fresh, not a refusal |
 | `found in review. Commit b77d349 rewrote the launcher's header and` | launcher-cli: the upstream window-class overrides are still exported |
-| `found in review. The "already in the store, just retarget" branch ran` | works-update: a base change that takes a Plug backward is refused from the store |
+| `found in review. The "already in the store, just retarget" branch ran` | wires-update: a base change that takes a Plug backward is refused from the store |
 | `found in review. The ABI answers compatibility, not recency - two kits` | install-runs: an older implementation at the same ABI does not replace a newer one |
 | `found in review. install.sh hands this to `wineserver -k` *before*` | runtime-env: live prefix: names the legacy path while the destination is absent |
-| `found in review. works-update guards its Wine-base refusal on the field` | manifest: a manifest with no wine field is refused |
+| `found in review. wires-update guards its Wine-base refusal on the field` | manifest: a manifest with no wine field is refused |
 | `found on a VM after a fix that did not work. The architecture is` | runtime-env: a 32-bit prefix declared only in user.reg is not mistaken for unfinished |
 | `install.sh aborting on its own first lines, which no resolver test can` | install-runs: install.sh gets past its own initialisation |
 | `install.sh writes the channel file, so "removed everything install.sh` | install-runs: uninstalling takes the recorded channel back |
@@ -925,12 +925,12 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `issue label 'installer'` | packaging: every script a kit script sources is itself staged into the kit |
 | `licence GPLv2+` | packaging: the kit ships the GPL source and licence Ableton Link requires |
 | `lifting runtime_pids into the lib renamed it, and a replace that only` | packaging: every shell function a script calls is actually defined |
-| `make-installer accepted WORKS_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
-| `manifests published before runtime-only installs name no tarball, and` | works-runtime: a manifest without runtime fields is refused, pointing at works update |
-| `measured on real prefixes - the two indexes are disjoint. An NSIS` | works-plug: an application in Uninstall alone is a tenant |
+| `make-installer accepted WIRES_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
+| `manifests published before runtime-only installs name no tarball, and` | wires-runtime: a manifest without runtime fields is refused, pointing at wires update |
+| `measured on real prefixes - the two indexes are disjoint. An NSIS` | wires-plug: an application in Uninstall alone is a tenant |
 | `moving a release must not strand the installer it names` | manifest: the installer URL is resolved beside the manifest |
 | `names tie across every nightly between two releases, so ordering on` | migrate-layout: retention orders by built-at, not by the name |
-| `names tie across nightlies, so ordering is by built-at` | works-runtime: list is newest first |
+| `names tie across nightlies, so ordering is by built-at` | wires-runtime: list is newest first |
 | `no released runtime carries source-commit` | runtime-env: a runtime without source-commit is named from its patch stack |
 | `nothing here deletes a prefix. The store sets a runtime it cannot use` | migrate-layout: an unfinished prefix at the destination is set aside, not deleted |
 | `nothing is left behind for an older .run to overwrite, and a migrated` | migrate-layout: nothing remains at the legacy path |
@@ -939,13 +939,13 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `pruning on behalf of one channel must not strand another` | runtime-env: retention never removes what a DIFFERENT channel points at |
 | `raising OLDEST is the one act that can strand an application, and this` | runtime-env: apps below min: names exactly the applications an OLDEST would strand |
 | `refusing here aborted a whole install over a directory nothing reads.` | migrate-layout: a prefix already at the destination means the move is done, not ambiguous |
-| `releases move, and the manifest must stay the thing that locates the` | works-update: the installer is fetched from beside the manifest |
-| `removing what default points at leaves the selection dangling and` | works-plug: rm refuses the default Plug while others exist, and names the successors |
+| `releases move, and the manifest must stay the thing that locates the` | wires-update: the installer is fetched from beside the manifest |
+| `removing what default points at leaves the selection dangling and` | wires-plug: rm refuses the default Plug while others exist, and names the successors |
 | `renaming a prefix out from under a live wineserver corrupts its` | migrate-layout: plug: a prefix something is running from is not moved |
-| `replacing the tree under a running Live is how a session is lost` | works-update: it refuses while something is running from the runtime |
-| `reporting the channel's bare version against the installed id put a` | works-update: both sides of the report are ids, not one id and one version |
+| `replacing the tree under a running Live is how a session is lost` | wires-update: it refuses while something is running from the runtime |
+| `reporting the channel's bare version against the installed id put a` | wires-update: both sides of the report are ids, not one id and one version |
 | `runtime-only installs read these two fields and refuse without them,` | manifest: the writer carries the runtime tarball when one is given |
-| `same measurement as works-runtime's same-base tests - by stamp alone` | works-update: a same-base newer build in the store retargets without consent |
+| `same measurement as wires-runtime's same-base tests - by stamp alone` | wires-update: a same-base newer build in the store retargets without consent |
 | `scoping` | runtime-env: runtime pids: a process from another Wine install is ignored |
 | `scripts/ableton-live` | launcher-cli: a stale wineserver is killed and the session booted before registry writes<br>launcher: windowmetrics: a value wrapped across continuation lines is rejoined |
 | `scripts/build-audit.sh` | patch-stack: audit: every wine patch is registered in FINGERPRINTS or STAMP_ONLY |
@@ -953,46 +953,46 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `scripts/detect-scale.sh DPI policy` | detect-scale: block map: gnome scales collapse onto the ceil-based matched set<br>detect-scale: block map: non-gnome scales round to plain LogPixels with no IFEO |
 | `scripts/detect-theme.sh` | detect-theme: newest prefs dir: mtime wins, not a version sort<br>detect-theme: newest prefs dir: the sort -V trap case, stated explicitly |
 | `scripts/setup-run-header.sh line 19` | repo-hygiene: the installer header survives being run by a real POSIX sh |
-| `set-aside trees are not builds you can choose, but their existence is` | works-runtime: list does not offer quarantined trees, but mentions them |
+| `set-aside trees are not builds you can choose, but their existence is` | wires-runtime: list does not offer quarantined trees, but mentions them |
 | `setup-prefix.sh clears these two itself; folding them in would drop a` | runtime-env: binding leaves the sync backends alone, unlike setup-prefix.sh's own unset |
-| `someone who typed `works` to find out what it does wants the shape,` | works: no command at all prints the short usage |
+| `someone who typed `wires` to find out what it does wants the shape,` | wires: no command at all prints the short usage |
 | `someone with both set has already migrated and left the old one in a` | runtime-env: compat: the new name wins when both are set |
 | `sort -V orders the -debug suffix last, so glob+tail installs a tree with no share/` | runtime-env: the runtime wins over a debug tree sitting beside it |
-| `stopping Live discards unsaved work, so it is the one process here` | works-runtime: stop refuses a running Live with no terminal to confirm on |
-| `tenants come from the prefix's own RegisteredApplications index, not` | works-plug: a Plug that registers nothing lists without tenants |
-| `the BUILD column was exactly as wide as a nightly id --` | works-runtime: list: a nightly id does not crowd the WINE column |
+| `stopping Live discards unsaved work, so it is the one process here` | wires-runtime: stop refuses a running Live with no terminal to confirm on |
+| `tenants come from the prefix's own RegisteredApplications index, not` | wires-plug: a Plug that registers nothing lists without tenants |
+| `the BUILD column was exactly as wide as a nightly id --` | wires-runtime: list: a nightly id does not crowd the WINE column |
 | `the Plug holds Live, its authorisation and the user's sets` | install-runs: uninstalling keeps the Plug, and the work inside it |
-| `the VMs and anyone bisecting a build rely on WORKS_RUNTIME being the` | works-plug: WORKS_RUNTIME still overrides a Plug's binding |
+| `the VMs and anyone bisecting a build rely on WIRES_RUNTIME being the` | wires-plug: WIRES_RUNTIME still overrides a Plug's binding |
 | `the app directory must contain the app` | install-runs: the launcher lives with the application, and PATH holds a link to it |
 | `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
 | `the channel is user configuration and must never choose a host` | manifest: an unknown channel resolves no URL at all |
-| `the channel is what the launcher resolves through` | works-runtime: use refuses a name that is not installed |
+| `the channel is what the launcher resolves through` | wires-runtime: use refuses a name that is not installed |
 | `the check must not fire on the infrastructure everyone actually has` | launcher-cli: a launcher runs under a library that predates the contract |
-| `the checksum is the only thing making the manifest's URL trustworthy` | works-update: a checksum mismatch stops the install |
-| `the comparison happens before the stop, so an up-to-date machine is` | works-runtime: install says so and stops when the build is already here |
+| `the checksum is the only thing making the manifest's URL trustworthy` | wires-update: a checksum mismatch stops the install |
+| `the comparison happens before the stop, so an up-to-date machine is` | wires-runtime: install says so and stops when the build is already here |
 | `the container sees only what build.sh passes with -e, and an unset` | repo-hygiene: build.sh forwards every variable container-build.sh reads from its environment |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
-| `the guard above cannot fire for the last Plug, and leaving the link` | works-plug: removing the last Plug takes the default link with it |
+| `the guard above cannot fire for the last Plug, and leaving the link` | wires-plug: removing the last Plug takes the default link with it |
 | `the guard must not block the .run, where install.sh has already` | install-runs: setup-prefix gets past the guard when nothing is running |
-| `the help is a fixed line range over the header comment, so editing that` | works-update: update help ends on a command, not on prose |
-| `the help used to be a fixed line range over the header comment, which` | works: help ends on a command, not on prose |
+| `the help is a fixed line range over the header comment, so editing that` | wires-update: update help ends on a command, not on prose |
+| `the help used to be a fixed line range over the header comment, which` | wires: help ends on a command, not on prose |
 | `the id becomes a directory name, and a BUILD-INFO is just text in a tarball` | runtime-env: a BUILD-INFO carrying path traversal is refused, not turned into a path |
-| `the id contains dots and a plus, so anything treating it as a pattern` | works-runtime: use accepts a nightly build by its full name |
-| `the installed shape is a symlink on PATH pointing into works/bin, with` | works: works resolves its verbs through a symlink on PATH |
+| `the id contains dots and a plus, so anything treating it as a pattern` | wires-runtime: use accepts a nightly build by its full name |
+| `the installed shape is a symlink on PATH pointing into wires/bin, with` | wires: wires resolves its verbs through a symlink on PATH |
 | `the installer name becomes both a URL component and a filename` | manifest: an installer name containing a path is refused |
 | `the interface must never go backward even when the kit is newer by` | install-runs: a higher installed ABI is kept even against a newer implementation |
-| `the label comparison needs the runtime that booted the Plug, and that` | works-runtime: a rollback whose booting runtime is gone stays a refusal |
+| `the label comparison needs the runtime that booted the Plug, and that` | wires-runtime: a rollback whose booting runtime is gone stays a refusal |
 | `the launcher's stale-wineserver kill` | runtime-env: a lingering wineserver means busy, but not that Live is running |
-| `the manifest describes a build that is not on disk yet, so the base` | works-update: a Wine base change on the download path is announced, not refused |
+| `the manifest describes a build that is not on disk yet, so the base` | wires-update: a Wine base change on the download path is announced, not refused |
 | `the marker says an application has been installed here. It does NOT say` | run-header: a runtime with no prefix takes the full install, not the update |
-| `the old guard compared two runtimes and applied the answer to a machine` | works-update: with no Plug, a base change from the store is not obstructed |
+| `the old guard compared two runtimes and applied the answer to a machine` | wires-update: with no Plug, a base change from the store is not obstructed |
 | `the other direction of the same promise` | install-runs: a kit below the installed OLDEST is refused whole |
-| `the path is what people copy into a script or a bug report, and it is` | works-plug: list shows each Plug's path, abbreviated under home |
-| `the path is what people copy into a script, a bug report or a `cd`,` | works-runtime: list shows each build's path, abbreviated under home |
-| `the plural is what fingers type after `works app list` teaches the` | works: the plural nouns alias to the singular |
-| `the prefix cannot be taken back, so this must not happen quietly` | works-runtime: use refuses a base change with no terminal to ask on |
+| `the path is what people copy into a script or a bug report, and it is` | wires-plug: list shows each Plug's path, abbreviated under home |
+| `the path is what people copy into a script, a bug report or a `cd`,` | wires-runtime: list shows each build's path, abbreviated under home |
+| `the plural is what fingers type after `wires app list` teaches the` | wires: the plural nouns alias to the singular |
+| `the prefix cannot be taken back, so this must not happen quietly` | wires-runtime: use refuses a base change with no terminal to ask on |
 | `the prefix is the one thing here that cannot be re-downloaded` | migrate-layout: plug: the contents survive the move intact |
 | `the primary path ended in a bare `mv` while both sibling writers into` | migrate-layout: an id collision sets the old tree aside instead of nesting it in the entry |
 | `the promote step and its dated rollback, which is where the store's` | install-runs: a second install promotes and leaves the previous runtime behind |
@@ -1002,28 +1002,28 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the resolver, the process scan and the install must all name the same` | install-runs: after installing, the resolver points at a real build directory |
 | `the same resolution a running process reports, so the two can be` | runtime-env: runtime root: matches what /proc would report for a process under it |
 | `the same-day counter must not be read as a date component` | runtime-env: tarball predicate: a partial download is refused |
-| `the selection is a symlink, and a list that does not say which one is` | works-plug: list marks the selected Plug, and use moves the mark |
+| `the selection is a symlink, and a list that does not say which one is` | wires-plug: list marks the selected Plug, and use moves the mark |
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
-| `the stop was gated on works_runtime_busy, which resolves /proc/PID/exe` | runtime-env: busy: a prefix holder that never executed from the runtime is still seen |
-| `the two ids differ in length by design -- a nightly carries its kind --` | works-update: the report's columns line up between available and installed |
+| `the stop was gated on wires_runtime_busy, which resolves /proc/PID/exe` | runtime-env: busy: a prefix holder that never executed from the runtime is still seen |
+| `the two ids differ in length by design -- a nightly carries its kind --` | wires-update: the report's columns line up between available and installed |
 | `the updater compares source-commit and retention orders by built-at` | promote: source-commit and built-at survive the restamp unchanged |
 | `the updater compares source-commit to decide "do I already have this"` | manifest: the source commit is carried, not truncated |
 | `the updater compares the manifest's source-commit against` | manifest: the runtime's BUILD-INFO is read straight out of a tarball |
 | `the value names a symlink and, for the updater, part of a URL` | runtime-env: channel: an unknown value falls back to stable and says so |
-| `the version string is identical across every nightly between releases,` | works-update: a new build with the same version is still an update |
+| `the version string is identical across every nightly between releases,` | wires-update: a new build with the same version is still an update |
 | `the voucher runs before promote, and its refusal aborts with the` | install-runs: a refusing validator stops the verb before anything is promoted |
 | `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
-| `this deletes a prefix that can hold a licensed Live and tens of GB of` | works-plug: rm without -y and with no terminal refuses rather than assuming |
+| `this deletes a prefix that can hold a licensed Live and tens of GB of` | wires-plug: rm without -y and with no terminal refuses rather than assuming |
 | `this is the exact shape that made the first stable manifest invalid` | manifest: a BUILD-INFO with no source-commit produces a manifest that is refused |
 | `this is the only runtime artifact the nightly channel publishes, so` | runtime-env: tarball predicate: a nightly label is accepted |
 | `this is the whole point -- the directory name answers "when"` | runtime-env: runtime id: dates order correctly across both channels |
-| `two Plugs running different builds is the whole point of the binding,` | works-plug: a Plug's binding decides the runtime a launch binds to |
-| `two builds can share a timestamp -- the same build published on two` | works-update: a build with the same timestamp is not called older |
+| `two Plugs running different builds is the whole point of the binding,` | wires-plug: a Plug's binding decides the runtime a launch binds to |
+| `two builds can share a timestamp -- the same build published on two` | wires-update: a build with the same timestamp is not called older |
 | `two installs of one build collapse to one entry, and the loser is set` | migrate-layout: two rollbacks holding one build keep one and set the rest aside |
 | `two prefixes can hold different Lives and different authorisations` | migrate-layout: plug: a prefix at both paths refuses, naming both |
-| `unguarded, whichever kit ran last owned ~/works/lib` | install-runs: a newer installed infrastructure is kept, not overwritten |
-| `uninstalling one application used to run works_remove_runtimes and take` | install-runs: uninstalling one application keeps the runtimes another still needs |
-| `which door of the installer this opens, which is not a detail. Both` | works-update: a matching checksum reaches the installer, through the update door |
+| `unguarded, whichever kit ran last owned ~/wires/lib` | install-runs: a newer installed infrastructure is kept, not overwritten |
+| `uninstalling one application used to run wires_remove_runtimes and take` | install-runs: uninstalling one application keeps the runtimes another still needs |
+| `which door of the installer this opens, which is not a detail. Both` | wires-update: a matching checksum reaches the installer, through the update door |
+| `wires_manifest_write emits the key unconditionally but writes whatever` | manifest: a manifest with an empty wine field is refused |
 | `with no terminal nobody can answer, and the header takes the update` | run-header: with no terminal the update is taken, not the install |
-| `with no terminal nobody consented; -y is how a script says it meant it` | works-app: rm without a terminal refuses unless -y |
-| `works_manifest_write emits the key unconditionally but writes whatever` | manifest: a manifest with an empty wine field is refused |
+| `with no terminal nobody consented; -y is how a script says it meant it` | wires-app: rm without a terminal refuses unless -y |
