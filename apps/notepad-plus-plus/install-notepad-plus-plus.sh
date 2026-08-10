@@ -80,7 +80,8 @@ WINEPREFIX="$plug" WINEDLLOVERRIDES="mscoree,mshtml,winemenubuilder.exe=" "$rt/b
 WINEPREFIX="$plug" "$rt/bin/wineserver" -w
 
 echo "== installing Notepad++ $VERSION (silent) =="
-WINEPREFIX="$plug" "$rt/bin/wine" "$payload" /S
+WINEPREFIX="$plug" WINEDLLOVERRIDES="mscoree,mshtml,winemenubuilder.exe=" \
+    "$rt/bin/wine" "$payload" /S
 WINEPREFIX="$plug" "$rt/bin/wineserver" -w
 [ -f "$plug/drive_c/Program Files/Notepad++/notepad++.exe" ] || {
     echo "!! the installer ran but notepad++.exe is not in the Plug" >&2; exit 1; }
