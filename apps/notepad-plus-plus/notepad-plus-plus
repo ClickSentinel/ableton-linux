@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Notepad++ under the Works runtime. The second-application probe: everything
+# this launcher needs beyond its own exe path is the app side of the
+# Works contract, and anything hand-rolled here is a gap in that contract
+# (see ONBOARDING.md).
+set -u
+
+# The oldest Works contract this launcher is written against; read by the
+# infrastructure gate before an upgrade that would strand it.
+WORKS_ABI_MIN=1
+
+# Sibling in a kit, ../../works in a checkout (app directories sit one level
+# deeper than scripts/), the installed library last.
+for _l in "$(dirname "$0")/runtime-env.sh" \
+          "$(dirname "$0")/../../works/runtime-env.sh" \
+          "$HOME/works/lib/runtime-env.sh"; do
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v works_runtime_path >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/works/lib" >&2; exit 1; }
+if [ "${WORKS_ABI_OLDEST:-1}" -gt "$WORKS_ABI_MIN" ]; then
+    echo "notepad-plus-plus: the installed Works infrastructure (generation ${WORKS_ABI:-?}," >&2
+    echo "  oldest supported ${WORKS_ABI_OLDEST:-?}) no longer supports this launcher" >&2
+    echo "  (written against generation $WORKS_ABI_MIN). Reinstall with a current kit." >&2
+    exit 1
+fi
+
+# This application's own Plug by default; WORKS_PLUG still overrides.
+export WORKS_PLUG="${WORKS_PLUG:-$(works_plugs_dir)/npp}"
+works_bind_runtime
+
+EXE="$WINEPREFIX/drive_c/Program Files/Notepad++/notepad++.exe"
+if [ ! -f "$EXE" ]; then
+    echo "notepad-plus-plus: not installed in $WINEPREFIX" >&2
+    echo "  install it: apps/notepad-plus-plus/install-notepad-plus-plus.sh" >&2
+    exit 1
+fi
+
+# Unix file arguments become Windows paths; anything else passes through.
+args=()
+for a in "$@"; do
+    if [ -f "$a" ]; then
+        w="$(winepath -w "$a" 2>/dev/null || true)"
+        [ -n "$w" ] && a="$w"
+    fi
+    args+=("$a")
+done
+exec wine "$EXE" ${args[@]+"${args[@]}"}
