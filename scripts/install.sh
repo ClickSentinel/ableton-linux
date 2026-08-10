@@ -23,72 +23,20 @@ done
 command -v works_runtime_path >/dev/null 2>&1 || {
     echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
 NAME="$(works_runtime_name)"
-# Where this install lands. scripts/ableton-live and scripts/setup-prefix.sh
-# already respect WORKS_RUNTIME; install.sh and uninstall.sh hardcoded it,
-# which is the only reason two runtimes could not sit side by side. Staging,
-# the dated rollbacks, and — since PR #120 — the runtime pid scan and the
-# wineserver stop all follow the target, so an overridden root is guarded by
-# the same gate as the default one rather than silently unprotected.
-WINE_ROOT="$(works_runtime_path)"
-WINE_ROOT_DIR="$(dirname "$WINE_ROOT")"
-stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-stage=""
-backup=""
-CHANNEL="stable"
-replaced=""
-replaced_orig=""
-STORE=""
-launcher_backup=""
-promoted=0
-migrated=0
+verb_spoke=0
 
 cleanup()
 {
     rc=$?
     trap - EXIT
-    if [ "$rc" -ne 0 ]; then
-        failed="$WINE_ROOT.failed-$stamp"
-        if [ "$promoted" -eq 1 ] && [ -e "$WINE_ROOT" ]; then
-            mv "$WINE_ROOT" "$failed" || true
-        fi
-        if [ -n "$backup" ] && [ -e "$backup" ] && [ ! -e "$WINE_ROOT" ]; then
-            mv "$backup" "$WINE_ROOT" || true
-        elif [ -n "$backup" ] && [ -e "$backup" ]; then
-            echo "!! $WINE_ROOT still present; backup left at $backup" >&2
-        fi
-        if [ -n "$replaced" ] && [ -d "$replaced" ] && [ -n "$replaced_orig" ]; then
-            # A store entry this install set aside to write over. Put it back,
-            # so a failure between the move and the channel retarget does not
-            # leave the user without the build they already had.
-            rm -rf "$replaced_orig" 2>/dev/null || true
-            mv "$replaced" "$replaced_orig" 2>/dev/null || true
-        fi
-        if [ -n "$launcher_backup" ] && [ -e "$launcher_backup" ]; then
-            cp -a "$launcher_backup" "$BIN/ableton-live" || true
-        fi
-        if [ "$promoted" -eq 1 ] || [ -n "$backup" ] || [ -n "$launcher_backup" ]; then
-            echo "!! install failed; previous runtime restored" >&2
-        elif [ "$migrated" -eq 1 ]; then
-            # The migration is deliberately not undone - it only moves trees
-            # that stay valid, and rerunning continues from it. A message
-            # claiming nothing changed after ~/works has appeared would send
-            # whoever is investigating in exactly the wrong direction.
-            echo "!! install aborted; the layout migration had already completed and" >&2
-            echo "   stands - rerunning will continue from it" >&2
-        else
-            echo "!! install aborted; nothing was changed" >&2
-        fi
+    if [ "$rc" -ne 0 ] && [ "$verb_spoke" -eq 0 ]; then
+        # Only for aborts before the runtime install runs: past that point the
+        # verb owns the rollback and has already said what happened.
+        echo "!! install aborted; nothing was changed" >&2
     fi
-    [ -z "$stage" ] || rm -rf "$stage"
     exit "$rc"
 }
 trap cleanup EXIT
-# Without these, a signal reaches the EXIT trap with $? still 0 and the
-# rollback above is skipped: an interrupt between the two promotion mv's
-# would leave no runtime installed and say nothing. The confirmation
-# prompt is a 60 second window inviting exactly that Ctrl-C.
-trap 'exit 130' INT
-trap 'exit 143' TERM
 
 # tarball: prefer dist/ (freshly built), else a release tarball dropped in root
 if [ -n "${WORKS_RUNTIME_TARBALL:-}" ]; then
@@ -128,141 +76,24 @@ gate_rc=0
 # the same decision and keeps it, so nothing here needs to remember which.
 case "$gate_rc" in 0|3) ;; *) exit 1 ;; esac
 
-# Anything still running from the installed runtime holds the old files
-# open. Stop it all instead of refusing: ask the prefix's wineserver to
-# take the whole session down (Live and its helpers are its clients), and
-# signal the processes directly only when that is unavailable or leaves
-# something behind. ableton-linkd is not part of the runtime and is
-# handled at its own install step below.
-
-# The scan, the busy predicate and the Live-only variant are in runtime-env.sh:
-# they have to agree with the root resolved above about which tree is being
-# replaced, and a second copy here is exactly how that agreement is lost.
-#
-# Live itself, as opposed to the support processes: the prompt below is
-# about unsaved work and only Live has any. Scoped to this runtime, so a
-# Live under an unrelated Wine install is neither prompted for nor killed.
-live_up=0
-[ -z "$(ableton_live_pids)" ] || live_up=1
-if works_runtime_busy; then
-    echo "== stop processes using the installed runtime =="
-    echo "   $(works_runtime_pids | wc -l) found"
-    # Closing Live discards unsaved work, so require an explicit yes.
-    # -r and -w cannot ask that: they stat a 0666 device node and pass
-    # even with no controlling terminal, and the printf would then fail
-    # ENXIO and abort the install under set -e. Opening it is the only
-    # honest test. Anything but y - a timeout, an EOF, a bare Enter, a
-    # missing terminal - means nobody consented, so refuse. Leftover
-    # wineserver and winedevice.exe without Live have nothing to save and
-    # never reach this.
-    if [ "$live_up" -eq 1 ]; then
-        if { : >/dev/tty; } 2>/dev/null; then
-            echo "!! Live is running. Updating will force-close it. Save your work before continuing." >&2
-            printf "Force-close Live? [y/N] " > /dev/tty
-            ans=""
-            read -r -t 60 ans < /dev/tty || printf '\n' > /dev/tty 2>/dev/null || true
-            case "$ans" in
-                y|Y|yes|Yes|YES) ;;
-                *) exit 1 ;;
-            esac
-        else
-            echo "!! Live is running; no terminal to confirm on. Close Live, or rerun from a terminal." >&2
-            exit 1
-        fi
-    fi
-    if [ -x "$WINE_ROOT/bin/wineserver" ]; then
-        # The prefix as it is now, not where the migration below will put it:
-        # this runs before works_migrate_plug, so on an unmigrated machine the
-        # real prefix is still at the legacy path and the container path does
-        # not exist yet.
-        WINEPREFIX="$(works_plug_path_live)" \
-            "$WINE_ROOT/bin/wineserver" -k 2>/dev/null || true
-        for _ in $(seq 1 20); do
-            works_anything_busy || break
-            sleep 0.5
-        done
-    fi
-    # works_all_pids, not works_runtime_pids. The runtime scan resolves
-    # /proc/PID/exe under the runtime tree; works_migrate_plug's guard matches
-    # WINEPREFIX= in /proc/PID/environ, and that set is strictly larger. A
-    # process that inherited the prefix without executing from the runtime -
-    # ableton-linkd is exactly that - is invisible to the narrower kill and
-    # visible to the guard, so the install stops cleanly and then refuses.
-    if works_anything_busy; then
-        works_all_pids | sort -un | xargs -r kill 2>/dev/null || true
-        pkill -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
-        for _ in $(seq 1 10); do
-            works_anything_busy || break
-            sleep 0.5
-        done
-        works_all_pids | sort -un | xargs -r kill -9 2>/dev/null || true
-        pkill -9 -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
-    fi
-fi
-
-# The layout migration belongs here and nowhere else: after the stop above,
-# which needs WINE_ROOT to still name where the running processes are executing
-# from, and before the staging below, which must target where the runtime will
-# now live. It refuses rather than guesses whenever the live tree cannot be
-# identified, and set -e turns that into an aborted install.
-#
-# A later failure does not undo it and does not need to: it only moves trees
-# that stay valid, and re-running is a no-op.
-# Recorded from the pre-state, not from having called them: the migrations are
-# no-ops on an already-migrated machine, and claiming a migration "stands" on a
-# machine where nothing moved is the wrong turn this flag exists to prevent.
-if [ -e "$(works_legacy_root)" ] || [ -L "$(works_legacy_root)" ] || [ -d "$(works_legacy_plug)" ]; then
-    migrated=1
-fi
-works_migrate_layout
-works_migrate_plug
-
-# Where this install lands. Unpinned, that is always the store - including on a
-# fresh machine, so a new user never sees the flat layout and never becomes a
-# later migration. Pinned, it is exactly the path the user named, flat, because
-# the pin exists for tests, regression VMs and bisecting a build.
-if [ -n "${WORKS_RUNTIME:-}" ]; then
-    STORE=""
-    WINE_ROOT="$WORKS_RUNTIME"
-else
-    STORE="$(works_runtime_store)"
-    mkdir -p "$STORE"
-    # Which channel this kit belongs to, not which one the machine follows.
-    # Installing a nightly while configured for stable must not point `stable`
-    # at a nightly build. Kits older than this say nothing, and stable is what
-    # they all were.
-    CHANNEL="stable"
-    for _c in "$here/../channel" "$root/dist/channel"; do
-        [ -r "$_c" ] || continue
-        case "$(head -1 "$_c" | tr -d '[:space:]')" in
-            stable)  CHANNEL=stable ;;
-            nightly) CHANNEL=nightly ;;
-        esac
-        break
-    done
-fi
-
-echo "== stage and validate patched Wine =="
-mkdir -p "$WINE_ROOT_DIR"
-stage="$(mktemp -d "${STORE:-$WINE_ROOT_DIR}/.install.XXXXXX")"
-tar -C "$stage" -I zstd -xf "$tarball"
-candidate="$stage/$NAME"
-for required in \
-    bin/wine bin/wineserver \
-    lib/wine/x86_64-windows/libusb-1.0.dll \
-    lib/wine/x86_64-unix/libusb-1.0.so \
-    lib/wine/x86_64-unix/comdlg32.so \
-    lib/wine/x86_64-unix/winealsa.so \
-    lib/wine/x86_64-unix/winegstreamer.so \
-    lib/wine/x86_64-windows/pipeasio64.dll \
-    lib/wine/x86_64-windows/pipeasio.dll \
-    lib/wine/x86_64-unix/pipeasio64.dll.so \
-    lib/wine/x86_64-unix/pipeasio.dll.so; do
-    [ -s "$candidate/$required" ] || { echo "!! package is missing $required" >&2; exit 1; }
+# Which channel this kit belongs to, not which one the machine follows:
+# installing a nightly while configured for stable must not point `stable` at a
+# nightly build. Kits older than the marker say nothing, and stable is what
+# they all were. Passed to the verb as an argument - a caller handing over a
+# flag is legible where a caller planting a file the callee reads is not.
+CHANNEL="stable"
+for _c in "$here/../channel" "$root/dist/channel"; do
+    [ -r "$_c" ] || continue
+    case "$(head -1 "$_c" | tr -d '[:space:]')" in
+        stable)  CHANNEL=stable ;;
+        nightly) CHANNEL=nightly ;;
+    esac
+    break
 done
-# ableton-linkd (persistent native Ableton Link peer) is not part of the runtime
-# tree. The kit carries it in bin/, and a repository checkout reads it from
-# dist/. Its user unit ships next to the install scripts.
+
+# ableton-linkd is not part of the runtime tree; the kit carries it in bin/, a
+# checkout in dist/. Checked before the runtime install so a kit missing its
+# own pieces stops while nothing has moved.
 linkd=""
 for f in "$here/../bin/ableton-linkd" "$root/dist/ableton-linkd"; do
     if [ -f "$f" ]; then linkd="$f"; break; fi
@@ -273,36 +104,10 @@ for f in "$here/ableton-linkd.service" "$root/scripts/ableton-linkd.service"; do
     if [ -f "$f" ]; then linkd_unit="$f"; break; fi
 done
 [ -n "$linkd_unit" ] || { echo "!! package is missing scripts/ableton-linkd.service" >&2; exit 1; }
-if [ -e "$candidate/lib/wine/i386-windows/libusb-1.0.dll" ] || \
-   [ -e "$candidate/lib/wine/i386-unix/libusb-1.0.so" ]; then
-    echo "!! package unexpectedly contains a 32-bit Push 2 bridge" >&2
-    exit 1
-fi
-if command -v readelf >/dev/null && command -v strings >/dev/null; then
-    readelf -d "$candidate/lib/wine/x86_64-unix/libusb-1.0.so" | \
-        grep -F 'Shared library: [libusb-1.0.so.0]' >/dev/null || {
-            echo "!! Push 2 bridge is not linked to host libusb-1.0.so.0" >&2
-            exit 1
-        }
-    strings "$candidate/lib/wine/x86_64-unix/comdlg32.so" | \
-        grep -F 'org.freedesktop.portal.FileChooser' >/dev/null || {
-            echo "!! package comdlg32 lacks the XDG portal backend" >&2
-            exit 1
-        }
-    readelf -d "$candidate/lib/wine/x86_64-unix/pipeasio64.dll.so" | \
-        grep -F 'Shared library: [libpipewire-0.3.so.0]' >/dev/null || {
-            echo "!! PipeASIO is not linked to host libpipewire-0.3.so.0" >&2
-            exit 1
-        }
-    readelf -d "$candidate/lib/wine/x86_64-unix/winegstreamer.so" | \
-        grep -F 'Shared library: [libgstreamer-1.0.so.0]' >/dev/null || {
-            echo "!! winegstreamer is not linked to host libgstreamer-1.0.so.0" >&2
-            exit 1
-        }
-    # ableton-linkd must resolve against host C-runtime sonames only.
-    # -static-libstdc++ and -static-libgcc keep libstdc++ and libgcc_s out of
-    # DT_NEEDED. Any other dependency means the required static-link flags
-    # were omitted.
+if command -v readelf >/dev/null; then
+    # ableton-linkd must resolve against host C-runtime sonames only:
+    # -static-libstdc++/-static-libgcc keep libstdc++ and libgcc_s out of
+    # DT_NEEDED, and any other dependency means those flags were omitted.
     linkd_needed="$(readelf -d "$linkd" | sed -n 's/.*Shared library: \[\(.*\)\]/\1/p')"
     for so in $linkd_needed; do
         case "$so" in
@@ -315,133 +120,17 @@ if command -v readelf >/dev/null && command -v strings >/dev/null; then
         echo "!! ableton-linkd links a shared libstdc++ (needs -static-libstdc++)" >&2
         exit 1
     fi
-else
-    # binutils absent (e.g. stock SteamOS); the checksum above already covers content integrity.
-    echo "   (binutils not found: skipping deep binary checks)"
 fi
 
-# --- does this build take any Plug backward? ----------------------------------
-# Here, and not in the commands. `works update` and `works runtime use` each grew
-# their own version of this, comparing the `wine:` field of two BUILD-INFO files
-# - which asked about two runtimes when the question is about a prefix, and left
-# the installer, the one path both of them told people to use instead, with no
-# check at all. The refusal named an escape hatch less careful than itself.
-#
-# The staged candidate is a full tree, so share/wine/wine.inf is right there and
-# this is answerable before anything is promoted. The comparison is Wine's own:
-# it reads the prefix's .update-timestamp against that file and re-runs wineboot
-# when they differ, forward only.
-#
-# A pinned WORKS_RUNTIME is deliberately exempt. Running an old build against a
-# newer prefix is exactly what bisecting is, the regression VMs depend on it, and
-# a pin is already the outermost explicit say in every other resolver here.
-if [ -z "${WORKS_RUNTIME:-}" ]; then
-    back=""; fwd=""; roll=""
-    while read -r _plug; do
-        [ -n "$_plug" ] || continue
-        move="$(works_base_move "$candidate" "$(works_plugs_dir)/$_plug")" || {
-            echo "!! $_plug has been booted but will not say which Wine base bootstrapped" >&2
-            echo "   it, so whether this build takes it backward cannot be answered." >&2
-            echo "   Refusing rather than guessing. Set WORKS_ALLOW_BASE_CHANGE=1 to" >&2
-            echo "   install anyway." >&2
-            [ "${WORKS_ALLOW_BASE_CHANGE:-0}" = 1 ] || exit 1
-            move=""; }
-        # refresh - a newer build of the same base - is the ordinary update and
-        # passes in silence: Wine re-runs its prefix update exactly as every
-        # update has always made it do.
-        case "$move" in
-            backward) back="$back $_plug" ;;
-            forward)  fwd="$fwd $_plug" ;;
-            rollback) roll="$roll $_plug" ;;
-        esac
-    done < <(works_plugs_following "$CHANNEL")
-
-    # Going back to an older build of the same base is what the store is for -
-    # the dated rollbacks always allowed it, and the nightly's own notes say
-    # "to go back, install the stable installer over it". A note, not a
-    # question: wineboot re-runs against the same wine.inf content.
-    if [ -n "$roll" ]; then
-        echo "   note: this is an older build of the same Wine base; going back for:$roll"
-    fi
-
-    # Backward is not a warning. Wine does not support taking a prefix back, so
-    # this refuses the way the prefix migration refuses: only an explicit say
-    # gets past it, and nothing is deleted either way.
-    if [ -n "$back" ]; then
-        echo "!! This build is on an OLDER Wine base than the Plug(s) it would run:$back" >&2
-        echo "   Wine cannot take a prefix back. Those Plugs were bootstrapped against" >&2
-        echo "   a newer base and would break." >&2
-        if [ "${WORKS_ALLOW_BASE_CHANGE:-0}" != 1 ]; then
-            echo "   Refusing. Keep a copy of the Plug and set WORKS_ALLOW_BASE_CHANGE=1" >&2
-            echo "   if you mean it, or pick a newer build." >&2
-            exit 1
-        fi
-        echo "   (WORKS_ALLOW_BASE_CHANGE=1 given)"
-    fi
-
-    # Forward is supported and is what every base bump is, so this informs and
-    # asks rather than refusing. No terminal proceeds with the notice printed:
-    # refusing would break every scripted install the first time a base moves,
-    # and unlike force-closing Live there is no unsaved work at stake.
-    if [ -n "$fwd" ] && [ "${WORKS_ALLOW_BASE_CHANGE:-0}" != 1 ]; then
-        echo "== this build changes the Wine base =="
-        echo "   Re-bootstrapped on next launch, and not reversible:$fwd"
-        if { : >/dev/tty; } 2>/dev/null; then
-            printf 'Continue? [Y/n] ' > /dev/tty
-            ans=""
-            read -r -t 60 ans < /dev/tty || printf '\n' > /dev/tty 2>/dev/null || true
-            case "$ans" in [Nn]*) echo "cancelled"; exit 1 ;; esac
-        else
-            echo "   (no terminal to ask on; continuing)"
-        fi
-    fi
-fi
-
-# Promote. Into the store this is: file the candidate under the name its own
-# BUILD-INFO gives it, then retarget the channel. No dated rollback directory is
-# created, because the entry one would hold is already in the store under its
-# real name - which is the whole point of naming them.
-#
-# Promoting by moving the channel aside and writing a real directory in its
-# place, as the flat layout did, replaces the channel with a directory and
-# leaves a rollback symlink pointing into the store. The store then survives no
-# installs at all, and the migration reads the result as already migrated.
-# Reproduced 2026-08-05 before this was written.
-if [ -n "$STORE" ]; then
-    echo "== promote runtime into the store =="
-    id="$(works_runtime_id "$candidate")"
-    [ -n "$id" ] || { echo "!! the staged runtime carries no readable BUILD-INFO, so it cannot be named" >&2; exit 1; }
-    if [ -e "$STORE/$id" ]; then
-        # Same build already present. Set it aside rather than writing over it,
-        # so a failure between here and the channel retarget can be undone.
-        replaced_orig="$STORE/$id"
-        replaced="$STORE/.replaced-$id-$stamp"
-        mv "$replaced_orig" "$replaced"
-    fi
-    mv "$candidate" "$STORE/$id"
-    promoted=1
-    WINE_ROOT="$STORE/$id"
-    ln -sfn "$id" "$STORE/$CHANNEL"
-    [ -z "$replaced" ] || { rm -rf "$replaced"; replaced=""; replaced_orig=""; }
-    echo "   $id  [$CHANNEL]"
-    # Follow what was last installed. Downloading the nightly installer is the
-    # choice; nobody should have to also edit a file to make it stick.
-    _cf="$(works_channel_file)"
-    mkdir -p "$(dirname "$_cf")" && printf '%s\n' "$CHANNEL" > "$_cf"
-    # After the promote, never before: a failure earlier must not leave a user
-    # with neither the new runtime nor the old one.
-    works_prune_runtimes
-else
-    echo "== promote runtime with dated rollback =="
-    if [ -e "$WINE_ROOT" ]; then
-        backup="$WINE_ROOT-rollback-$stamp"
-        [ ! -e "$backup" ] || { echo "!! rollback path already exists: $backup" >&2; exit 1; }
-        mv "$WINE_ROOT" "$backup"
-    fi
-    mv "$candidate" "$WINE_ROOT"
-    promoted=1
-fi
-"$WINE_ROOT/bin/wine" --version
+# The store lifecycle - stop, migrate, stage, guard, promote, prune, and the
+# rollback if any of it fails - is Works' own: `works runtime install` owns it
+# whole, and this application vouches for the build's contents through the
+# validator it passes in. WORKS_RUNTIME reaches the verb through the
+# environment and keeps its meaning: pinned installs are flat, with a dated
+# rollback and no channel.
+verb_spoke=1
+"$works_src/works-runtime" install "$tarball" --channel "$CHANNEL" \
+    --validate "$here/validate-runtime.sh"
 
 echo "== install launcher -> ~/works/apps/ableton-live =="
 mkdir -p "$BIN" "$HOME/works/apps/ableton-live" "$HOME/works/bin" "$HOME/works/lib"
@@ -676,16 +365,14 @@ if ! ldconfig -p 2>/dev/null | grep 'libgstreamer-1\.0\.so\.0' >/dev/null; then
     echo "!! note: no host libgstreamer-1.0.so.0 found: mp3 and video import will not work until GStreamer (with its base and good plugin sets) is installed"
 fi
 
-promoted=0
 trap - EXIT
-rm -rf "$stage"
 
 echo
-# The store path never sets $backup - rollback there is the store itself - so
-# the old line claimed "fresh install" at the end of every update.
-if [ -n "$STORE" ]; then
-    echo "OK. Previous builds stay in the store: works runtime list"
+# The verb owns rollback either way: the store keeps previous builds, a pinned
+# install keeps a dated sibling.
+if [ -n "${WORKS_RUNTIME:-}" ]; then
+    echo "OK. A dated rollback of the previous runtime sits beside the pin."
 else
-    echo "OK. Runtime rollback: ${backup:-none (fresh install)}"
+    echo "OK. Previous builds stay in the store: works runtime list"
 fi
 echo "Next: ./scripts/setup-prefix.sh"

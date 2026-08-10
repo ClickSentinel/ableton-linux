@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-449 tests across 18 suites. See [README.md](README.md) for how to run
+452 tests across 18 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -19,7 +19,7 @@ for which run on a PR.
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/install-runs.bats](#install-runs) — 24 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 27 test(s)
 - [tests/unit/run-header.bats](#run-header) — 12 test(s)
 - [tests/unit/manifest.bats](#manifest) — 21 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 42 test(s)
@@ -302,6 +302,9 @@ tree ships.
 | 22 | a newer installed infrastructure is kept, not overwritten | unguarded, whichever kit ran last owned ~/works/lib — installing an |
 | 23 | a kit below the installed OLDEST is refused whole | the other direction of the same promise — an installed infrastructure |
 | 24 | uninstalling one application keeps the runtimes another still needs | uninstalling one application used to run works_remove_runtimes and take |
+| 25 | the verb installs into the store and honours --channel | — |
+| 26 | a refusing validator stops the verb before anything is promoted | the voucher runs before promote, and its refusal aborts with the |
+| 27 | the verb honours a pinned WORKS_RUNTIME with a dated rollback | — |
 
 <a id="run-header"></a>
 
@@ -992,6 +995,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the updater compares the manifest's source-commit against` | manifest: the runtime's BUILD-INFO is read straight out of a tarball |
 | `the value names a symlink and, for the updater, part of a URL` | runtime-env: channel: an unknown value falls back to stable and says so |
 | `the version string is identical across every nightly between releases,` | works-update: a new build with the same version is still an update |
+| `the voucher runs before promote, and its refusal aborts with the` | install-runs: a refusing validator stops the verb before anything is promoted |
 | `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
 | `this deletes a prefix that can hold a licensed Live and tens of GB of` | works-plug: rm without -y and with no terminal refuses rather than assuming |
 | `this is the exact shape that made the first stable manifest invalid` | manifest: a BUILD-INFO with no source-commit produces a manifest that is refused |

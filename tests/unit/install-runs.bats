@@ -414,3 +414,47 @@ setup() {
     [ ! -e "$HOME/works/runtimes" ]
     [ ! -e "$HOME/works/bin" ]
 }
+
+# --- the runtime install verb ---------------------------------------------------
+# The store lifecycle out of the application's installer: `works runtime
+# install` owns stop, migrate, stage, guard, promote and prune, and the caller
+# vouches for the build through --validate, run against the staged tree before
+# anything is promoted.
+
+@test "the verb installs into the store and honours --channel" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    run bash "$REPO/works/works-runtime" install "$tarball" --channel nightly
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    container="$(works_runtime_store)"
+    [ -L "$container/nightly" ]
+    [ -x "$container/$(readlink "$container/nightly")/bin/wine" ]
+    [ "$(cat "$container/.channel")" = nightly ]
+    [ ! -e "$container/stable" ]
+}
+
+# guards: the voucher runs before promote, and its refusal aborts with the
+# machine unchanged - a validator that ran after promote would be an autopsy
+@test "a refusing validator stops the verb before anything is promoted" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    v="$BATS_TEST_TMPDIR/refuse.sh"
+    printf '#!/bin/sh\necho "!! vouch refused: $1" >&2\nexit 1\n' > "$v"; chmod +x "$v"
+    run bash "$REPO/works/works-runtime" install "$tarball" --validate "$v"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"vouch refused"* ]]
+    [ ! -e "$(works_runtime_store)/stable" ]
+    [ -z "$(find "$(works_runtime_store)" -maxdepth 1 -mindepth 1 -type d 2>/dev/null)" ]
+}
+
+@test "the verb honours a pinned WORKS_RUNTIME with a dated rollback" {
+    tarball="$(sandbox_tarball)"
+    [ -n "$tarball" ] || skip "no runtime tarball; set WORKS_TEST_TARBALL to run this"
+    root="$BATS_TEST_TMPDIR/rt"
+    env WORKS_RUNTIME="$root" bash "$REPO/works/works-runtime" install "$tarball" >/dev/null 2>&1
+    run env WORKS_RUNTIME="$root" bash "$REPO/works/works-runtime" install "$tarball"
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [ -x "$root/bin/wine" ]
+    [ "$(find "$(dirname "$root")" -maxdepth 1 -name "$(basename "$root")-rollback-*" | wc -l)" -eq 1 ]
+    [ ! -e "$HOME/works/runtimes/stable" ]
+}
