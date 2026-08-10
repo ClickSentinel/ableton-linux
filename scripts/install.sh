@@ -255,9 +255,16 @@ fi
 #
 # A later failure does not undo it and does not need to: it only moves trees
 # that stay valid, and re-running is a no-op.
+# Recorded from the pre-state, not from having called them: the migrations are
+# no-ops on an already-migrated machine, and the abort message keys on this
+# flag - claiming "the layout migration had already completed and stands" on a
+# machine where nothing moved is the same investigative wrong turn the flag
+# exists to prevent, one layer up. (Review find, PR #33.)
+if [ -e "$(works_legacy_root)" ] || [ -L "$(works_legacy_root)" ] || [ -d "$(works_legacy_plug)" ]; then
+    migrated=1
+fi
 works_migrate_layout
 works_migrate_plug
-migrated=1
 
 # Where this install lands. Unpinned, that is always the store - including on a
 # fresh machine, so a new user never sees the flat layout and never becomes a

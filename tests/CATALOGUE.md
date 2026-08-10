@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-436 tests across 17 suites. See [README.md](README.md) for how to run
+437 tests across 17 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -15,7 +15,7 @@ for which run on a PR.
 
 - [tests/repo-hygiene.bats](#repo-hygiene) — 17 test(s)
 - [tests/packaging.bats](#packaging) — 10 test(s)
-- [tests/launcher-cli.bats](#launcher-cli) — 21 test(s)
+- [tests/launcher-cli.bats](#launcher-cli) — 22 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
@@ -131,6 +131,7 @@ was covered by anything before.
 | 19 | the launcher never leaves the fake runtime for the host's wine | — |
 | 20 | a launcher below the infrastructure's OLDEST refuses as a version conflict | — |
 | 21 | a launcher runs under a library that predates the contract | the check must not fire on the infrastructure everyone actually has — |
+| 22 | the upstream window-class overrides are still exported | found in review (PR #33). The works stack's resolver consolidation |
 
 <a id="detect-scale"></a>
 
@@ -864,6 +865,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `forward is supported and irreversible, so it takes consent rather than` | works-update: a base change that moves a Plug forward is refused with no terminal |
 | `found by hand on a pre-store machine. The clone landed, the *default*` | works-plug: new --from succeeds on a machine with no version store |
 | `found by hand. With no store there is no channel for a Plug to follow,` | works-plug: a pre-store install is not reported as following a channel |
+| `found in review (PR #33). The works stack's resolver consolidation` | launcher-cli: the upstream window-class overrides are still exported |
 | `found in review. The "already in the store, just retarget" branch ran` | works-update: a base change that takes a Plug backward is refused from the store |
 | `found in review. install.sh hands this to `wineserver -k` *before*` | runtime-env: live prefix: names the legacy path while the destination is absent |
 | `found in review. works-update guards its Wine-base refusal on the field` | manifest: a manifest with no wine field is refused |
