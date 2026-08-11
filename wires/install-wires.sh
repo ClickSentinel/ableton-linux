@@ -63,23 +63,12 @@ inst_version="$(head -1 "$installed_ver" 2>/dev/null || echo 0)"
 # this kit's does not - installing over it is the mirror of the stranding the
 # prompt below refuses.
 #
-# Within one interface, the newer shipment wins.
-#
-# Compared with sort -V, not -gt: these are release stamps like 2026.08.08.1,
-# not integers. Equal versions install, so a rebuild of one release replaces
-# itself rather than being refused.
-#
-# A labelled build sorts after the plain release of the same date - the
-# opposite of wires_pick_tarball, which is choosing what to offer and ranks a
-# release above a nightly. This asks which came later.
-wires_version_older() {     # older <a> <b> -> true when $1 precedes $2
-    [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -1)" = "$1" ]
-}
-
+# Within one interface, the newer shipment wins. Equal versions install, so a
+# rebuild of one release replaces itself rather than being refused.
 decide() {
     [ -r "$installed_lib" ] || return 0
     [ "$inst_abi" -gt "$kit_abi" ] && return 3
-    if [ "$inst_abi" -eq "$kit_abi" ] && wires_version_older "$kit_version" "$inst_version"; then
+    if [ "$inst_abi" -eq "$kit_abi" ] && wires_version_newer "$inst_version" "$kit_version"; then
         return 3
     fi
     return 0
@@ -114,8 +103,11 @@ cmd_check() {
             echo "   declare an older floor:" >&2
             printf '%s\n' "$stranded" | sed 's/^/     /' >&2
             echo "   They would stop launching until each is updated with its own installer." >&2
-            wires_ask_tty 'Continue anyway? [y/N] '
-            case "$?" in
+            # This file runs under set -e, unlike the other verbs: a bare
+            # call ends the script on a non-zero return, before $? is read.
+            local answer=0
+            wires_ask_tty 'Continue anyway? [y/N] ' || answer=$?
+            case "$answer" in
                 0) ;;
                 2) echo "   No terminal to ask on; set WIRES_ALLOW_ABI_BREAK=1 if you mean it." >&2
                    exit 1 ;;
@@ -143,6 +135,8 @@ cmd_check() {
 }
 
 cmd_install() {
+    [ $# -eq 0 ] || {
+        echo "!! install-wires install: takes no arguments (got '$*')" >&2; exit 2; }
     if ! decide; then
         # check already reported this; installing anyway is exactly the downgrade the
         # gate exists to prevent. Exit 0: keeping the newer one is success.
@@ -176,9 +170,9 @@ cmd_install() {
     # before the toolkit lived with its app - removed so lib stays what the
     # census and the gate say it is: Wires, whole, nothing else.
     rm -f "$BIN/ableton-runtime" "$BIN/ableton-update" \
-          "$BIN/wires-runtime" "$BIN/wires-update" 2>/dev/null || true
+          "$BIN/wires-runtime" "$BIN/wires-update" || true
     rm -f "$HOME/wires/lib/detect-scale.sh" "$HOME/wires/lib/detect-theme.sh" \
-          "$HOME/wires/lib/shortcut-hold.sh" 2>/dev/null || true
+          "$HOME/wires/lib/shortcut-hold.sh" || true
 }
 
 case "${1:-}" in

@@ -993,6 +993,16 @@ wires_compose_id() {
 # resolvers above about where a runtime is, and those drifting apart is the
 # failure this whole file exists to prevent.
 
+# Is <a> a later version stamp than <b>? Equal is not later.
+#
+# sort -V, because these are release stamps and not integers. A labelled build
+# sorts after the plain release of the same date, which is what later means
+# here; wires_pick_tarball orders the other way, choosing what to offer rather
+# than what came last.
+wires_version_newer() {
+    [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" = "$1" ]
+}
+
 # Is <a> a newer build than <b>? built-at where both carry it, dist-version
 # otherwise. Runtimes built before built-at existed have only the version, which
 # ties across every nightly between two releases — that is why the field was
@@ -1006,8 +1016,7 @@ wires_build_is_newer() {
         _bv="$(wires_buildinfo_field "$_b/ABLETON-WINE-BUILD-INFO.txt" dist-version)"
     fi
     [ -n "$_av" ] && [ -n "$_bv" ] || return 1
-    [ "$_av" != "$_bv" ] || return 1
-    [ "$(printf '%s\n%s\n' "$_av" "$_bv" | sort -V | tail -1)" = "$_av" ]
+    wires_version_newer "$_av" "$_bv"
 }
 
 # Move <dir> into the store under its own id. A tree that cannot be named, or

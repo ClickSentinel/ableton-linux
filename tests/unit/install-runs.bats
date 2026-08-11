@@ -539,3 +539,29 @@ setup() {
     run bash "$REPO/wires/install-wires.sh" check --app-min 2
     [ "$status" -ne 2 ]
 }
+
+# guards: this file is the only one under set -e, and wires_ask_tty is called
+# the same way as in five other verbs where that is safe. A bare call ended the
+# script on its return, so the no-terminal branch never ran: the operator got
+# exit 2 and no mention of WIRES_ALLOW_ABI_BREAK. Reachable once OLDEST rises
+# above 1, which is the one release it exists for.
+@test "a stranded application with no terminal says how to proceed" {
+    mkdir -p "$HOME/wires/apps/oldapp" "$HOME/wires/lib"
+    printf '#!/bin/sh\nWIRES_ABI_MIN=0\n' > "$HOME/wires/apps/oldapp/oldapp"
+    cp "$REPO/wires/runtime-env.sh" "$HOME/wires/lib/"
+    printf '2020.01.01.1\n' > "$HOME/wires/lib/VERSION"
+
+    run setsid bash "$REPO/wires/install-wires.sh" check --app-min 1
+    [ "$status" -eq 1 ] || { echo "$output" >&2; false; }
+    [[ "$output" == *"WIRES_ALLOW_ABI_BREAK"* ]] \
+        || { echo "the no-terminal branch did not run" >&2; false; }
+}
+
+# guards: `install` took "$@" and never looked at it, so a mistyped flag ran a
+# full install rather than being refused the way `check` refuses one.
+@test "install refuses arguments instead of installing anyway" {
+    run bash "$REPO/wires/install-wires.sh" install --nonsense
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"takes no arguments"* ]]
+    [ ! -e "$HOME/wires" ]
+}

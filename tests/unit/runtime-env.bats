@@ -889,3 +889,26 @@ a_login_shell() {               # [shell-name] -> path to a fake shell
     run wires_path_unregister
     [ "$status" -eq 0 ]
 }
+
+# ---------------------------------------------------------------------------
+# Version stamps.
+# ---------------------------------------------------------------------------
+
+@test "version newer: later release wins, equal is not newer" {
+    wires_version_newer 2026.08.08.1 2026.08.04.1
+    ! wires_version_newer 2026.08.04.1 2026.08.08.1
+    ! wires_version_newer 2026.08.08.1 2026.08.08.1
+}
+
+# guards: the two orderings in this file disagree on purpose. This asks which
+# came later, so a labelled build outranks the release it was cut from;
+# wires_pick_tarball asks what to offer, and ranks the release above it.
+@test "version newer: a labelled build is later than its release" {
+    wires_version_newer '2026.08.08.1+nightly.bf76bb2' 2026.08.08.1
+    ! wires_version_newer 2026.08.08.1 '2026.08.08.1+nightly.bf76bb2'
+}
+
+@test "version newer: a missing stamp reads as 0 and loses to any release" {
+    wires_version_newer 2026.08.08.1 0
+    ! wires_version_newer 0 2026.08.08.1
+}

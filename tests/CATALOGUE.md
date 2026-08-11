@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-488 tests across 18 suites. See [README.md](README.md) for how to run
+493 tests across 18 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -19,7 +19,7 @@ for which run on a PR.
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
-- [tests/unit/install-runs.bats](#install-runs) — 32 test(s)
+- [tests/unit/install-runs.bats](#install-runs) — 34 test(s)
 - [tests/unit/run-header.bats](#run-header) — 19 test(s)
 - [tests/unit/manifest.bats](#manifest) — 23 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 42 test(s)
@@ -29,7 +29,7 @@ for which run on a PR.
 - [tests/unit/wires-runtime.bats](#wires-runtime) — 43 test(s)
 - [tests/unit/wires-plug.bats](#wires-plug) — 45 test(s)
 - [tests/unit/wires-update.bats](#wires-update) — 37 test(s)
-- [tests/unit/runtime-env.bats](#runtime-env) — 87 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 90 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 
 <a id="repo-hygiene"></a>
@@ -313,6 +313,8 @@ tree ships.
 | 30 | an empty desktop entry is replaced, not mistaken for a hand-made one | found on the fedora rig. The preserve rule asked only whether a file |
 | 31 | a hand-made desktop entry is still preserved | the other half of the same rule - the protection it exists for must |
 | 32 | install-wires refuses an --app-min that is not a number | found in review. --app-min silently became 1 when it was not a number, |
+| 33 | a stranded application with no terminal says how to proceed | this file is the only one under set -e, and wires_ask_tty is called |
+| 34 | install refuses arguments instead of installing anyway | `install` took "$@" and never looked at it, so a mistyped flag ran a |
 
 <a id="run-header"></a>
 
@@ -830,6 +832,9 @@ sandbox, which is the whole reason they echo instead of assigning.
 | 85 | path register: already registered but missing from this shell says how | — |
 | 86 | path unregister: takes the block out and leaves the rest | — |
 | 87 | path unregister: silent with nothing to remove | uninstall runs on machines installed before this existed |
+| 88 | version newer: later release wins, equal is not newer | — |
+| 89 | version newer: a labelled build is later than its release | the two orderings in this file disagree on purpose. This asks which |
+| 90 | version newer: a missing stamp reads as 0 and loses to any release | — |
 
 <a id="patch-stack"></a>
 
@@ -882,6 +887,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `THE defect. Every existing user is on the legacy layout on the day the` | run-header: an unmigrated machine is offered an update, not a fresh install |
 | `WIRES_RUNTIME is the outermost say in every resolver, and a pinned` | wires-update: a pinned WIRES_RUNTIME is refused before any fetch |
 | ``default` is the selection link itself, so a Plug by that name could` | wires-plug: default is refused as a Plug name |
+| ``install` took "$@" and never looked at it, so a mistyped flag ran a` | install-runs: install refuses arguments instead of installing anyway |
 | ``stat -f` reads statfs.f_type, and ext2, ext3 and ext4 all share magic` | wires-plug: the clone names the filesystem the mount table reports |
 | ``wineboot -u` rewriting the registry under a live wineserver` | install-runs: setup-prefix refuses while something runs from the runtime |
 | ``wires app adopt` shipped while `wires --help` still said` | wires: help names every sub-verb its dispatchers accept |
@@ -1044,6 +1050,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the staging list is recovered by anchored sed, so a reformat of` | packaging: the kit staging list is still parseable out of make-installer.sh |
 | `the stop was gated on wires_runtime_busy, which resolves /proc/PID/exe` | runtime-env: busy: a prefix holder that never executed from the runtime is still seen |
 | `the two ids differ in length by design -- a nightly carries its kind --` | wires-update: the report's columns line up between available and installed |
+| `the two orderings in this file disagree on purpose. This asks which` | runtime-env: version newer: a labelled build is later than its release |
 | `the updater compares source-commit and retention orders by built-at` | promote: source-commit and built-at survive the restamp unchanged |
 | `the updater compares source-commit to decide "do I already have this"` | manifest: the source commit is carried, not truncated |
 | `the updater compares the manifest's source-commit against` | manifest: the runtime's BUILD-INFO is read straight out of a tarball |
@@ -1052,6 +1059,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the voucher runs before promote, and its refusal aborts with the` | install-runs: a refusing validator stops the verb before anything is promoted |
 | `the whole install path` | install-runs: a real tarball installs, and the tree identifies itself |
 | `this deletes a prefix that can hold a licensed Live and tens of GB of` | wires-plug: rm without -y and with no terminal refuses rather than assuming |
+| `this file is the only one under set -e, and wires_ask_tty is called` | install-runs: a stranded application with no terminal says how to proceed |
 | `this is the exact shape that made the first stable manifest invalid` | manifest: a BUILD-INFO with no source-commit produces a manifest that is refused |
 | `this is the only runtime artifact the nightly channel publishes, so` | runtime-env: tarball predicate: a nightly label is accepted |
 | `this is the whole point -- the directory name answers "when"` | runtime-env: runtime id: dates order correctly across both channels |
