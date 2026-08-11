@@ -51,6 +51,11 @@ if [ -z "$remaining" ]; then
     rmdir  "$HOME/wires/bin" 2>/dev/null || true
     rm -f  "$HOME/.local/bin/wires"
     rm -rf "$HOME/wires/lib" "$HOME/wires/apps" 2>/dev/null || true
+    # The PATH block the installer wrote. It is the one thing this project puts
+    # in a file it does not own, so it is the one thing that would otherwise be
+    # left behind - a fence exists precisely so this is a deletion and not a
+    # guess at which line was ours.
+    wires_path_unregister
     echo "removed ~/wires/lib and the wires command (no application left)"
     # The channel install.sh recorded. Not prompted for, unlike the prefix:
     # this is one word of preference, not data, and leaving it behind means a

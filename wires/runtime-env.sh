@@ -43,7 +43,7 @@
 # LINK_SETUP_VERSION shape: a variable inside the file it describes.
 #
 # shellcheck disable=SC2034  # read from outside; nothing here consumes them
-WIRES_VERSION=2
+WIRES_VERSION=3
 # shellcheck disable=SC2034
 WIRES_ABI=1
 # Policy: stays 1. Stranding an application is a breaking release, taken
@@ -674,6 +674,137 @@ wires_ask_tty() {
     read -r -t 60 _ans < /dev/tty || { printf '\n' > /dev/tty 2>/dev/null || true; _ans=""; }
     [ -n "$_ans" ] || _ans="$_default"
     case "$_ans" in [yY]|[yY][eE][sS]) return 0 ;; *) return 1 ;; esac
+}
+
+# The user's login shell, or nothing when it cannot be established.
+#
+# $SHELL first. It is set at login and is not changed by running a subshell, so
+# it names the shell whose startup files this user actually loads - which is the
+# question, since that is the file a PATH entry would go in. The passwd entry is
+# the fallback for a context that never went through login (a service, cron,
+# sudo without -i), where $SHELL is unset or inherited from somewhere else.
+wires_login_shell() {
+    local _s="${SHELL:-}"
+    [ -x "$_s" ] || _s="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)"
+    [ -x "$_s" ] || return 1
+    printf '%s\n' "$_s"
+}
+
+# The file this user's *interactive* shells read, or nothing when the shell is
+# one we should not be guessing about.
+#
+# The interactive rc, deliberately, not the login file. ~/.profile is read once
+# by the session at login; a terminal window opened afterwards is an interactive
+# non-login shell and never reads it again, so a PATH entry written there does
+# not appear until the user logs out of their desktop. ~/.bashrc is read by
+# every new terminal, which is what "install a command and then run it" needs.
+#
+# Login shells are covered anyway: Debian's ~/.profile and Fedora's and Arch's
+# ~/.bash_profile all source ~/.bashrc for bash. What a line here does not reach
+# is non-interactive shells - `ssh host wires ...`, cron, a systemd unit -
+# because the distro rc files return early for those. Those callers get an
+# absolute path, which is what automation should be using regardless.
+wires_path_rc() {
+    local _sh
+    _sh="$(wires_login_shell)" || return 1
+    case "${_sh##*/}" in
+        fish)    printf '%s\n' "$HOME/.config/fish/conf.d/wires.fish" ;;
+        zsh)     printf '%s\n' "${ZDOTDIR:-$HOME}/.zshrc" ;;
+        bash)    printf '%s\n' "$HOME/.bashrc" ;;
+        *)       return 1 ;;
+    esac
+}
+
+# The block wires_path_register writes, fenced so it can be found again and
+# removed exactly. Nothing else in this project edits a user's shell files, and
+# an unfenced append cannot be undone without guessing.
+WIRES_PATH_MARK_OPEN='# >>> wires >>>'
+WIRES_PATH_MARK_CLOSE='# <<< wires <<<'
+
+wires_path_block() {
+    local _sh _kind
+    _sh="$(wires_login_shell)" || _sh="sh"
+    _kind="${_sh##*/}"
+    printf '%s\n' "$WIRES_PATH_MARK_OPEN"
+    printf '%s\n' "# Added by the Wires installer. Delete this block to undo it."
+    if [ "$_kind" = fish ]; then
+        printf '%s\n' 'fish_add_path -g $HOME/.local/bin'
+    else
+        printf '%s\n' 'case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) PATH="$HOME/.local/bin:$PATH" ;; esac'
+        printf '%s\n' 'export PATH'
+    fi
+    printf '%s\n' "$WIRES_PATH_MARK_CLOSE"
+}
+
+# Put ~/.local/bin on PATH for this user's future shells, and say what to do
+# about the one they are sitting in.
+#
+# Unconditional and idempotent: the block goes in unless it is already there.
+# There is no "the distro will handle it" case, because on a desktop that means
+# "after you log out" - ~/.profile is read once by the session, and the terminal
+# window someone opens next is an interactive non-login shell that never reads
+# it. Writing the interactive rc is what nvm, conda and pyenv all do, and it is
+# the only thing that works in a new terminal without logging out.
+#
+# No consent prompt. A fenced, idempotent, uninstall-removable line in the file
+# whose entire purpose is shell setup is not a question worth stopping an
+# install for, and asking made the unattended path print instructions nobody
+# reads.
+#
+# It cannot fix the *calling* shell: a child process cannot change its parent's
+# environment. That is why every installer that does this ends by telling you to
+# start a new shell, and why this one does too.
+#
+# Takes the command names to name in the message, so it reads as advice about
+# what was just installed rather than about a directory.
+wires_path_register() {
+    local _bin="$HOME/.local/bin" _names="${*:-wires}" _rc _now=1
+    case ":${PATH:-}:" in *":$_bin:"*) _now=0 ;; esac
+
+    _rc="$(wires_path_rc)" || {
+        echo "!! $_names is in $(wires_abbrev_home "$_bin"), and your login shell is not one"
+        echo "   this installer will edit. Add the equivalent of this to the file"
+        echo "   your interactive shells read:"
+        echo "     PATH=\"\$HOME/.local/bin:\$PATH\""
+        return 0; }
+
+    if [ -f "$_rc" ] && grep -qF "$WIRES_PATH_MARK_OPEN" "$_rc" 2>/dev/null; then
+        # Already registered. Silent unless this shell is the one left out.
+        if [ "$_now" = 1 ]; then
+            echo "   $(wires_abbrev_home "$_rc") already puts $(wires_abbrev_home "$_bin") on PATH."
+            echo "   This shell started before that; open a new terminal, or run:"
+            echo "     . $(wires_abbrev_home "$_rc")"
+        fi
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$_rc")"
+    { if [ -s "$_rc" ]; then printf '\n'; fi; wires_path_block; } >> "$_rc"
+    echo "   put $(wires_abbrev_home "$_bin") on PATH via $(wires_abbrev_home "$_rc")"
+    if [ "$_now" = 1 ]; then
+        echo "   For this shell, open a new terminal or run:  . $(wires_abbrev_home "$_rc")"
+    fi
+    return 0
+}
+
+# Take the block back out, exactly. Deletes between the fences inclusive and
+# leaves everything else in the file alone, including a second copy if some
+# earlier version of this ever wrote one.
+#
+# Silent when there is nothing to remove: uninstall runs on machines that were
+# installed before this existed.
+wires_path_unregister() {
+    local _rc _tmp
+    _rc="${1:-}"; [ -n "$_rc" ] || _rc="$(wires_path_rc)" || return 0
+    [ -f "$_rc" ] || return 0
+    grep -qF "$WIRES_PATH_MARK_OPEN" "$_rc" 2>/dev/null || return 0
+    _tmp="$_rc.wires-tmp.$$"
+    # sed over awk: the range form is exactly "these two lines and what is
+    # between them", which is what the fence means.
+    sed "/^${WIRES_PATH_MARK_OPEN}\$/,/^${WIRES_PATH_MARK_CLOSE}\$/d" "$_rc" > "$_tmp" \
+        && cat "$_tmp" > "$_rc"
+    rm -f "$_tmp"
+    echo "removed the PATH block from $(wires_abbrev_home "$_rc")"
 }
 
 # A path as a person would write it. Everything these commands list is under

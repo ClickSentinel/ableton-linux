@@ -762,3 +762,130 @@ id_of() {   # id_of <build-info lines...>
     [ -z "$(wires_apps_below_min 2 | grep -x new-app || true)" ]
     [ "$(wires_apps_below_min 5 | grep -cx new-app)" = 1 ]
 }
+
+# ---------------------------------------------------------------------------
+# Putting the installed commands on PATH.
+#
+# The defect behind these, reported off a rebuilt VM: the kit installed,
+# ~/.local/bin/wires existed, and `wires` was not found. ~/.profile is read once
+# by the session at login and adds ~/.local/bin only `if [ -d ]` - and the
+# directory is created by the installer, after that. A terminal opened next is
+# an interactive non-login shell, which never reads ~/.profile again, so the
+# command stays missing until the user logs out of their desktop.
+#
+# Hence: write the *interactive* rc, unconditionally, and say what to do about
+# the shell you are standing in.
+# ---------------------------------------------------------------------------
+
+a_login_shell() {               # [shell-name] -> path to a fake shell
+    local sh="$BATS_TEST_TMPDIR/${1:-bash}"
+    printf '#!/bin/sh\nexit 0\n' > "$sh"
+    chmod +x "$sh"
+    printf '%s\n' "$sh"
+}
+
+@test "path rc: the interactive file, not the login file" {
+    SHELL="$(a_login_shell bash)"; export SHELL
+    [ "$(wires_path_rc)" = "$HOME/.bashrc" ]
+    # even when a login file exists, which is the trap this replaced
+    printf '\n' > "$HOME/.bash_profile"; printf '\n' > "$HOME/.profile"
+    [ "$(wires_path_rc)" = "$HOME/.bashrc" ]
+    SHELL="$(a_login_shell zsh)"; export SHELL
+    [ "$(wires_path_rc)" = "$HOME/.zshrc" ]
+    SHELL="$(a_login_shell fish)"; export SHELL
+    [ "$(wires_path_rc)" = "$HOME/.config/fish/conf.d/wires.fish" ]
+    SHELL="$(a_login_shell nushell)"; export SHELL
+    ! wires_path_rc
+}
+
+@test "path register: writes the block, fenced, and says how to get it now" {
+    SHELL="$(a_login_shell bash)"; export SHELL
+    printf 'original line\n' > "$HOME/.bashrc"
+    run wires_path_register wires
+    [ "$status" -eq 0 ]
+    grep -qF 'original line' "$HOME/.bashrc"
+    grep -qF '# >>> wires >>>' "$HOME/.bashrc"
+    grep -qF '# <<< wires <<<' "$HOME/.bashrc"
+    grep -qF '.local/bin' "$HOME/.bashrc"
+    [[ "$output" == *".bashrc"* ]]
+}
+
+# guards: unconditional means it runs on every install, so running twice must
+# not leave two blocks - the fence is what makes that checkable.
+@test "path register: twice leaves one block" {
+    SHELL="$(a_login_shell bash)"; export SHELL
+    wires_path_register wires >/dev/null
+    wires_path_register wires >/dev/null
+    [ "$(grep -c '>>> wires >>>' "$HOME/.bashrc")" = 1 ]
+    [ "$(grep -c '<<< wires <<<' "$HOME/.bashrc")" = 1 ]
+}
+
+# guards: the block has to be a no-op when the entry is already there, or every
+# nested shell prepends another copy and PATH grows without bound.
+@test "path register: the block it writes does not duplicate an existing entry" {
+    SHELL="$(a_login_shell bash)"; export SHELL
+    wires_path_register wires >/dev/null
+    local out
+    out="$(PATH="$HOME/.local/bin:/usr/bin" bash -c ". '$HOME/.bashrc'; echo \$PATH")"
+    [ "$(printf '%s\n' "$out" | tr ':' '\n' | grep -cx "$HOME/.local/bin")" = 1 ]
+}
+
+# guards: and it has to actually put it there when it is absent
+@test "path register: the block it writes does add the entry" {
+    SHELL="$(a_login_shell bash)"; export SHELL
+    wires_path_register wires >/dev/null
+    local out
+    out="$(PATH=/usr/bin bash -c ". '$HOME/.bashrc'; echo \$PATH")"
+    [ "$(printf '%s\n' "$out" | tr ':' '\n' | grep -cx "$HOME/.local/bin")" = 1 ]
+}
+
+@test "path register: an unknown shell is told what to add, and nothing is written" {
+    SHELL="$(a_login_shell nushell)"; export SHELL
+    run wires_path_register wires
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'PATH="$HOME/.local/bin:$PATH"'* ]]
+    [ ! -e "$HOME/.bashrc" ]
+}
+
+@test "path register: already registered and already on PATH says nothing" {
+    SHELL="$(a_login_shell bash)"; export SHELL
+    wires_path_register wires >/dev/null
+    PATH="$HOME/.local/bin:$PATH"
+    run wires_path_register wires
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "path register: already registered but missing from this shell says how" {
+    SHELL="$(a_login_shell bash)"; export SHELL
+    wires_path_register wires >/dev/null
+    run wires_path_register wires
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"already puts"* ]]
+    [[ "$output" == *".bashrc"* ]]
+}
+
+@test "path unregister: takes the block out and leaves the rest" {
+    SHELL="$(a_login_shell bash)"; export SHELL
+    printf 'before\n' > "$HOME/.bashrc"
+    wires_path_register wires >/dev/null
+    printf 'after\n' >> "$HOME/.bashrc"
+    run wires_path_unregister
+    [ "$status" -eq 0 ]
+    grep -qx 'before' "$HOME/.bashrc"
+    grep -qx 'after' "$HOME/.bashrc"
+    ! grep -q 'wires >>>' "$HOME/.bashrc"
+    ! grep -q '.local/bin' "$HOME/.bashrc"
+}
+
+# guards: uninstall runs on machines installed before this existed
+@test "path unregister: silent with nothing to remove" {
+    SHELL="$(a_login_shell bash)"; export SHELL
+    printf 'untouched\n' > "$HOME/.bashrc"
+    run wires_path_unregister
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    [ "$(cat "$HOME/.bashrc")" = "untouched" ]
+    run wires_path_unregister
+    [ "$status" -eq 0 ]
+}

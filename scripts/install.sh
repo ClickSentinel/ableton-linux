@@ -369,10 +369,12 @@ if [ -f "$max_unix" ]; then
     echo "   installed max9 launcher and desktop entry"
 fi
 
-case ":$PATH:" in
-    *":$BIN:"*) ;;
-    *) echo "!! note: $BIN is not on your PATH: add it or call ~/.local/bin/ableton-live directly" ;;
-esac
+# One implementation, in the library. This note used to name only ableton-live,
+# which stopped being the whole truth when wires became a command people run,
+# and it could not tell "your shell will never add it" from "your shell adds it
+# at login and this session predates the directory" - which is the case a clean
+# machine actually hits.
+wires_path_register "ableton-live and wires"
 
 # winegstreamer resolves against the host GStreamer at runtime (issue #44).
 # Live runs without it (wav/aiff), so this is a note, not a failure.
