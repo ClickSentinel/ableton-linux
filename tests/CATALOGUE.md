@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-488 tests across 18 suites. See [README.md](README.md) for how to run
+496 tests across 18 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -29,7 +29,7 @@ for which run on a PR.
 - [tests/unit/wires-runtime.bats](#wires-runtime) — 43 test(s)
 - [tests/unit/wires-plug.bats](#wires-plug) — 45 test(s)
 - [tests/unit/wires-update.bats](#wires-update) — 37 test(s)
-- [tests/unit/runtime-env.bats](#runtime-env) — 87 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 95 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 
 <a id="repo-hygiene"></a>
@@ -830,6 +830,14 @@ sandbox, which is the whole reason they echo instead of assigning.
 | 85 | path register: already registered but missing from this shell says how | — |
 | 86 | path unregister: takes the block out and leaves the rest | — |
 | 87 | path unregister: silent with nothing to remove | uninstall runs on machines installed before this existed |
+| 88 | entries: one record per Uninstall key, fields in order | — |
+| 89 | entries: an empty middle field stays empty and shifts nothing | the defect that made this a named constant. InstallLocation is empty |
+| 90 | entries: QuietUninstallString wins over UninstallString | — |
+| 91 | entries: SystemComponent and nameless keys are dropped | — |
+| 92 | entries: an application that registers only in RegisteredApplications is absent | measured on ~/.wine-ableton, where Live is in RegisteredApplications |
+| 93 | win path: drive letter dropped, separators flipped, icon index stripped | — |
+| 94 | reg unescape: doubled backslashes halve, escaped quotes survive | — |
+| 95 | platform runtimes: every DisplayName a real Live prefix carries is matched | — |
 
 <a id="patch-stack"></a>
 
@@ -962,6 +970,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `make-installer accepted WIRES_RUNTIME_TARBALL with only an -f check,` | packaging: make-installer refuses a tarball the kit's installer cannot select |
 | `manifests published before runtime-only installs name no tarball, and` | wires-runtime: a manifest without runtime fields is refused, pointing at wires update |
 | `measured on real prefixes - the two indexes are disjoint. An NSIS` | wires-plug: an application in Uninstall alone is a tenant |
+| `measured on ~/.wine-ableton, where Live is in RegisteredApplications` | runtime-env: entries: an application that registers only in RegisteredApplications is absent |
 | `moving a release must not strand the installer it names` | manifest: the installer URL is resolved beside the manifest |
 | `names tie across every nightly between two releases, so ordering on` | migrate-layout: retention orders by built-at, not by the name |
 | `names tie across nightlies, so ordering is by built-at` | wires-runtime: list is newest first |
@@ -1008,6 +1017,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the container sees only what build.sh passes with -e, and an unset` | repo-hygiene: build.sh forwards every variable container-build.sh reads from its environment |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
 | `the defect itself. A path typed at the prompt has to be used.` | run-header: a path typed at the prompt is used, not discarded |
+| `the defect that made this a named constant. InstallLocation is empty` | runtime-env: entries: an empty middle field stays empty and shifts nothing |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
 | `the guard above cannot fire for the last Plug, and leaving the link` | wires-plug: removing the last Plug takes the default link with it |

@@ -889,3 +889,132 @@ a_login_shell() {               # [shell-name] -> path to a fake shell
     run wires_path_unregister
     [ "$status" -eq 0 ]
 }
+
+# ---------------------------------------------------------------------------
+# The Uninstall index as records.
+#
+# Shapes taken from ~/.wine-ableton rather than invented: the doubled
+# backslashes, the ",0" icon index, the GUID keys, and the fact that a real
+# Live prefix's Uninstall index holds nothing but platform runtimes.
+# ---------------------------------------------------------------------------
+
+# Writes the .reg on stdin into a fresh Plug and names it. The heredoc goes
+# inside the command substitution, not beside it: `$(f <<'X')` on one line
+# leaves bash parsing the body outside the substitution and warning about it.
+a_prefix() {
+    local p="$BATS_TEST_TMPDIR/plug"
+    mkdir -p "$p"
+    cat > "$p/system.reg"
+    printf '%s\n' "$p"
+}
+
+@test "entries: one record per Uninstall key, fields in order" {
+    local p key disp icon ver loc un
+    p="$(a_prefix <<'REG'
+[Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Notepad++] 1784299416
+"DisplayName"="Notepad++ (64-bit x64)"
+"DisplayIcon"="C:\\Program Files\\Notepad++\\notepad++.exe"
+"DisplayVersion"="8.9.7"
+"InstallLocation"="C:\\Program Files\\Notepad++"
+"QuietUninstallString"="\"C:\\Program Files\\Notepad++\\uninstall.exe\" /S"
+REG
+)"
+    IFS="$WIRES_FS" read -r key disp icon ver loc un < <(wires_plug_entries "$p")
+    [ "$key"  = "Notepad++" ]
+    [ "$disp" = 'Notepad++ (64-bit x64)' ]
+    [ "$ver"  = "8.9.7" ]
+    [ "$(wires_reg_unescape "$icon")" = 'C:\Program Files\Notepad++\notepad++.exe' ]
+    [ "$(wires_reg_unescape "$loc")"  = 'C:\Program Files\Notepad++' ]
+    [[ "$(wires_reg_unescape "$un")" == *"/S" ]]
+}
+
+# guards: the defect that made this a named constant. InstallLocation is empty
+# more often than not, and with a tab the empty field vanishes and the
+# uninstall command arrives in the location variable.
+@test "entries: an empty middle field stays empty and shifts nothing" {
+    local p key disp icon ver loc un
+    p="$(a_prefix <<'REG'
+[Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Thing] 1784299416
+"DisplayName"="Thing"
+"DisplayIcon"="C:\\thing\\thing.exe"
+"DisplayVersion"="1.0"
+"UninstallString"="C:\\thing\\uninst.exe"
+REG
+)"
+    IFS="$WIRES_FS" read -r key disp icon ver loc un < <(wires_plug_entries "$p")
+    [ -z "$loc" ]
+    [ "$(wires_reg_unescape "$un")" = 'C:\thing\uninst.exe' ]
+    [ "$ver" = "1.0" ]
+}
+
+@test "entries: QuietUninstallString wins over UninstallString" {
+    local p key disp icon ver loc un
+    p="$(a_prefix <<'REG'
+[Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Thing] 1784299416
+"DisplayName"="Thing"
+"UninstallString"="C:\\thing\\uninst.exe"
+"QuietUninstallString"="C:\\thing\\uninst.exe /S"
+REG
+)"
+    IFS="$WIRES_FS" read -r key disp icon ver loc un < <(wires_plug_entries "$p")
+    [[ "$(wires_reg_unescape "$un")" == *"/S" ]]
+}
+
+@test "entries: SystemComponent and nameless keys are dropped" {
+    local p
+    p="$(a_prefix <<'REG'
+[Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Hidden] 1784299416
+"DisplayName"="Hidden Support Package"
+"SystemComponent"=dword:00000001
+[Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Nameless] 1784299416
+"DisplayVersion"="2.0"
+[Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Real] 1784299416
+"DisplayName"="Real Thing"
+REG
+)"
+    [ "$(wires_plug_entries "$p" | wc -l)" = 1 ]
+    [[ "$(wires_plug_entries "$p")" == *"Real Thing"* ]]
+}
+
+# guards: measured on ~/.wine-ableton, where Live is in RegisteredApplications
+# alone and every one of the ten Uninstall entries is a platform runtime. The
+# reader is the Uninstall index only, so it must come back empty here rather
+# than appear to have looked everywhere.
+@test "entries: an application that registers only in RegisteredApplications is absent" {
+    local p
+    p="$(a_prefix <<'REG'
+[Software\\RegisteredApplications] 1784299416
+"Ableton Live 12 Suite"="SOFTWARE\\Ableton\\LiveSuite.12\\Capabilities"
+[Software\\Ableton\\LiveSuite.12\\Capabilities] 1784299416
+"ApplicationName"="Ableton Live 12 Suite"
+REG
+)"
+    [ -z "$(wires_plug_entries "$p")" ]
+    # ...while the census, which reads the union, does see it
+    [ "$(wires_plug_tenants "$p")" = "Ableton Live 12 Suite" ]
+}
+
+@test "win path: drive letter dropped, separators flipped, icon index stripped" {
+    [ "$(wires_win_path /p 'C:\Program Files\App\app.exe')" = '/p/drive_c/Program Files/App/app.exe' ]
+    [ "$(wires_win_path /p 'C:\App\app.exe,0')"             = '/p/drive_c/App/app.exe' ]
+    [ "$(wires_win_path /p/ '"C:\App\app.exe"')"            = '/p/drive_c/App/app.exe' ]
+}
+
+@test "reg unescape: doubled backslashes halve, escaped quotes survive" {
+    [ "$(wires_reg_unescape 'C:\\Program Files\\A')" = 'C:\Program Files\A' ]
+    [ "$(wires_reg_unescape '\"C:\\a.exe\" /S')"     = '"C:\a.exe" /S' ]
+}
+
+@test "platform runtimes: every DisplayName a real Live prefix carries is matched" {
+    local n
+    for n in "Wine Mono Runtime" "Wine Mono Windows Support" \
+             "Microsoft Edge WebView2 Runtime" \
+             "Microsoft Visual C++ 2022 X64 Minimum Runtime - 14.44.35211" \
+             "Microsoft Visual C++ 2015-2022 Redistributable (x64) - 14.44.35211" \
+             "Microsoft Windows Desktop Runtime - 8.0.0"; do
+        printf '%s\n' "$n" | grep -qE "$(wires_platform_runtimes)" \
+            || { echo "unmatched: $n"; return 1; }
+    done
+    # and an application is not a platform runtime
+    printf 'Notepad++ (64-bit x64)\n' | grep -qvE "$(wires_platform_runtimes)"
+}

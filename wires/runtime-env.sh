@@ -43,7 +43,7 @@
 # LINK_SETUP_VERSION shape: a variable inside the file it describes.
 #
 # shellcheck disable=SC2034  # read from outside; nothing here consumes them
-WIRES_VERSION=3
+WIRES_VERSION=4
 # shellcheck disable=SC2034
 WIRES_ABI=1
 # Policy: stays 1. Stranding an application is a breaking release, taken
@@ -574,6 +574,102 @@ wires_plug_tenants() {
             ' "$_p/$_f" 2>/dev/null
         done
     } | grep -vE "$(wires_platform_runtimes)" | sort -u
+}
+
+# The separator wires_plug_entries puts between fields, named so a consumer
+# cannot quietly keep assuming the last one. A tab cannot be used: it is IFS
+# whitespace, so `IFS=$'\t' read` collapses runs of it and an empty field -
+# InstallLocation is empty more often than not - takes every field after it one
+# place to the left. US is the character the question was invented for.
+#
+# The awk below writes it as 31 because awk has no $'' quoting. The two are the
+# same character and have to stay that way.
+WIRES_FS=$'\037'
+
+# The Uninstall index as records rather than names. wires_plug_tenants answers
+# "what is in this Plug" and throws the rest away; this keeps it, because an
+# installer writes down everything an application record needs and there is no
+# reason to make a person retype it:
+#
+#   DisplayIcon           where the executable is
+#   DisplayVersion        what version it is
+#   DisplayName           what to call it
+#   InstallLocation       where to look if DisplayIcon is not an .exe
+#   QuietUninstallString  how to remove it again
+#
+# One line per entry: key, name, icon, version, location, uninstall, separated
+# by WIRES_FS.
+#
+# Deliberately not the union wires_plug_tenants reads. The other half of that
+# union is HKLM\Software\RegisteredApplications, which carries a name and a
+# pointer to a Capabilities key and nothing else - no icon, no version, no
+# location. Measured on ~/.wine-ableton: the Capabilities key holds
+# ApplicationName and ApplicationDescription, and no ApplicationIcon anywhere
+# in the prefix. There is no executable path to be had from that index, so a
+# record cannot be built from it and this reader does not pretend otherwise.
+# Callers reconcile against the census and say what they could not reach.
+#
+# Values stay as the registry spells them - doubled backslashes and all -
+# because unescaping is the caller's business and doing it in awk is how a
+# quote in a product name becomes a parse error.
+wires_plug_entries() {
+    local _p="${1:-}"; [ -n "$_p" ] || _p="$(wires_plug_path)"
+    _p="${_p%/}"
+    local _f
+    for _f in system.reg user.reg; do
+        [ -r "$_p/$_f" ] || continue
+        awk '
+            function emit() {
+                if (key != "" && sc == 0 && dn != "")
+                    printf "%s%c%s%c%s%c%s%c%s%c%s\n", key, 31, dn, 31, di, 31,
+                           dv, 31, il, 31, (qus != "" ? qus : us)
+            }
+            /^\[/ {
+                emit()
+                key = ""; dn = ""; di = ""; dv = ""; il = ""; us = ""; qus = ""; sc = 0
+                if ($0 ~ /CurrentVersion\\\\Uninstall\\\\/) {
+                    key = $0; sub(/^\[/, "", key); sub(/\].*$/, "", key)
+                    sub(/^.*Uninstall\\\\/, "", key)
+                }
+                next
+            }
+            key != "" && /^"SystemComponent"=dword:00000001/ { sc = 1; next }
+            key != "" && /^"[A-Za-z]+"="/ {
+                n = $0; sub(/^"/, "", n); sub(/".*$/, "", n)
+                v = $0; sub(/^"[^"]*"="/, "", v); sub(/"$/, "", v)
+                if      (n == "DisplayName")          dn = v
+                else if (n == "DisplayIcon")          di = v
+                else if (n == "DisplayVersion")       dv = v
+                else if (n == "InstallLocation")      il = v
+                else if (n == "UninstallString")      us = v
+                else if (n == "QuietUninstallString") qus = v
+            }
+            END { emit() }
+        ' "$_p/$_f" 2>/dev/null
+    done | sort -u
+}
+
+# A registry value as the string it means. The .reg format doubles backslashes
+# and escapes quotes; every value out of wires_plug_entries comes through here.
+wires_reg_unescape() {
+    local _s="$1"
+    _s="${_s//\\\\/\\}"
+    _s="${_s//\\\"/\"}"
+    printf '%s\n' "$_s"
+}
+
+# A Windows path inside a Plug, as a path on this machine. Takes the drive
+# letter off rather than mapping it: everything an installer writes lands on C:,
+# and a Plug's other drives are links into the real home, which is not where an
+# application's own files go. A trailing ,N is an icon index and not part of the
+# path - DisplayIcon carries one more often than not.
+wires_win_path() {
+    local _p="${1%/}" _w="$2"
+    _w="${_w%%,[0-9]*}"
+    _w="${_w#\"}"; _w="${_w%\"}"
+    case "$_w" in [A-Za-z]:*) _w="${_w#?:}" ;; esac
+    _w="${_w//\\//}"
+    printf '%s\n' "$_p/drive_c$_w"
 }
 
 # Bind this shell to the runtime: drop inherited Wine settings that would reach
