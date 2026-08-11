@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-480 tests across 18 suites. See [README.md](README.md) for how to run
+487 tests across 18 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -20,7 +20,7 @@ for which run on a PR.
 - [tests/unit/detect-theme.bats](#detect-theme) — 22 test(s)
 - [tests/unit/launcher.bats](#launcher) — 20 test(s)
 - [tests/unit/install-runs.bats](#install-runs) — 32 test(s)
-- [tests/unit/run-header.bats](#run-header) — 12 test(s)
+- [tests/unit/run-header.bats](#run-header) — 19 test(s)
 - [tests/unit/manifest.bats](#manifest) — 23 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 42 test(s)
 - [tests/unit/wires.bats](#wires) — 14 test(s)
@@ -349,6 +349,13 @@ not what the decision runs.
 | 10 | a damaged payload is refused before anything runs | — |
 | 11 | help ends on an option, not on prose about the payload | --help sliced lines 2-18 of this file's own header comment, and line 18 |
 | 12 | help names every mode the argument parser accepts | — |
+| 13 | --installer takes the installer itself | — |
+| 14 | --installer takes a directory holding it | — |
+| 15 | --installer=PATH is spelled both ways | — |
+| 16 | --installer with nothing there fails, rather than falling back quietly | — |
+| 17 | a path typed at the prompt is used, not discarded | the defect itself. A path typed at the prompt has to be used. |
+| 18 | an empty answer still falls through to the manual instructions | — |
+| 19 | help names the installer option | — |
 
 <a id="manifest"></a>
 
@@ -998,6 +1005,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the comparison happens before the stop, so an up-to-date machine is` | wires-runtime: install says so and stops when the build is already here |
 | `the container sees only what build.sh passes with -e, and an unset` | repo-hygiene: build.sh forwards every variable container-build.sh reads from its environment |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
+| `the defect itself. A path typed at the prompt has to be used.` | run-header: a path typed at the prompt is used, not discarded |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
 | `the four cleared here are the launchers' long-standing set` | runtime-env: binding clears inherited Wine settings that would reach the wrong build |
 | `the guard above cannot fire for the last Plug, and leaving the link` | wires-plug: removing the last Plug takes the default link with it |

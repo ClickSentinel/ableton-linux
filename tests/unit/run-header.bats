@@ -208,3 +208,66 @@ a_wires_install() {
         [[ "$output" == *"$flag"* ]] || { echo "--help omits $flag" >&2; false; }
     done
 }
+
+# --- supplying the Ableton installer ------------------------------------------
+#
+# The prompt used to read its answer into $_ and throw it away: it meant "put the
+# file next to this one and press Enter", then rescanned the same directory. But
+# it printed a bare "> " and waited, which in every other program asks for a
+# path — so typing one, which is what a person does, silently produced the manual
+# instructions instead. Reported from the fedora rig, 2026-08-11.
+
+an_installer() {                # dir -> writes a plausible Live installer in it
+    mkdir -p "$1"
+    : > "$1/Ableton Live 12 Suite Installer.exe"
+    printf '%s\n' "$1/Ableton Live 12 Suite Installer.exe"
+}
+
+@test "--installer takes the installer itself" {
+    an_installer "$BATS_TEST_TMPDIR/elsewhere" >/dev/null
+    run sh "$RUN" --no-link \
+        --installer "$BATS_TEST_TMPDIR/elsewhere/Ableton Live 12 Suite Installer.exe"
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [[ "$output" == *"will install: Ableton Live 12 Suite Installer.exe"* ]]
+}
+
+@test "--installer takes a directory holding it" {
+    an_installer "$BATS_TEST_TMPDIR/elsewhere" >/dev/null
+    run sh "$RUN" --no-link --installer "$BATS_TEST_TMPDIR/elsewhere"
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [[ "$output" == *"will install: Ableton Live 12 Suite Installer.exe"* ]]
+}
+
+@test "--installer=PATH is spelled both ways" {
+    an_installer "$BATS_TEST_TMPDIR/elsewhere" >/dev/null
+    run sh "$RUN" --no-link --installer="$BATS_TEST_TMPDIR/elsewhere"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"will install:"* ]]
+}
+
+@test "--installer with nothing there fails, rather than falling back quietly" {
+    run sh "$RUN" --no-link --installer "$BATS_TEST_TMPDIR/nope"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"--installer"* ]]
+}
+
+# guards: the defect itself. A path typed at the prompt has to be used.
+@test "a path typed at the prompt is used, not discarded" {
+    an_installer "$BATS_TEST_TMPDIR/elsewhere" >/dev/null
+    run bash -c "printf '%s\n' '$BATS_TEST_TMPDIR/elsewhere' | script -qec 'sh \"$RUN\" --no-link' /dev/null"
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [[ "$output" == *"will install: Ableton Live 12 Suite Installer.exe"* ]] \
+        || { echo "the typed path was ignored" >&2; false; }
+}
+
+@test "an empty answer still falls through to the manual instructions" {
+    run bash -c "printf '\n' | script -qec 'sh \"$RUN\" --no-link' /dev/null"
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+    [[ "$output" != *"will install:"* ]]
+}
+
+@test "help names the installer option" {
+    run sh "$RUN" --help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"--installer"* ]]
+}

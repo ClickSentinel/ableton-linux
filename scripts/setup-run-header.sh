@@ -4,6 +4,8 @@
 # Options:
 #   --runtime-only   install the patched Wine only; skip making the Wine prefix
 #   --update         update compatibility files; keep Live, authorization, and projects
+#   --installer PATH the Ableton installer to use (the .exe/.zip, or a folder
+#                    holding it) - for when it cannot sit beside this file
 #   --no-launch      never run the Ableton installer (zip/exe) automatically
 #   --no-link        skip Ableton Link setup (remembered on later runs)
 #   --link           configure Ableton Link even if previously skipped or declined
@@ -93,6 +95,8 @@ Usage:  sh ableton-wine-setup-@VERSION@.run [options]
 Options:
   --runtime-only   install the patched Wine only; skip making the Wine prefix
   --update         update compatibility files; keep Live, authorization, and projects
+  --installer PATH the Ableton installer to use: the .exe/.zip itself, or a
+                   folder holding it - for when it cannot sit beside this file
   --no-launch      never run the Ableton installer (zip/exe) automatically
   --no-link        skip Ableton Link setup (remembered on later runs)
   --link           configure Ableton Link even if previously skipped or declined
@@ -110,6 +114,7 @@ EOF
 }
 
 mode=install
+installer_arg=""
 do_launch=1
 do_link_setup=1
 do_link_force=0
@@ -126,6 +131,8 @@ while [ $# -gt 0 ]; do
         --uninstall)    mode=uninstall ;;
         --prefix)       drop_prefix=1 ;;
         --extract)      mode=extract; extract_dir="${2:?--extract needs a directory}"; shift ;;
+        --installer)    installer_arg="${2:?--installer needs a path}"; shift ;;
+        --installer=*)  installer_arg="${1#--installer=}" ;;
         *)              fail "unknown option: $1 (try --help)" ;;
     esac
     shift
@@ -164,10 +171,10 @@ fi
 # --- find the Ableton payload next to this file, up front ---------------------
 # Any edition (Intro/Lite/Standard/Suite/Trial) and any major version works:
 # an ableton_live*.zip straight from ableton.com, or an already-unpacked installer .exe.
-find_live_payload() {
+find_live_payload() {              # [dir], defaults to the .run's own directory
     live_payloads=()
-    local f base
-    for f in "$stick_dir"/*; do
+    local f base d="${1:-$stick_dir}"
+    for f in "$d"/*; do
         [ -f "$f" ] || continue
         base="$(basename "$f" | tr '[:upper:]' '[:lower:]')"
         case "$base" in
@@ -176,6 +183,43 @@ find_live_payload() {
     done
     [ "${#live_payloads[@]}" -le 1 ] || \
         mapfile -t live_payloads < <(printf '%s\n' "${live_payloads[@]}" | sort -V)
+}
+# A path given to --installer or typed at the prompt: the installer itself, or a
+# directory holding it. Non-zero when there is nothing usable there.
+#
+# This exists because the prompt used to read its answer into $_ and discard it.
+# It meant "go and put the file next to this one, then press Enter", and then
+# rescanned the same directory - but it printed a bare "> " and waited, which
+# asks for a path in every other program anyone has used. Typing one, which is
+# the obvious thing to do, silently produced the manual instructions instead.
+take_live_payload() {
+    local p="$1"
+    # A path pasted out of a file manager arrives quoted, and `read` does not
+    # expand a leading ~.
+    p="${p%\"}"; p="${p#\"}"; p="${p%\'}"; p="${p#\'}"
+    # A literal tilde, matched rather than expanded: `read` hands one over as
+    # text. Written as a prefix strip and not a case pattern because SC2088
+    # reads a quoted tilde as one that was meant to expand, and here the literal
+    # is exactly what is being looked for.
+    if [ "$p" = '~' ]; then
+        p="$HOME"
+    elif [ "${p#'~/'}" != "$p" ]; then
+        p="$HOME/${p#'~/'}"
+    fi
+    if [ -d "$p" ]; then
+        find_live_payload "$p"
+        choose_live_payload
+        [ -n "$live_exe$live_zip" ]
+        return
+    fi
+    [ -f "$p" ] || return 1
+    # Named outright, so it is taken at its word: someone pointing at a file has
+    # said more than a glob over a directory ever does.
+    case "$(basename "$p" | tr '[:upper:]' '[:lower:]')" in
+        *.zip) live_zip="$p" ;;
+        *)     live_exe="$p" ;;
+    esac
+    return 0
 }
 choose_live_payload() {    # picks one of live_payloads into live_exe or live_zip
     live_exe=""; live_zip=""
@@ -212,16 +256,24 @@ manual_install=1
 if [ "$mode" = install ] && [ "$do_launch" -eq 1 ]; then
     find_live_payload
     choose_live_payload
+    [ -z "$installer_arg" ] || take_live_payload "$installer_arg" \
+        || fail "--installer: no Ableton installer at $installer_arg"
     if [ -z "$live_exe$live_zip" ] && [ -t 0 ]; then
         say ""
         say "No Ableton installer found next to this file"
         say "(looked for an ableton_live*.zip of any edition, or an Ableton .exe, in $stick_dir)."
-        say "Put it here and press Enter. Or press Enter without it, and the"
-        say "manual install commands are printed at the end."
+        say "Type the path to yours - the installer itself, or the folder holding"
+        say "it. Or put it beside this file and press Enter. Press Enter with"
+        say "nothing and the manual install commands are printed at the end."
         printf '> '
-        read -r _ || true
-        find_live_payload
-        choose_live_payload
+        read -r answer || answer=""
+        if [ -n "$answer" ]; then
+            take_live_payload "$answer" || say "   nothing usable there: $answer"
+        fi
+        if [ -z "$live_exe$live_zip" ]; then
+            find_live_payload
+            choose_live_payload
+        fi
     fi
     if [ -n "$live_exe$live_zip" ]; then
         manual_install=0
