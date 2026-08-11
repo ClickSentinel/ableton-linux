@@ -212,9 +212,9 @@ jobs:
           # silently, so publish under the full label, with a checksum
           # regenerated to match the name it is served as.
           version="${LABEL%%+*}"
-          built="dist/wires-wine-11.13-${version}.tar.zst"
+          built="dist/wires-${version}.tar.zst"
           [ -f "$built" ] || { echo "!! no runtime tarball at $built" >&2; exit 1; }
-          tarball="dist/wires-wine-11.13-${LABEL}.tar.zst"
+          tarball="dist/wires-${LABEL}.tar.zst"
           cp "$built" "$tarball"
           ( cd dist && sha256sum "$(basename "$tarball")" > "$(basename "$tarball").sha256" )
           # The runtime fields must match the labeled tarball published beside

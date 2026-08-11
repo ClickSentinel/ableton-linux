@@ -100,8 +100,8 @@ jobs:
         with:
           name: wine-build
           path: |
-            dist/wires-wine-11.13-*.tar.zst
-            dist/wires-wine-11.13-*.tar.zst.sha256
+            dist/wires-*.tar.zst
+            dist/wires-*.tar.zst.sha256
             dist/ableton-linkd
             dist/BUILD-INFO-*.txt
           if-no-files-found: error

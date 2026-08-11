@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-runtime="${ABLETON_PORTAL_WINE_ROOT:-$HOME/wires/wires-wine-11.13-portal}"
+runtime="${ABLETON_PORTAL_WINE_ROOT:-$HOME/wires/wires-portal}"
 prefix="${WIRES_PLUG:-$HOME/wires/plugs/studio}"
 
 if [[ ! -x "$runtime/bin/wine" || ! -x "$runtime/bin/wineserver" ]]; then

@@ -6,7 +6,6 @@
 *.tmp
 !tools/*.log
 ableton-prefix-*/
-wires-wine-11.13/
 wine-d2d1-nspa-src/
 pteq_win.log
 *.exe

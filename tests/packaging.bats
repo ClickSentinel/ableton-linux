@@ -149,15 +149,18 @@ kit_script_names() {
     offenders=""
     while read -r f; do
         case " $allowed " in *" $f "*) continue ;; esac
-        grep -qE 'wires-wine-[0-9]+\.[0-9]+' "$f" && offenders="$offenders $f"
+        grep -qE '/opt/wires\b|INSTALL_PREFIX=[^$]' "$f" && offenders="$offenders $f"
     done < <(git ls-files 'scripts/*' 'build.sh')
     [ -z "$offenders" ] || {
         echo "these spell the runtime name instead of deriving it:$offenders" >&2; false; }
 
-    lib="$(grep -oE 'wires-wine-[0-9]+\.[0-9]+' wires/runtime-env.sh | head -1)"
-    bs="$(grep -oE 'wires-wine-[0-9]+\.[0-9]+' build.sh | head -1)"
-    [ "$lib" = "$bs" ] || {
-        echo "lib says '$lib', build.sh says '$bs'" >&2; false; }
+    # Read from the assignments, not by grepping the name: it is "wires", which
+    # is also the project, the install root and the command, so a free-text
+    # search cannot tell the runtime name from any other use of the word.
+    lib="$(sed -n 's/.*WIRES_RUNTIME_NAME:-\([^}]*\)}.*/\1/p' wires/runtime-env.sh | head -1)"
+    bs="$(sed -n 's|^INSTALL_PREFIX="${INSTALL_PREFIX:-\(.*\)}"|\1|p' build.sh | head -1)"
+    [ "$lib" = "${bs##*/}" ] || {
+        echo "lib says '$lib', build.sh prefix ends in '${bs##*/}'" >&2; false; }
 }
 
 # guards: licence GPLv2+ — Ableton Link has no linking exception, so the source must travel with the binary

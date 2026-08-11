@@ -120,18 +120,23 @@ all_shell_files() {
 # in ~20 live files. The 11.11 -> 11.13 bump missed some of them and needed a
 # follow-up commit (f84eaa4) to finish the rename. This is that commit as a test.
 
-# guards: commit f84eaa4 — the 11.11 to 11.13 rename needed a follow-up pass
-@test "runtime name: every live file agrees on one wires-wine version" {
+# guards: commit f84eaa4 - the 11.11 to 11.13 rename needed a follow-up pass
+# because the Wine version was spelled into the artifact name in ~20 files. The
+# name no longer carries a version, so that drift cannot happen; what can is the
+# three sites that define the name disagreeing. container-build.sh refuses a
+# mismatch, but only once a build is already running.
+@test "runtime name: the library, build.sh and container-build.sh agree" {
     cd "$REPO"
-    # dist/ holds archived BUILD-INFO for past releases and notes/ is a written
-    # record — both legitimately name older runtimes. Everything else is live.
-    versions="$(git grep -hoE 'wires-wine-[0-9]+\.[0-9]+' -- \
-        ':!dist' ':!notes' ':!CHANGELOG.md' ':!beta' | sort -u)"
-    [ "$(printf '%s\n' "$versions" | wc -l)" -eq 1 ] || {
-        echo "live files disagree on the runtime name:" >&2
-        printf '  %s\n' $versions >&2
-        echo "offending files:" >&2
-        git grep -lE 'wires-wine-[0-9]+\.[0-9]+' -- ':!dist' ':!notes' ':!CHANGELOG.md' ':!beta' >&2
+    local lib bs cb
+    lib="$(sed -n 's/.*WIRES_RUNTIME_NAME:-\([^}]*\)}.*/\1/p' wires/runtime-env.sh | head -1)"
+    bs="$(sed -n 's|^INSTALL_PREFIX="${INSTALL_PREFIX:-\(.*\)}"|\1|p' build.sh | head -1)"
+    bs="${bs##*/}"
+    cb="$(sed -n 's/^NAME="\(.*\)"/\1/p' scripts/container-build.sh | head -1)"
+    [ -n "$lib" ] && [ -n "$bs" ] && [ -n "$cb" ] || {
+        echo "could not read the name from lib='$lib' build.sh='$bs' container-build='$cb'" >&2
+        false; }
+    [ "$lib" = "$bs" ] && [ "$lib" = "$cb" ] || {
+        echo "runtime name disagrees: lib='$lib' build.sh='$bs' container-build.sh='$cb'" >&2
         false; }
 }
 

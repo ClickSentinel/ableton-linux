@@ -463,33 +463,33 @@ make_tree() {
 # guards: a kit packed around a name the installer cannot select builds cleanly
 # and fails on the user's machine — reproduced 2026-08-05
 @test "tarball predicate: the dated release form is accepted" {
-    wires_is_runtime_tarball "wires-wine-11.13-2026.08.04.1.tar.zst"
+    wires_is_runtime_tarball "wires-2026.08.04.1.tar.zst"
 }
 
 @test "tarball predicate: a full path is judged by its basename" {
-    wires_is_runtime_tarball "/any/where/wires-wine-11.13-2026.08.04.1.tar.zst"
+    wires_is_runtime_tarball "/any/where/wires-2026.08.04.1.tar.zst"
 }
 
 # guards: bin/ and lib/ with no share/ — passes `wine --version`, then fails at
 # launch with "could not exec the wine loader"
 @test "tarball predicate: a debug tree is refused" {
-    ! wires_is_runtime_tarball "wires-wine-11.13-2026.08.04.1-debug.tar.zst"
+    ! wires_is_runtime_tarball "wires-2026.08.04.1-debug.tar.zst"
 }
 
 # guards: this is the only runtime artifact the nightly channel publishes, so
 # refusing it left that channel with nothing installable
 @test "tarball predicate: a nightly label is accepted" {
-    wires_is_runtime_tarball "wires-wine-11.13-2026.08.04.1+nightly.bf76bb2.tar.zst"
+    wires_is_runtime_tarball "wires-2026.08.04.1+nightly.bf76bb2.tar.zst"
 }
 
 # guards: a label is a suffix on the release form, not a licence to accept any
 # trailing text — `-debug` must keep falling out
 @test "tarball predicate: a labelled debug tree is still refused" {
-    ! wires_is_runtime_tarball "wires-wine-11.13-2026.08.04.1+nightly.bf76bb2-debug.tar.zst"
+    ! wires_is_runtime_tarball "wires-2026.08.04.1+nightly.bf76bb2-debug.tar.zst"
 }
 
 @test "tarball predicate: an empty label is refused" {
-    ! wires_is_runtime_tarball "wires-wine-11.13-2026.08.04.1+.tar.zst"
+    ! wires_is_runtime_tarball "wires-2026.08.04.1+.tar.zst"
 }
 
 # guards: both in one directory is the nightly builder's own dist/, and the
@@ -519,12 +519,12 @@ make_tree() {
 }
 
 @test "tarball predicate: an undated artifact is refused" {
-    ! wires_is_runtime_tarball "wires-wine-11.13-release.tar.zst"
+    ! wires_is_runtime_tarball "wires-release.tar.zst"
 }
 
 # guards: the same-day counter must not be read as a date component
 @test "tarball predicate: a partial download is refused" {
-    ! wires_is_runtime_tarball "wires-wine-11.13-2026.08.04.1.tar.zst.part"
+    ! wires_is_runtime_tarball "wires-2026.08.04.1.tar.zst.part"
 }
 
 # --- channels -----------------------------------------------------------------
@@ -668,7 +668,7 @@ id_of() {   # id_of <build-info lines...>
 }
 
 @test "tarball predicate: the nightly artifact name is accepted" {
-    wires_is_runtime_tarball "wires-wine-11.13-2026.08.06.1+nightly.badafaf.tar.zst"
+    wires_is_runtime_tarball "wires-2026.08.06.1+nightly.badafaf.tar.zst"
 }
 
 # --- the names this library used to answer to ---------------------------------

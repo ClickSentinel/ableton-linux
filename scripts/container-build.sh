@@ -17,7 +17,7 @@ VERSION="${WIRES_DIST_VERSION:-$(cat "$SRC/VERSION")}"
 # the discriminator -- so the directory is 2026.08.06.1+nightly.badafaf: the date
 # it was built, that it is a nightly, and which commit. Once each, one separator.
 BUILD_KIND="${WIRES_BUILD_KIND:-}"
-NAME="wires-wine-11.13"
+NAME="wires"
 CONFIGURE_PREFIX="${INSTALL_PREFIX:?build.sh must pass INSTALL_PREFIX}"
 [ "$(basename "$CONFIGURE_PREFIX")" = "$NAME" ] || {
     echo "!! INSTALL_PREFIX must end in /$NAME" >&2

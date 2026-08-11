@@ -100,7 +100,7 @@ wires_home() {
 # is the application's. WIRES_RUNTIME_NAME is the seam; the default is the one
 # application this repository ships, and is on the de-Ableton inventory below.
 wires_runtime_name() {
-    printf '%s\n' "${WIRES_RUNTIME_NAME:-wires-wine-11.13}"
+    printf '%s\n' "${WIRES_RUNTIME_NAME:-wires}"
 }
 
 
