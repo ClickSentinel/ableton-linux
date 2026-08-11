@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-496 tests across 18 suites. See [README.md](README.md) for how to run
+505 tests across 18 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -24,7 +24,7 @@ for which run on a PR.
 - [tests/unit/manifest.bats](#manifest) — 23 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 42 test(s)
 - [tests/unit/wires.bats](#wires) — 15 test(s)
-- [tests/unit/wires-app.bats](#wires-app) — 8 test(s)
+- [tests/unit/wires-app.bats](#wires-app) — 17 test(s)
 - [tests/unit/promote.bats](#promote) — 11 test(s)
 - [tests/unit/wires-runtime.bats](#wires-runtime) — 43 test(s)
 - [tests/unit/wires-plug.bats](#wires-plug) — 45 test(s)
@@ -519,6 +519,15 @@ installed into a prefix stays until the Plug goes.
 | 6 | rm without a terminal refuses unless -y | with no terminal nobody consented; -y is how a script says it meant it |
 | 7 | help ends on a command, not on prose | — |
 | 8 | a usage error exits 2, the same as it does from every other verb | found in review. An unknown option exited 1 from the app and Plug |
+| 9 | adopt: reads the record, generates a launcher, links it on PATH | — |
+| 10 | adopt: the launcher records the executable relative to the Plug | the decision that makes per-project Plugs work. An absolute path |
+| 11 | adopt: --name overrides the slug taken from the executable | — |
+| 12 | adopt: a platform runtime is not an application | — |
+| 13 | adopt: software already fronted by a record is not adopted twice | — |
+| 14 | adopt: names what the census sees but the record reader cannot reach | measured on ~/.wine-ableton. Live registers only in |
+| 15 | adopt: a match filter applies to the unreachable list too | — |
+| 16 | adopt: an entry with no reachable executable is named and skipped | — |
+| 17 | adopt: an unknown Plug and an unknown option are told apart | — |
 
 <a id="promote"></a>
 
@@ -971,6 +980,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `manifests published before runtime-only installs name no tarball, and` | wires-runtime: a manifest without runtime fields is refused, pointing at wires update |
 | `measured on real prefixes - the two indexes are disjoint. An NSIS` | wires-plug: an application in Uninstall alone is a tenant |
 | `measured on ~/.wine-ableton, where Live is in RegisteredApplications` | runtime-env: entries: an application that registers only in RegisteredApplications is absent |
+| `measured on ~/.wine-ableton. Live registers only in` | wires-app: adopt: names what the census sees but the record reader cannot reach |
 | `moving a release must not strand the installer it names` | manifest: the installer URL is resolved beside the manifest |
 | `names tie across every nightly between two releases, so ordering on` | migrate-layout: retention orders by built-at, not by the name |
 | `names tie across nightlies, so ordering is by built-at` | wires-runtime: list is newest first |
@@ -1016,6 +1026,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the comparison happens before the stop, so an up-to-date machine is` | wires-runtime: install says so and stops when the build is already here |
 | `the container sees only what build.sh passes with -e, and an unset` | repo-hygiene: build.sh forwards every variable container-build.sh reads from its environment |
 | `the container winning over a stale legacy tree left beside it` | runtime-env: runtime root: the container wins over a legacy tree still present |
+| `the decision that makes per-project Plugs work. An absolute path` | wires-app: adopt: the launcher records the executable relative to the Plug |
 | `the defect itself. A path typed at the prompt has to be used.` | run-header: a path typed at the prompt is used, not discarded |
 | `the defect that made this a named constant. InstallLocation is empty` | runtime-env: entries: an empty middle field stays empty and shifts nothing |
 | `the destructive case. Installing over a runtime that cannot be` | migrate-layout: a live tree that cannot be named refuses, and moves nothing |
