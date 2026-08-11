@@ -46,7 +46,7 @@ usage: wires <command> [options]          `wires help` for what each one does
 
   wires runtime {list|path|use|install}  the builds in the store, and which is live
   wires plug {list|new|use|setup|rm}     the prefixes applications are installed into
-  wires app {list|rm}                    the applications installed on this machine
+  wires app {list|adopt|rm}              the applications installed on this machine
   wires update [--check]                 is there a newer build on this channel?
   wires stop [-y]                        stop everything running from a runtime or Plug
 EOF
@@ -66,6 +66,7 @@ Wires: the runtime, the store, and the Plugs an application runs in.
   wires plug setup [name]         run an application's prefix setup against it
   wires plug rm <name> [-y]       remove a Plug and everything in it
   wires app list                  every installed application
+  wires app adopt [match]         wire up software already installed in a Plug
   wires app rm <name> [-y]        remove one; Plugs are untouched
   wires update [--check]          is there a newer build on this channel?
   wires stop [-y]                 stop everything running from the runtime or a Plug
