@@ -89,10 +89,12 @@ store() { a_build 2026.06.01.1+bbbbbbb; ln -sfn "2026.06.01.1+bbbbbbb" "$C/stabl
 # guards: someone who typed `wires` to find out what it does wants the shape,
 # with the alternatives inline the way every other CLI writes them - not the
 # full per-option list, which is what `wires help` is for
+# The brace contents are deliberately not asserted: pinning them here is what
+# made adding a verb look like a test failure rather than like a change.
 @test "no command at all prints the short usage" {
     run W
     [ "$status" -eq 0 ]
-    [[ "$output" == *"wires runtime {list|path|use}"* ]]
+    [[ "$output" == *"wires runtime {"* ]]
     [[ "$output" == *"wires help"* ]]
 }
 
@@ -101,7 +103,7 @@ store() { a_build 2026.06.01.1+bbbbbbb; ln -sfn "2026.06.01.1+bbbbbbb" "$C/stabl
     run W nonsense
     [ "$status" -ne 0 ]
     [[ "$output" == *"no such command: nonsense"* ]]
-    [[ "$output" == *"wires runtime {list|path|use}"* ]]
+    [[ "$output" == *"wires runtime {"* ]]
     [[ "$output" != *"the runtime root, for scripts and docs"* ]] \
         || { echo "the error printed the long form" >&2; false; }
 }
@@ -152,6 +154,40 @@ store() { a_build 2026.06.01.1+bbbbbbb; ln -sfn "2026.06.01.1+bbbbbbb" "$C/stabl
     run W -h
     [ "$status" -eq 0 ]
     [[ "$output" == *"wires runtime"* ]]
+}
+
+# The primary name of each arm in a verb's own dispatcher. Aliases after the
+# first are deliberately dropped: `ls` and `remove` answer, and neither belongs
+# in help.
+verb_subcommands() {
+    sed -n '/^case "\${1/,/^esac/p' "$1" \
+      | sed -n 's/^[[:space:]]*\([a-z][a-z|_-]*\)).*/\1/p' \
+      | cut -d'|' -f1 \
+      | grep -vxE 'help'
+}
+
+# guards: `wires app adopt` shipped while `wires --help` still said
+# `wires app {list|rm}`, so the verb was undiscoverable from the front door and
+# the test above passed anyway - it checked a hand-written list of three
+# commands. A list of what exists is a list that goes stale; this derives the
+# sub-verbs from each dispatcher instead.
+@test "help names every sub-verb its dispatchers accept" {
+    local help v noun sub ctx
+    help="$(W --help; W help)"
+    for v in "$REPO"/wires/wires-*; do
+        [ -f "$v" ] || continue
+        noun="${v##*/wires-}"
+        while read -r sub; do
+            [ -n "$sub" ] || continue
+            # Scoped to the lines about its own noun, or to its own name where a
+            # sub-verb is promoted to a top-level command (`wires stop`). A bare
+            # substring search is not enough: `install` matches "installed".
+            ctx="$(printf '%s\n' "$help" | grep -E "wires ($noun|$sub)\b" || true)"
+            printf '%s\n' "$ctx" | grep -qE "\\b$sub\\b" || {
+                echo "wires help never mentions '$noun $sub' (from ${v##*/})" >&2
+                false; }
+        done < <(verb_subcommands "$v")
+    done
 }
 
 @test "app is reachable through the dispatcher" {

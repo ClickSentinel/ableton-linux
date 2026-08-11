@@ -7,7 +7,7 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-487 tests across 18 suites. See [README.md](README.md) for how to run
+488 tests across 18 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
@@ -23,7 +23,7 @@ for which run on a PR.
 - [tests/unit/run-header.bats](#run-header) — 19 test(s)
 - [tests/unit/manifest.bats](#manifest) — 23 test(s)
 - [tests/unit/migrate-layout.bats](#migrate-layout) — 42 test(s)
-- [tests/unit/wires.bats](#wires) — 14 test(s)
+- [tests/unit/wires.bats](#wires) — 15 test(s)
 - [tests/unit/wires-app.bats](#wires-app) — 8 test(s)
 - [tests/unit/promote.bats](#promote) — 11 test(s)
 - [tests/unit/wires-runtime.bats](#wires-runtime) — 43 test(s)
@@ -492,8 +492,9 @@ beside it — and nothing exercised the installed shape until now.
 | 10 | help is spelled three ways and they agree | `wires help` is the spelling a person reaches for before they know the |
 | 11 | the long form carries the detail the short form leaves out | — |
 | 12 | help names every command it dispatches | — |
-| 13 | app is reachable through the dispatcher | — |
-| 14 | the plural nouns alias to the singular | the plural is what fingers type after `wires app list` teaches the |
+| 13 | help names every sub-verb its dispatchers accept | `wires app adopt` shipped while `wires --help` still said |
+| 14 | app is reachable through the dispatcher | — |
+| 15 | the plural nouns alias to the singular | the plural is what fingers type after `wires app list` teaches the |
 
 <a id="wires-app"></a>
 
@@ -883,6 +884,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | ``default` is the selection link itself, so a Plug by that name could` | wires-plug: default is refused as a Plug name |
 | ``stat -f` reads statfs.f_type, and ext2, ext3 and ext4 all share magic` | wires-plug: the clone names the filesystem the mount table reports |
 | ``wineboot -u` rewriting the registry under a live wineserver` | install-runs: setup-prefix refuses while something runs from the runtime |
+| ``wires app adopt` shipped while `wires --help` still said` | wires: help names every sub-verb its dispatchers accept |
 | ``wires help` is the spelling a person reaches for before they know the` | wires: help is spelled three ways and they agree |
 | ``wires runtime use` with no argument offers a numbered list, so this` | wires-plug: use with no argument refuses when there is no terminal, naming the Plugs |
 | ``wires stop` is the documented spelling and has to arrive at the same` | wires: update is delegated |

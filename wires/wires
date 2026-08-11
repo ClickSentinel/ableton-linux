@@ -44,11 +44,11 @@ short_usage() {
     cat <<'EOF'
 usage: wires <command> [options]          `wires help` for what each one does
 
-  wires runtime {list|path|use}   the builds in the store, and which one is live
-  wires plug {list|new|use|rm}    the prefixes applications are installed into
-  wires app {list|rm}             the applications installed on this machine
-  wires update [--check]          is there a newer build on this channel?
-  wires stop [-y]                 stop everything running from the runtime or a Plug
+  wires runtime {list|path|use|install}  the builds in the store, and which is live
+  wires plug {list|new|use|setup|rm}     the prefixes applications are installed into
+  wires app {list|rm}                    the applications installed on this machine
+  wires update [--check]                 is there a newer build on this channel?
+  wires stop [-y]                        stop everything running from a runtime or Plug
 EOF
 }
 
@@ -59,9 +59,11 @@ Wires: the runtime, the store, and the Plugs an application runs in.
   wires runtime list              every installed build, newest first
   wires runtime path              the runtime root, for scripts and docs
   wires runtime use [id]          switch the channel to another build
+  wires runtime install [tarball] this channel's current build, or a local one
   wires plug list                 every Plug, what is in it, what it runs
   wires plug new <name>           a fresh Plug, or --from a clone of another
   wires plug use [name]           make one the default for new launches
+  wires plug setup [name]         run an application's prefix setup against it
   wires plug rm <name> [-y]       remove a Plug and everything in it
   wires app list                  every installed application
   wires app rm <name> [-y]        remove one; Plugs are untouched
