@@ -100,8 +100,8 @@ jobs:
         with:
           name: wine-build
           path: |
-            dist/wine-d2d1-nspa-11.13-*.tar.zst
-            dist/wine-d2d1-nspa-11.13-*.tar.zst.sha256
+            dist/wires-wine-11.13-*.tar.zst
+            dist/wires-wine-11.13-*.tar.zst.sha256
             dist/ableton-linkd
             dist/BUILD-INFO-*.txt
           if-no-files-found: error

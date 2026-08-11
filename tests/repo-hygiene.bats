@@ -121,17 +121,17 @@ all_shell_files() {
 # follow-up commit (f84eaa4) to finish the rename. This is that commit as a test.
 
 # guards: commit f84eaa4 — the 11.11 to 11.13 rename needed a follow-up pass
-@test "runtime name: every live file agrees on one wine-d2d1-nspa version" {
+@test "runtime name: every live file agrees on one wires-wine version" {
     cd "$REPO"
     # dist/ holds archived BUILD-INFO for past releases and notes/ is a written
     # record — both legitimately name older runtimes. Everything else is live.
-    versions="$(git grep -hoE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' -- \
+    versions="$(git grep -hoE 'wires-wine-[0-9]+\.[0-9]+' -- \
         ':!dist' ':!notes' ':!CHANGELOG.md' ':!beta' | sort -u)"
     [ "$(printf '%s\n' "$versions" | wc -l)" -eq 1 ] || {
         echo "live files disagree on the runtime name:" >&2
         printf '  %s\n' $versions >&2
         echo "offending files:" >&2
-        git grep -lE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' -- ':!dist' ':!notes' ':!CHANGELOG.md' ':!beta' >&2
+        git grep -lE 'wires-wine-[0-9]+\.[0-9]+' -- ':!dist' ':!notes' ':!CHANGELOG.md' ':!beta' >&2
         false; }
 }
 

@@ -530,7 +530,7 @@ fake_live() {
 published() {   # commit, [runtime-name], [sha-override]
     PUB="$BATS_TEST_TMPDIR/pub"; mkdir -p "$PUB"
     export WIRES_MANIFEST_URL="file://$PUB/manifest.txt"
-    local name="${2:-wine-d2d1-nspa-11.13-2026.09.01.1.tar.zst}"
+    local name="${2:-wires-wine-11.13-2026.09.01.1.tar.zst}"
     local t="$BATS_TEST_TMPDIR/build/$(wires_runtime_name)"
     rm -rf "$BATS_TEST_TMPDIR/build"; mkdir -p "$t/bin" "$t/share/wine"
     printf '#!/bin/sh\necho wine-11.13\n' > "$t/bin/wine"; chmod +x "$t/bin/wine"
@@ -583,7 +583,7 @@ published() {   # commit, [runtime-name], [sha-override]
 
 @test "a checksum mismatch refuses before anything is staged" {
     setup_stubs; stub pgrep 1
-    published aaaaaaaa wine-d2d1-nspa-11.13-2026.09.01.1.tar.zst notthesha
+    published aaaaaaaa wires-wine-11.13-2026.09.01.1.tar.zst notthesha
     run bash "$REPO/wires/wires-runtime" install
     [ "$status" -ne 0 ]
     [[ "$output" == *"checksum mismatch"* ]]
@@ -596,7 +596,7 @@ published() {   # commit, [runtime-name], [sha-override]
 @test "a named tarball skips the web entirely" {
     setup_stubs; stub pgrep 1; stub curl 1
     published aaaaaaaa
-    run bash "$REPO/wires/wires-runtime" install "$PUB/wine-d2d1-nspa-11.13-2026.09.01.1.tar.zst"
+    run bash "$REPO/wires/wires-runtime" install "$PUB/wires-wine-11.13-2026.09.01.1.tar.zst"
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     [[ "$output" != *"channel:"* ]]
     [ -L "$C/stable" ]

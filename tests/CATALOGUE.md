@@ -49,7 +49,7 @@ that should run on *every* push, unfiltered by paths.
 | 3 | the installer header survives being run by a real POSIX sh | scripts/setup-run-header.sh line 19 — the bash re-exec must precede every bash-ism |
 | 4 | the installer header rejects unknown options instead of proceeding | — |
 | 5 | file modes: launchers are executable, sourced and templated files are not | — |
-| 6 | runtime name: every live file agrees on one wine-d2d1-nspa version | commit f84eaa4 — the 11.11 to 11.13 rename needed a follow-up pass |
+| 6 | runtime name: every live file agrees on one wires-wine version | commit f84eaa4 — the 11.11 to 11.13 rename needed a follow-up pass |
 | 7 | the wine base container-build.sh unpacks is the one vendor/ pins | — |
 | 8 | VERSION is a well-formed dated release string | — |
 | 9 | the test catalogue is current | — |
@@ -927,7 +927,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `build-kind becomes a directory name like everything else in the id` | runtime-env: runtime id: a kind with a path separator is refused, not sanitised |
 | `commit 9cba3b0` | launcher: gray text: the dark fallback lands on classic GrayText |
 | `commit f0fc05e` | detect-scale: cosmic probe: a disabled lid never wins when it is marked non-primary<br>detect-scale: cosmic probe: a disabled lid never wins, even with no primary line |
-| `commit f84eaa4` | repo-hygiene: runtime name: every live file agrees on one wine-d2d1-nspa version |
+| `commit f84eaa4` | repo-hygiene: runtime name: every live file agrees on one wires-wine version |
 | `dated rollbacks are the reason the store exists` | migrate-layout: dated rollbacks are renamed by the build they hold |
 | `docs and scripts resolve through this instead of naming a directory,` | wires-runtime: path answers on the flat layout |
 | `dosdevices holds relative links back into the Plug and outward ones to` | wires-plug: cloning keeps the prefix's symlinks as symlinks |

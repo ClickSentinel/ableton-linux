@@ -149,13 +149,13 @@ kit_script_names() {
     offenders=""
     while read -r f; do
         case " $allowed " in *" $f "*) continue ;; esac
-        grep -qE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' "$f" && offenders="$offenders $f"
+        grep -qE 'wires-wine-[0-9]+\.[0-9]+' "$f" && offenders="$offenders $f"
     done < <(git ls-files 'scripts/*' 'build.sh')
     [ -z "$offenders" ] || {
         echo "these spell the runtime name instead of deriving it:$offenders" >&2; false; }
 
-    lib="$(grep -oE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' wires/runtime-env.sh | head -1)"
-    bs="$(grep -oE 'wine-d2d1-nspa-[0-9]+\.[0-9]+' build.sh | head -1)"
+    lib="$(grep -oE 'wires-wine-[0-9]+\.[0-9]+' wires/runtime-env.sh | head -1)"
+    bs="$(grep -oE 'wires-wine-[0-9]+\.[0-9]+' build.sh | head -1)"
     [ "$lib" = "$bs" ] || {
         echo "lib says '$lib', build.sh says '$bs'" >&2; false; }
 }
