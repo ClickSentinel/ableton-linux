@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Assemble dist/ableton-wine-setup-<VERSION>.run: setup-run-header.sh + a tar of the end-user kit
+# Assemble dist/ableton-wine-setup-<LABEL>.run: setup-run-header.sh + a tar of the end-user kit
 # (runtime tarball, scripts, winetricks payloads, static cabextract, ableton-linkd).
 # Repackaging only; Wine is not rebuilt.
 set -euo pipefail
@@ -13,13 +13,49 @@ cd "$root"
 
 ENGINE="${ENGINE:-podman}"
 IMAGE="${IMAGE:-ableton-wine-build:22.04}"
-NAME="wine-d2d1-nspa-11.13"
+# Runtime naming and tarball selection resolve in one place; see
+# wires/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" \
+          "$(dirname "$0")/../wires/runtime-env.sh"; do
+    # shellcheck source=wires/runtime-env.sh
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v wires_pick_tarball >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
+NAME="$(wires_runtime_name)"
 VERSION="$(cat VERSION)"
-# exact-version runtime if present, else the newest built one
-tarball="dist/${NAME}-${VERSION}.tar.zst"
-[ -f "$tarball" ] || tarball="$(ls dist/${NAME}-*.tar.zst 2>/dev/null | sort -V | tail -1 || true)"
+# What the finished installer is called, as opposed to which runtime goes in it.
+# They are the same for a release and differ for a nightly, which must not bump
+# VERSION: that file is committed, and repo-hygiene and release.bats both assert
+# its format and its pairing with CHANGELOG and BUILD-INFO. Everything that
+# locates a build input keeps using VERSION; only the artifact's name, the
+# header stamp and the version recorded into the installed kit use LABEL.
+LABEL="${WIRES_DIST_LABEL:-$VERSION}"
+# WIRES_RUNTIME_TARBALL pins one outright; otherwise the exact-version
+# runtime if present, else the newest properly-named one. Never a bare glob.
+if [ -n "${WIRES_RUNTIME_TARBALL:-}" ]; then
+    tarball="$WIRES_RUNTIME_TARBALL"
+    [ -f "$tarball" ] || { echo "!! WIRES_RUNTIME_TARBALL is not a file: $tarball" >&2; exit 1; }
+else
+    tarball="dist/${NAME}-${VERSION}.tar.zst"
+    [ -f "$tarball" ] || tarball="$(wires_pick_tarball dist)"
+fi
 
 [ -n "$tarball" ] && [ -f "$tarball" ] || { echo "!! no ${NAME}-*.tar.zst in dist/: run ./build.sh first" >&2; exit 1; }
+# The kit carries this tarball and the kit's own install.sh selects it by name,
+# so a name the selector rejects builds a kit that packs cleanly and then dies
+# on the user's machine with "no tarball found". Only the pin reaches here with
+# an unchecked name — the branch above already filters — but the pin is exactly
+# how a published nightly gets packed, and those are named
+# <name>-<version>+nightly.<sha>.tar.zst.
+#
+# install.sh honours its own pin whatever the name, deliberately: there the
+# consequence lands on whoever set the variable. Here it lands on whoever is
+# handed the .run, so this refuses instead.
+wires_is_runtime_tarball "$tarball" || {
+    echo "!! not a name the kit's install.sh will select: $(basename "$tarball")" >&2
+    echo "   expected ${NAME}-<YYYY.MM.DD.N>.tar.zst — rename it, or drop it in dist/ under that name" >&2
+    exit 1; }
 [ -f "$tarball.sha256" ] || { echo "!! $tarball.sha256 missing" >&2; exit 1; }
 echo "   runtime: $(basename "$tarball")"
 
@@ -66,7 +102,7 @@ mkdir -p "$kit/bin" "$kit/dist" "$kit/vendor"
 cp -a "$tarball" "$tarball.sha256" "$kit/dist/"
 cp -a "dist/BUILD-INFO-${VERSION}.txt" "$kit/" 2>/dev/null || true
 mkdir -p "$kit/scripts"
-cp -a scripts/install.sh scripts/setup-prefix.sh scripts/uninstall.sh \
+cp -a wires/runtime-env.sh wires/wires wires/wires-runtime wires/wires-update wires/wires-plug wires/wires-app wires/install-wires.sh scripts/install.sh scripts/validate-runtime.sh scripts/setup-prefix.sh scripts/uninstall.sh \
       scripts/ableton-live scripts/max9 scripts/detect-scale.sh \
       scripts/detect-theme.sh scripts/shortcut-hold.sh \
       scripts/check-live-audio.sh scripts/setup-link.sh \
@@ -75,7 +111,30 @@ install -m644 scripts/ableton-linkd.service "$kit/scripts/ableton-linkd.service"
 install -m644 tools/setsyscolors.exe "$kit/scripts/setsyscolors.exe"
 install -m644 tools/learnheal.exe "$kit/scripts/learnheal.exe"
 cp -a desktop "$kit/desktop"
-cp -a vendor/winetricks vendor/winetricks-cache "$kit/vendor/"
+cp -a vendor/winetricks "$kit/vendor/"
+# The cache is staged by tracked path, not wholesale. Copying the directory as
+# it stands ships whatever the build machine has downloaded: on the development
+# machine an untracked win7sp1 entry made the kit 1.6G against CI's 112M, so the
+# installer's size depended on who built it. What the repository tracks is its
+# own statement of what it ships; anything else in there is a local download.
+mkdir -p "$kit/vendor/winetricks-cache"
+if git -C . rev-parse --git-dir >/dev/null 2>&1; then
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        # "$kit/$f", not "$kit/${f#vendor/}". $f already starts with vendor/, so
+        # stripping it staged the cache to $kit/winetricks-cache - a path
+        # nothing reads - and *succeeded*, so the fallback behind the || never
+        # ran. setup-prefix.sh looks in $root/vendor/winetricks-cache, found it
+        # empty, and every install downloaded the 44M the kit was already
+        # carrying.
+        install -Dm644 "$f" "$kit/$f"
+    done < <(git -C . ls-files vendor/winetricks-cache)
+else
+    # Not a checkout (an exported tarball): nothing says which entries are ours,
+    # so take them all rather than ship an incomplete cache.
+    echo "   (not a git checkout: staging the whole winetricks cache)"
+    cp -a vendor/winetricks-cache "$kit/vendor/"
+fi
 # Bitstream Vera must ship: it is the terminal entry of Max for Live's font
 # fallback chain, and without it any M4L device that requests a typeface the
 # prefix lacks hangs Live outright (frozen window, audio still playing). Not a
@@ -88,7 +147,20 @@ mkdir -p "$kit/vendor/fonts/bitstream-vera"
 install -m644 vendor/fonts/bitstream-vera/*.ttf \
               vendor/fonts/bitstream-vera/COPYRIGHT.TXT \
               "$kit/vendor/fonts/bitstream-vera/"
-cp -a VERSION README.md TROUBLESHOOTING.md BUILDING.md "$kit/"
+cp -a README.md TROUBLESHOOTING.md BUILDING.md "$kit/"
+# The kit records LABEL, not VERSION: a nightly and the release it was built
+# after share a VERSION, and the installed tree has to be able to say which of
+# the two it is.
+printf '%s\n' "$LABEL" > "$kit/VERSION"
+# The kit says which channel it belongs to. Without it install.sh promotes into
+# whatever channel the machine already followed, so installing a nightly while
+# configured for stable would point `stable` at a nightly build.
+#
+# One word rather than the manifest: the manifest carries the sealed kit's own
+# checksum and so cannot exist until after this is packed. They answer different
+# questions anyway - the manifest says what a channel currently points at, for
+# the updater; this says what this kit is, for the installer holding it.
+printf '%s\n' "${WIRES_CHANNEL_PUBLISH:-stable}" > "$kit/channel"
 install -m755 dist/cabextract-static "$kit/bin/cabextract"
 install -m755 dist/ableton-linkd "$kit/bin/ableton-linkd"
 # Ableton Link is GPLv2+ with no linking exception, so the built daemon's
@@ -112,16 +184,52 @@ payload="$stage/payload.tar"
 tar --sort=name --owner=0 --group=0 --numeric-owner \
     -cf "$payload" -C "$kit" .
 payload_sha="$(sha256sum "$payload" | awk '{print $1}')"
-out="dist/ableton-wine-setup-${VERSION}.run"
-sed -e "s/@VERSION@/$VERSION/g" -e "s/@PAYLOAD_SHA@/$payload_sha/g" \
+out="dist/ableton-wine-setup-${LABEL}.run"
+sed -e "s/@VERSION@/$LABEL/g" -e "s/@PAYLOAD_SHA@/$payload_sha/g" \
     scripts/setup-run-header.sh > "$out"
 cat "$payload" >> "$out"
 chmod +x "$out"
 ( cd dist && sha256sum "$(basename "$out")" > "$(basename "$out").sha256" )
+
+# The channel manifest, beside the kit. Written from the runtime's own
+# BUILD-INFO by the same function that reads it, so a manifest this repo
+# publishes is one its updater accepts - the round trip is tested. The publish
+# step uploads it; nothing here decides which channel a build is for, so it
+# takes one, defaulting to stable.
+#
+# The installer is named as *published*, which is not what it is called here:
+# both channels upload a second copy under a fixed name (install-ableton-latest
+# .run, install-ableton-nightly.run) so the download URL survives a release. The
+# updater resolves that name against the manifest's own URL, so naming the
+# versioned artifact would send it to a URL that stops existing next release.
+# Same bytes either way, so the checksum is the built file's.
+# Read from the runtime being packed, not from dist/BUILD-INFO-<version>.txt:
+# the tarball's copy is the one that lands on the user's machine and the one the
+# updater compares against. See wires_tarball_buildinfo.
+info="$stage/runtime-BUILD-INFO.txt"
+if wires_tarball_buildinfo "$tarball" > "$info" && [ -s "$info" ]; then
+    # The runtime asset is published under the label's name (the workflow copies
+    # the built tarball to it), so the manifest names that, with the identical
+    # content's checksum - runtime-only installs verify against these fields.
+    wires_manifest_write "${WIRES_CHANNEL_PUBLISH:-stable}" "$info" \
+        "${WIRES_PUBLISH_AS:-$(basename "$out")}" \
+        "$(awk '{print $1}' "$out.sha256")" \
+        "${NAME}-${LABEL}.tar.zst" \
+        "$(sha256sum "$tarball" | cut -d' ' -f1)" > dist/manifest.txt
+    wires_manifest_valid dist/manifest.txt || {
+        echo "!! the manifest this build would publish is incomplete:" >&2
+        sed 's/^/   /' dist/manifest.txt >&2
+        echo "   the runtime's BUILD-INFO is missing a field -- rebuild it" >&2
+        exit 1; }
+    echo "   manifest: dist/manifest.txt -> ${WIRES_PUBLISH_AS:-$(basename "$out")}"
+else
+    echo "!! could not read BUILD-INFO out of $(basename "$tarball")" >&2
+    exit 1
+fi
 
 echo "== [5/5] wrapper self-check =="
 sh "$out" --help >/dev/null
 echo
 echo "OK: $out ($(du -h "$out" | cut -f1))"
 echo "Copy it (plus your Ableton installer .exe) to a USB stick and run:"
-echo "  sh /run/media/*/*/ableton-wine-setup-${VERSION}.run"
+echo "  sh /run/media/*/*/ableton-wine-setup-${LABEL}.run"

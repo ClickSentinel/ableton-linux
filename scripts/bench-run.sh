@@ -17,7 +17,7 @@
 # with a warning; the row is always appended and the script never fails mid-run.
 #
 # Rows land in bench/results.csv (created with a header on first use).
-# Overrides: ABLETON_WINE_ROOT (wineserver location), BENCH_RESULTS_CSV (output
+# Overrides: WIRES_RUNTIME (wineserver location), BENCH_RESULTS_CSV (output
 # file), BENCH_WS_STATUS (wineserver /proc status file — testing only).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -43,7 +43,15 @@ for v in "$xruns" "$dsp"; do
     esac
 done
 
-WINE_ROOT="${ABLETON_WINE_ROOT:-$HOME/.local/opt/wine-d2d1-nspa-11.13}"
+# Runtime and prefix paths resolve in one place; see wires/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" \
+          "$(dirname "$0")/../wires/runtime-env.sh" \
+          "$HOME/wires/lib/runtime-env.sh"; do
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v wires_runtime_path >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/wires/apps/ableton-live" >&2; exit 1; }
+WINE_ROOT="$(wires_runtime_path)"
 
 # The xruns figure is operator-entered from pw-top's ERR delta over the reference
 # playback; without pw-top there is no sanctioned way to have measured it.

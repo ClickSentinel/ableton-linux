@@ -8,54 +8,44 @@ set -euo pipefail
 export LC_ALL=C.UTF-8
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
+# The Wires files sit beside this script in a kit (the kit is flat) and in
+# wires/ in a checkout. Resolved once; every stage below uses it.
+wires_src="$here"; [ -f "$wires_src/wires" ] || wires_src="$root/wires"
 
-OPT="$HOME/.local/opt"
 BIN="$HOME/.local/bin"
 APPS="$HOME/.local/share/applications"
-NAME="wine-d2d1-nspa-11.13"
-stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-stage=""
-backup=""
-launcher_backup=""
-promoted=0
+# Runtime naming, path resolution, tarball selection and the process scan all
+# resolve in one place; see wires/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" "$root/wires/runtime-env.sh"; do
+    # shellcheck source=wires/runtime-env.sh
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v wires_runtime_path >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0" >&2; exit 1; }
+NAME="$(wires_runtime_name)"
+verb_spoke=0
 
 cleanup()
 {
     rc=$?
     trap - EXIT
-    if [ "$rc" -ne 0 ]; then
-        failed="$OPT/${NAME}.failed-$stamp"
-        if [ "$promoted" -eq 1 ] && [ -e "$OPT/$NAME" ]; then
-            mv "$OPT/$NAME" "$failed" || true
-        fi
-        if [ -n "$backup" ] && [ -e "$backup" ] && [ ! -e "$OPT/$NAME" ]; then
-            mv "$backup" "$OPT/$NAME" || true
-        elif [ -n "$backup" ] && [ -e "$backup" ]; then
-            echo "!! $OPT/$NAME still present; backup left at $backup" >&2
-        fi
-        if [ -n "$launcher_backup" ] && [ -e "$launcher_backup" ]; then
-            cp -a "$launcher_backup" "$BIN/ableton-live" || true
-        fi
-        if [ "$promoted" -eq 1 ] || [ -n "$backup" ] || [ -n "$launcher_backup" ]; then
-            echo "!! install failed; previous runtime restored" >&2
-        else
-            echo "!! install aborted; nothing was changed" >&2
-        fi
+    if [ "$rc" -ne 0 ] && [ "$verb_spoke" -eq 0 ]; then
+        # Only for aborts before the runtime install runs: past that point the
+        # verb owns the rollback and has already said what happened.
+        echo "!! install aborted; nothing was changed" >&2
     fi
-    [ -z "$stage" ] || rm -rf "$stage"
     exit "$rc"
 }
 trap cleanup EXIT
-# Without these, a signal reaches the EXIT trap with $? still 0 and the
-# rollback above is skipped: an interrupt between the two promotion mv's
-# would leave no runtime installed and say nothing. The confirmation
-# prompt is a 60 second window inviting exactly that Ctrl-C.
-trap 'exit 130' INT
-trap 'exit 143' TERM
 
 # tarball: prefer dist/ (freshly built), else a release tarball dropped in root
-tarball="$(ls "$root"/dist/${NAME}-*.tar.zst 2>/dev/null | sort -V | tail -1 || true)"
-[ -z "$tarball" ] && tarball="$(ls "$root"/${NAME}-*.tar.zst 2>/dev/null | sort -V | tail -1 || true)"
+if [ -n "${WIRES_RUNTIME_TARBALL:-}" ]; then
+    tarball="$WIRES_RUNTIME_TARBALL"
+    [ -f "$tarball" ] || { echo "!! WIRES_RUNTIME_TARBALL is not a file: $tarball" >&2; exit 1; }
+else
+    tarball="$(wires_pick_tarball "$root/dist")"
+    [ -n "$tarball" ] || tarball="$(wires_pick_tarball "$root")"
+fi
 [ -n "$tarball" ] || { echo "!! no ${NAME}-*.tar.zst found: run ./build.sh first, or drop a release tarball in $root/dist/"; exit 1; }
 
 echo "== verify checksum =="
@@ -65,112 +55,42 @@ else
     echo "   (no .sha256 next to tarball: skipping)"
 fi
 
-# Anything still running from the installed runtime holds the old files
-# open. Stop it all instead of refusing: ask the prefix's wineserver to
-# take the whole session down (Live and its helpers are its clients), and
-# signal the processes directly only when that is unavailable or leaves
-# something behind. ableton-linkd is not part of the runtime and is
-# handled at its own install step below.
+# --- the infrastructure gate --------------------------------------------------
+# wires/install-wires.sh owns the arbitration and the write; see wires/README.md.
+# check runs before anything is stopped or moved, the write after the runtime
+# is in place.
+#
+#   exit 0  install (or refresh) the infrastructure     the silent path
+#   exit 3  a newer one is installed; keep it, this kit adds only its app
+#   exit 1  refused - stranding, or this kit is too old for this machine
+#
+# The application's floor is read from its own launcher and passed in: the gate
+# should not know where an application keeps it.
+kit_app_min="$(wires_abi_field "$here/ableton-live" WIRES_ABI_MIN 2>/dev/null || echo 1)"
+gate_rc=0
+"$wires_src/install-wires.sh" check --app-min "$kit_app_min" || gate_rc=$?
+# 3 (keep the newer infrastructure) proceeds like 0: the write step re-derives
+# the same decision and keeps it, so nothing here needs to remember which.
+case "$gate_rc" in 0|3) ;; *) exit 1 ;; esac
 
-# Every process running from the installed runtime. Wine's in-prefix
-# helpers show a Windows path in argv (C:\windows\system32\...), so no
-# command-line pattern reaches them, and a pattern also catches unrelated
-# processes that merely mention the path. /proc/PID/exe is the binary
-# itself: bin/wineserver, or the wine-preloader every in-prefix process
-# runs from.
-runtime_pids()
-{
-    local d
-    for d in /proc/[0-9]*; do
-        case "$(readlink "$d/exe" 2>/dev/null)" in
-            "$OPT/$NAME"/*) printf '%s\n' "${d#/proc/}" ;;
-        esac
-    done
-}
-# Live's exe resolves to the same wine-preloader, so runtime_pids covers
-# it; the name match stays as a second opinion, since detection failing
-# open here means installing over a running runtime.
-ableton_up()
-{
-    [ -n "$(runtime_pids)" ] || \
-        pgrep -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' >/dev/null 2>&1
-}
-# Live itself, as opposed to the support processes: the prompt below is
-# about unsaved work and only Live has any. Scoped to this runtime, so a
-# Live under an unrelated Wine install is neither prompted for nor killed.
-live_up=0
-for p in $(runtime_pids); do
-    case "$(tr -s '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)" in
-        *"Ableton Live"*.exe*) live_up=1; break ;;
+# Which channel this kit belongs to, not which one the machine follows:
+# installing a nightly while configured for stable must not point `stable` at a
+# nightly build. Kits older than the marker say nothing, and stable is what
+# they all were. Passed to the verb as an argument - a caller handing over a
+# flag is legible where a caller planting a file the callee reads is not.
+CHANNEL="stable"
+for _c in "$here/../channel" "$root/dist/channel"; do
+    [ -r "$_c" ] || continue
+    case "$(head -1 "$_c" | tr -d '[:space:]')" in
+        stable)  CHANNEL=stable ;;
+        nightly) CHANNEL=nightly ;;
     esac
+    break
 done
-if ableton_up; then
-    echo "== stop processes using the installed runtime =="
-    echo "   $(runtime_pids | wc -l) found"
-    # Closing Live discards unsaved work, so require an explicit yes.
-    # -r and -w cannot ask that: they stat a 0666 device node and pass
-    # even with no controlling terminal, and the printf would then fail
-    # ENXIO and abort the install under set -e. Opening it is the only
-    # honest test. Anything but y - a timeout, an EOF, a bare Enter, a
-    # missing terminal - means nobody consented, so refuse. Leftover
-    # wineserver and winedevice.exe without Live have nothing to save and
-    # never reach this.
-    if [ "$live_up" -eq 1 ]; then
-        if { : >/dev/tty; } 2>/dev/null; then
-            echo "!! Live is running. Updating will force-close it. Save your work before continuing." >&2
-            printf "Force-close Live? [y/N] " > /dev/tty
-            ans=""
-            read -r -t 60 ans < /dev/tty || printf '\n' > /dev/tty 2>/dev/null || true
-            case "$ans" in
-                y|Y|yes|Yes|YES) ;;
-                *) exit 1 ;;
-            esac
-        else
-            echo "!! Live is running; no terminal to confirm on. Close Live, or rerun from a terminal." >&2
-            exit 1
-        fi
-    fi
-    if [ -x "$OPT/$NAME/bin/wineserver" ]; then
-        WINEPREFIX="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}" \
-            "$OPT/$NAME/bin/wineserver" -k 2>/dev/null || true
-        for _ in $(seq 1 20); do
-            ableton_up || break
-            sleep 0.5
-        done
-    fi
-    if ableton_up; then
-        runtime_pids | xargs -r kill 2>/dev/null || true
-        pkill -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
-        for _ in $(seq 1 10); do
-            ableton_up || break
-            sleep 0.5
-        done
-        runtime_pids | xargs -r kill -9 2>/dev/null || true
-        pkill -9 -f '[A]bleton Live.*\.exe|[P]ush2DisplayProcess.exe' 2>/dev/null || true
-    fi
-fi
 
-echo "== stage and validate patched Wine =="
-mkdir -p "$OPT"
-stage="$(mktemp -d "$OPT/.${NAME}.install.XXXXXX")"
-tar -C "$stage" -I zstd -xf "$tarball"
-candidate="$stage/$NAME"
-for required in \
-    bin/wine bin/wineserver \
-    lib/wine/x86_64-windows/libusb-1.0.dll \
-    lib/wine/x86_64-unix/libusb-1.0.so \
-    lib/wine/x86_64-unix/comdlg32.so \
-    lib/wine/x86_64-unix/winealsa.so \
-    lib/wine/x86_64-unix/winegstreamer.so \
-    lib/wine/x86_64-windows/pipeasio64.dll \
-    lib/wine/x86_64-windows/pipeasio.dll \
-    lib/wine/x86_64-unix/pipeasio64.dll.so \
-    lib/wine/x86_64-unix/pipeasio.dll.so; do
-    [ -s "$candidate/$required" ] || { echo "!! package is missing $required" >&2; exit 1; }
-done
-# ableton-linkd (persistent native Ableton Link peer) is not part of the runtime
-# tree. The kit carries it in bin/, and a repository checkout reads it from
-# dist/. Its user unit ships next to the install scripts.
+# ableton-linkd is not part of the runtime tree; the kit carries it in bin/, a
+# checkout in dist/. Checked before the runtime install so a kit missing its
+# own pieces stops while nothing has moved.
 linkd=""
 for f in "$here/../bin/ableton-linkd" "$root/dist/ableton-linkd"; do
     if [ -f "$f" ]; then linkd="$f"; break; fi
@@ -181,36 +101,10 @@ for f in "$here/ableton-linkd.service" "$root/scripts/ableton-linkd.service"; do
     if [ -f "$f" ]; then linkd_unit="$f"; break; fi
 done
 [ -n "$linkd_unit" ] || { echo "!! package is missing scripts/ableton-linkd.service" >&2; exit 1; }
-if [ -e "$candidate/lib/wine/i386-windows/libusb-1.0.dll" ] || \
-   [ -e "$candidate/lib/wine/i386-unix/libusb-1.0.so" ]; then
-    echo "!! package unexpectedly contains a 32-bit Push 2 bridge" >&2
-    exit 1
-fi
-if command -v readelf >/dev/null && command -v strings >/dev/null; then
-    readelf -d "$candidate/lib/wine/x86_64-unix/libusb-1.0.so" | \
-        grep -F 'Shared library: [libusb-1.0.so.0]' >/dev/null || {
-            echo "!! Push 2 bridge is not linked to host libusb-1.0.so.0" >&2
-            exit 1
-        }
-    strings "$candidate/lib/wine/x86_64-unix/comdlg32.so" | \
-        grep -F 'org.freedesktop.portal.FileChooser' >/dev/null || {
-            echo "!! package comdlg32 lacks the XDG portal backend" >&2
-            exit 1
-        }
-    readelf -d "$candidate/lib/wine/x86_64-unix/pipeasio64.dll.so" | \
-        grep -F 'Shared library: [libpipewire-0.3.so.0]' >/dev/null || {
-            echo "!! PipeASIO is not linked to host libpipewire-0.3.so.0" >&2
-            exit 1
-        }
-    readelf -d "$candidate/lib/wine/x86_64-unix/winegstreamer.so" | \
-        grep -F 'Shared library: [libgstreamer-1.0.so.0]' >/dev/null || {
-            echo "!! winegstreamer is not linked to host libgstreamer-1.0.so.0" >&2
-            exit 1
-        }
-    # ableton-linkd must resolve against host C-runtime sonames only.
-    # -static-libstdc++ and -static-libgcc keep libstdc++ and libgcc_s out of
-    # DT_NEEDED. Any other dependency means the required static-link flags
-    # were omitted.
+if command -v readelf >/dev/null; then
+    # ableton-linkd must resolve against host C-runtime sonames only:
+    # -static-libstdc++/-static-libgcc keep libstdc++ and libgcc_s out of
+    # DT_NEEDED, and any other dependency means those flags were omitted.
     linkd_needed="$(readelf -d "$linkd" | sed -n 's/.*Shared library: \[\(.*\)\]/\1/p')"
     for so in $linkd_needed; do
         case "$so" in
@@ -223,42 +117,61 @@ if command -v readelf >/dev/null && command -v strings >/dev/null; then
         echo "!! ableton-linkd links a shared libstdc++ (needs -static-libstdc++)" >&2
         exit 1
     fi
-else
-    # binutils absent (e.g. stock SteamOS); the checksum above already covers content integrity.
-    echo "   (binutils not found: skipping deep binary checks)"
 fi
 
-echo "== promote runtime with dated rollback =="
-if [ -e "$OPT/$NAME" ]; then
-    backup="$OPT/${NAME}-rollback-$stamp"
-    [ ! -e "$backup" ] || { echo "!! rollback path already exists: $backup" >&2; exit 1; }
-    mv "$OPT/$NAME" "$backup"
-fi
-mv "$candidate" "$OPT/$NAME"
-promoted=1
-"$OPT/$NAME/bin/wine" --version
+# The store lifecycle - stop, migrate, stage, guard, promote, prune, and the
+# rollback if any of it fails - is Wires' own: `wires runtime install` owns it
+# whole, and this application vouches for the build's contents through the
+# validator it passes in. WIRES_RUNTIME reaches the verb through the
+# environment and keeps its meaning: pinned installs are flat, with a dated
+# rollback and no channel.
+verb_spoke=1
+"$wires_src/wires-runtime" install "$tarball" --channel "$CHANNEL" \
+    --validate "$here/validate-runtime.sh"
 
-echo "== install launcher -> $BIN/ableton-live =="
-mkdir -p "$BIN"
-if [ -e "$BIN/ableton-live" ]; then
-    launcher_backup="$BIN/ableton-live.rollback-$stamp"
-    cp -a "$BIN/ableton-live" "$launcher_backup"
-fi
-install -m755 "$here/ableton-live" "$BIN/ableton-live"
+echo "== install launcher -> ~/wires/apps/ableton-live =="
+# plugs/ is in the list because the layout is not complete without it: wine
+# creates a Plug directory but not the container holding it, so an install that
+# migrates nothing left setup-prefix with nowhere to put the prefix.
+mkdir -p "$BIN" "$HOME/wires/apps/ableton-live" "$HOME/wires/bin" "$HOME/wires/lib" \
+         "$(wires_plugs_dir)"
+# The launcher belongs to the application, so it lives with it and ~/.local/bin
+# holds a link. Anything else means the app's directory does not contain the app:
+# backing up ~/wires would miss its entry point, and removing the app directory
+# would leave a working command behind pointing at nothing.
+install -m755 "$here/ableton-live" "$HOME/wires/apps/ableton-live/ableton-live"
+ln -sfn "$HOME/wires/apps/ableton-live/ableton-live" "$BIN/ableton-live"
 
-echo "== install detection libs -> ~/.local/share/ableton-wine =="
+# The infrastructure write, exactly as `check` decided it up top: the command,
+# the verbs, the shared library, the PATH link, and the legacy cleanup all live
+# in wires/install-wires.sh, because none of it is this application's.
+"$wires_src/install-wires.sh" install
+
+# Dated copies of the launcher accumulated here on every install, one per run,
+# with nothing to prune them - the same defect the version store exists to end,
+# on the PATH this time. The store rolls the runtime back and the launcher comes
+# from the kit, so the copies bought nothing. Clear out any left behind.
+rm -f "$BIN"/ableton-live.rollback-* 2>/dev/null || true
+
+echo "== install the shared toolkit -> ~/wires/lib =="
 # The launcher sources these on every start (DPI auto-calibration, light/dark
 # theme sync, and crash-safe GNOME shortcut holding).
-mkdir -p "$HOME/.local/share/ableton-wine"
-install -m644 "$here/detect-scale.sh" "$HOME/.local/share/ableton-wine/detect-scale.sh"
-install -m644 "$here/detect-theme.sh" "$HOME/.local/share/ableton-wine/detect-theme.sh"
-install -m644 "$here/shortcut-hold.sh" "$HOME/.local/share/ableton-wine/shortcut-hold.sh"
+# Two directories because they hold two different things: the toolkit any
+# application sources, and this application's own payload.
+mkdir -p "$HOME/wires/lib" "$HOME/wires/apps/ableton-live"
+# The app toolkit lives with the app, not in lib: lib is generation-locked by
+# the infrastructure gate, so app payload there would skip its own update
+# whenever a newer infrastructure is kept - and the app's directory should
+# contain the app. The launcher sources these as siblings.
+install -m644 "$here/detect-scale.sh" "$HOME/wires/apps/ableton-live/detect-scale.sh"
+install -m644 "$here/detect-theme.sh" "$HOME/wires/apps/ableton-live/detect-theme.sh"
+install -m644 "$here/shortcut-hold.sh" "$HOME/wires/apps/ableton-live/shortcut-hold.sh"
 # setsyscolors.exe repaints the top bar mid-session when the Live theme changes;
 # without it the colors still apply on the next launch. Kit stages it next to
 # these scripts; a repo checkout carries it in tools/.
 for f in "$here/setsyscolors.exe" "$root/tools/setsyscolors.exe"; do
     if [ -f "$f" ]; then
-        install -m644 "$f" "$HOME/.local/share/ableton-wine/setsyscolors.exe"
+        install -m644 "$f" "$HOME/wires/apps/ableton-live/setsyscolors.exe"
         break
     fi
 done
@@ -267,17 +180,17 @@ done
 # manual splitter nudge once per session.
 for f in "$here/learnheal.exe" "$root/tools/learnheal.exe"; do
     if [ -f "$f" ]; then
-        install -m644 "$f" "$HOME/.local/share/ableton-wine/learnheal.exe"
+        install -m644 "$f" "$HOME/wires/apps/ableton-live/learnheal.exe"
         break
     fi
 done
 # ableton-linkd anchors the Ableton Link session natively so tempo and
 # timeline survive a Live restart (notes/ABLETON-WINE-LINK-FIRSTCLASS.md).
-# The launcher auto-starts it. The .run wrapper calls setup-link.sh once after
-# this install; repository installs may call the staged script directly.
-# Stop a running daemon before replacing the binary, else the old process
-# keeps running from the deleted inode and the update takes effect only
-# after a reboot. SIGTERM is a clean exit for it, so Restart=on-failure
+# The launcher auto-starts it.
+#
+# Stop a running daemon before replacing the binary, or the old process keeps
+# running from the deleted inode and the update takes effect only after a
+# reboot. SIGTERM is a clean exit for it, so Restart=on-failure
 # does not undo the stop.
 linkd_active=0
 if systemctl --user is-active --quiet ableton-linkd.service 2>/dev/null; then
@@ -285,19 +198,40 @@ if systemctl --user is-active --quiet ableton-linkd.service 2>/dev/null; then
     systemctl --user stop ableton-linkd.service 2>/dev/null || true
 fi
 pkill -x ableton-linkd 2>/dev/null || true   # launcher-started instance, no unit
-install -m755 "$linkd" "$HOME/.local/share/ableton-wine/ableton-linkd"
-install -m644 "$linkd_unit" "$HOME/.local/share/ableton-wine/ableton-linkd.service"
+install -m755 "$linkd" "$HOME/wires/apps/ableton-live/ableton-linkd"
+install -m644 "$linkd_unit" "$HOME/wires/apps/ableton-live/ableton-linkd.service"
 if [ "$linkd_active" -eq 1 ]; then
     systemctl --user start ableton-linkd.service 2>/dev/null || true
 fi
 # Keep the setup command installed for retries after a firewall or
 # hook-removal failure.
-install -m755 "$here/setup-link.sh" "$HOME/.local/share/ableton-wine/setup-link.sh"
+install -m755 "$here/setup-link.sh" "$HOME/wires/apps/ableton-live/setup-link.sh"
 
-# Record the kit version so a later installer can tell what it is updating
-# (the kit and the repo both carry VERSION at the root).
-printf '%s\n' "$(cat "$root/VERSION" 2>/dev/null || echo unknown)" \
-    > "$HOME/.local/share/ableton-wine/VERSION"
+# The prefix setup belongs to this application, not to the runtime: it seeds
+# fonts, winetricks components and registry policy for Live specifically. It has
+# only ever been run out of the unpacked kit, which the .run deletes on the way
+# out - so it existed on no installed machine, `wires plug new` printed a path to
+# it that could not work, and there was no supported way to set a second Plug up
+# at all. That is what blocked the documented recovery for a 32-bit prefix.
+install -m755 "$here/setup-prefix.sh" "$HOME/wires/apps/ableton-live/setup-prefix.sh"
+
+# Where this application's kit came from, so an updater can ask the right channel
+# for the right application without a table of URLs in the library every
+# application shares. One line, written by the installer from the kit that
+# installed it; never edited by hand, and absent on a checkout install, which has
+# no origin to record.
+for _o in "$here/../origin" "$root/dist/origin"; do
+    [ -r "$_o" ] || continue
+    install -m644 "$_o" "$HOME/wires/apps/ableton-live/origin"
+    break
+done
+
+# Record the application's version so a later installer can tell what it is
+# updating. The release version only: the kit label carries the runtime build
+# discriminator, and an application listing that shows a runtime id in its
+# VERSION column is reporting the wrong object's version.
+_v="$(cat "$root/VERSION" 2>/dev/null || echo unknown)"
+printf '%s\n' "${_v%%+*}" > "$HOME/wires/apps/ableton-live/VERSION"
 
 echo "== install desktop entries -> $APPS =="
 mkdir -p "$APPS"
@@ -308,7 +242,7 @@ mkdir -p "$APPS"
 live_name="Ableton Live"
 live_icon="live-suite"
 live_wmclass=""
-live_prefix="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}"
+live_prefix="$(wires_plug_path)"
 newest=""
 for exe in "$live_prefix"/drive_c/ProgramData/Ableton/Live*/Program/Ableton\ Live*.exe; do
     [ -e "$exe" ] || continue
@@ -322,10 +256,25 @@ if [ -n "$newest" ]; then
         live_icon="live-$edition"
     fi
 fi
+# Does this entry belong to someone else? Only a file that is actually a
+# desktop entry - non-empty, with an Exec line - and whose Exec does not route
+# through our launcher.
+hand_made_desktop() {
+    [ -s "$1" ] || return 1
+    grep -q '^Exec=' "$1" || return 1
+    # The Exec line, not the file: a Comment or TryExec that happens to name
+    # the launcher would otherwise read as ours and be overwritten.
+    ! grep '^Exec=' "$1" | grep -qF "$2"
+}
+
 # The visible launcher entry: an entry whose Exec does not route through the
 # launcher is treated as hand-made and preserved; ours is refreshed so the
 # name, icon and WM class track the installed edition.
-if [ -e "$APPS/ableton-live.desktop" ] && ! grep -qF "$BIN/ableton-live" "$APPS/ableton-live.desktop"; then
+#
+# Hand-made means it has an Exec line. Testing existence alone preserves an
+# empty file forever, so a truncated entry from an interrupted install stops
+# every later install writing a working one.
+if hand_made_desktop "$APPS/ableton-live.desktop" "$BIN/ableton-live"; then
     echo "   preserving existing $APPS/ableton-live.desktop (it does not route through the launcher)"
 else
     sed -e "s#@HOME@#$HOME#g" -e "s#@NAME@#$live_name#g" \
@@ -343,12 +292,12 @@ fi
 # copies are staged for the launcher's start-time repair.
 # See notes/ABLETON-WINE-ONLINE-AUTH.md.
 for d in wine-protocol-ableton wine-extension-auz; do
-    sed "s#@HOME@#$HOME#g" "$root/desktop/$d.desktop.in" > "$HOME/.local/share/ableton-wine/$d.desktop"
+    sed "s#@HOME@#$HOME#g" "$root/desktop/$d.desktop.in" > "$HOME/wires/apps/ableton-live/$d.desktop"
     if [ -e "$APPS/$d.desktop" ] && grep -qF "$BIN/ableton-live" "$APPS/$d.desktop"; then
         echo "   preserving existing $APPS/$d.desktop"
     else
         [ ! -e "$APPS/$d.desktop" ] || echo "   replacing $APPS/$d.desktop (it does not route through the launcher)"
-        cp "$HOME/.local/share/ableton-wine/$d.desktop" "$APPS/$d.desktop"
+        cp "$HOME/wires/apps/ableton-live/$d.desktop" "$APPS/$d.desktop"
     fi
 done
 update-desktop-database "$APPS" 2>/dev/null || true
@@ -389,7 +338,7 @@ max_unix="$live_prefix/drive_c/Program Files/Cycling '74/Max 9/Max.exe"
 if [ -f "$max_unix" ]; then
     echo "== install the Max 9 launcher =="
     install -m755 "$here/max9" "$BIN/max9"
-    if [ -e "$APPS/max9.desktop" ] && ! grep -qF "$BIN/max9" "$APPS/max9.desktop"; then
+    if hand_made_desktop "$APPS/max9.desktop" "$BIN/max9"; then
         echo "   preserving existing $APPS/max9.desktop (it does not route through the launcher)"
     else
         sed "s#@HOME@#$HOME#g" "$root/desktop/max9.desktop.in" > "$APPS/max9.desktop"
@@ -420,10 +369,12 @@ if [ -f "$max_unix" ]; then
     echo "   installed max9 launcher and desktop entry"
 fi
 
-case ":$PATH:" in
-    *":$BIN:"*) ;;
-    *) echo "!! note: $BIN is not on your PATH: add it or call ~/.local/bin/ableton-live directly" ;;
-esac
+# One implementation, in the library. This note used to name only ableton-live,
+# which stopped being the whole truth when wires became a command people run,
+# and it could not tell "your shell will never add it" from "your shell adds it
+# at login and this session predates the directory" - which is the case a clean
+# machine actually hits.
+wires_path_register "ableton-live and wires"
 
 # winegstreamer resolves against the host GStreamer at runtime (issue #44).
 # Live runs without it (wav/aiff), so this is a note, not a failure.
@@ -432,10 +383,14 @@ if ! ldconfig -p 2>/dev/null | grep 'libgstreamer-1\.0\.so\.0' >/dev/null; then
     echo "!! note: no host libgstreamer-1.0.so.0 found: mp3 and video import will not work until GStreamer (with its base and good plugin sets) is installed"
 fi
 
-promoted=0
 trap - EXIT
-rm -rf "$stage"
 
 echo
-echo "OK. Runtime rollback: ${backup:-none (fresh install)}"
+# The verb owns rollback either way: the store keeps previous builds, a pinned
+# install keeps a dated sibling.
+if [ -n "${WIRES_RUNTIME:-}" ]; then
+    echo "OK. A dated rollback of the previous runtime sits beside the pin."
+else
+    echo "OK. Previous builds stay in the store: wires runtime list"
+fi
 echo "Next: ./scripts/setup-prefix.sh"

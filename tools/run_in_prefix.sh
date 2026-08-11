@@ -2,8 +2,14 @@
 # Run a PE tool inside the LIVE Ableton prefix/wineserver session (patched Wine).
 # Usage: run_in_prefix.sh <exe> [args...]     (cwd = this dir, so swamprobe.txt lands here)
 set -u
-WINE_ROOT="$HOME/.local/opt/wine-d2d1-nspa-11.13"
-export WINEPREFIX="$HOME/.wine-ableton"
+for _l in "$(dirname "$0")/runtime-env.sh" "$HOME/wires/lib/runtime-env.sh"; do
+    # shellcheck source=scripts/runtime-env.sh
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v wires_runtime_path >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/wires/apps/ableton-live" >&2; exit 1; }
+WINE_ROOT="$(wires_runtime_path)"
+export WINEPREFIX="$HOME/wires/plugs/studio"
 export PATH="$WINE_ROOT/bin:$PATH"
 export WINESERVER="$WINE_ROOT/bin/wineserver"
 export WINEDEBUG="${WINEDEBUG:--all}"

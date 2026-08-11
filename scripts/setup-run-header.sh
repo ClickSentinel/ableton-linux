@@ -4,6 +4,8 @@
 # Options:
 #   --runtime-only   install the patched Wine only; skip making the Wine prefix
 #   --update         update compatibility files; keep Live, authorization, and projects
+#   --installer PATH the Ableton installer to use (the .exe/.zip, or a folder
+#                    holding it) - for when it cannot sit beside this file
 #   --no-launch      never run the Ableton installer (zip/exe) automatically
 #   --no-link        skip Ableton Link setup (remembered on later runs)
 #   --link           configure Ableton Link even if previously skipped or declined
@@ -27,7 +29,53 @@ export LC_ALL=C.UTF-8
 
 VERSION="@VERSION@"
 PAYLOAD_SHA="@PAYLOAD_SHA@"
-RUNTIME_NAME="wine-d2d1-nspa-11.13"
+APP="ableton-live"
+
+# This wrapper used to carry a hand-written copy of the resolver, because it is
+# POSIX sh, runtime-env.sh is bash, and the first use came before the kit had
+# been extracted. Every updater defect found on 2026-08-09 was in that copy: it
+# got the runtime's legacy fallback right and the prefix's wrong, so the "is
+# there an install here" test looked only at ~/wires/plugs/studio and no
+# unmigrated machine - which is every existing user - was ever offered an
+# update. It hardcoded plugs/studio, so `wires plug use` did not reach it. And
+# it read WIRES_PLUG but not ABLETON_WINEPREFIX, which install.sh does read,
+# so on a machine setting the old name the two disagreed about which
+# prefix was being installed into.
+#
+# So there is no resolver here now. Exactly one fact has to be known before the
+# payload is unpacked - has this application been installed on this machine -
+# and a marker answers it without deriving a single path. Everything else is
+# needed only after extraction, by which point bash and the real runtime-env.sh
+# are both on disk and can be asked properly.
+#
+# Two markers because the answer has to be yes on a machine installed by any kit
+# that predates ~/wires, which is the population this whole question is about.
+returning=0
+for marker in "$HOME/wires/apps/$APP/VERSION" \
+              "$HOME/.local/share/ableton-wine/VERSION"; do
+    if [ -f "$marker" ]; then returning=1; break; fi
+done
+
+# And a prefix for update mode to act on, because update mode ends in
+# setup-prefix.sh --refresh, which exits 2 on a prefix that is not there rather
+# than creating one. The marker alone is not that question: --runtime-only writes
+# it and creates no prefix, so a machine set up that way would be offered an
+# update that could only fail. Answering "has this been installed" and "is there
+# something to refresh" separately is what keeps both cases right.
+#
+# A glob over plugs/*, not a named Plug: any Plug will do, and naming one here
+# would put the literal back that the resolver exists to remove. The legacy path
+# is listed beside it because on an unmigrated machine that is where the prefix
+# still is - which is the whole point of this test.
+if [ "$returning" = 1 ]; then
+    have_prefix=0
+    for reg in "${WIRES_PLUG:+$WIRES_PLUG/system.reg}" \
+               "$HOME"/wires/plugs/*/system.reg \
+               "$HOME/.wine-ableton/system.reg"; do
+        if [ -n "$reg" ] && [ -f "$reg" ]; then have_prefix=1; break; fi
+    done
+    [ "$have_prefix" = 1 ] || returning=0
+fi
 
 self="$(readlink -f -- "$0")"
 stick_dir="$(dirname -- "$self")"
@@ -35,7 +83,38 @@ stick_dir="$(dirname -- "$self")"
 say()  { printf '%s\n' "$*"; }
 fail() { printf '!! %s\n' "$*" >&2; exit 1; }
 
+# Written out, not sliced out of the header comment with `head -18 | sed -n
+# '2,18p'`. That range rots the moment a comment above it is edited, and it had
+# already rotted: line 18 is a note about the payload marker, so --help printed
+# a sentence of internal prose under the options. The same defect the wires
+# verbs were rewritten to remove, in the one script they did not cover.
+usage() {
+    cat <<'EOF'
+Ableton-on-Wine single-file installer (self-extracting).
+Usage:  sh ableton-wine-setup-@VERSION@.run [options]
+Options:
+  --runtime-only   install the patched Wine only; skip making the Wine prefix
+  --update         update compatibility files; keep Live, authorization, and projects
+  --installer PATH the Ableton installer to use: the .exe/.zip itself, or a
+                   folder holding it - for when it cannot sit beside this file
+  --no-launch      never run the Ableton installer (zip/exe) automatically
+  --no-link        skip Ableton Link setup (remembered on later runs)
+  --link           configure Ableton Link even if previously skipped or declined
+  --extract DIR    unpack this installer's files into DIR and exit
+  --uninstall      remove the installed Wine, launcher, and menu entries
+  --prefix         with --uninstall: also delete the Wine prefix and Live
+  --help           this text
+Environment:
+  ABLETON_DPI_MODE    auto|preserve|100|fractional|dpi<N> (overrides scale auto-detection)
+  ABLETON_THEME_MODE  auto|dark|light|preserve (overrides the light/dark sync)
+  ABLETON_LIVE_VERSION  11|12 (prepare the prefix for this Live version; default 12)
+  WIRES_PLUG          install into this Plug instead of the selected one
+  WIRES_RUNTIME       use this runtime tree instead of the store's
+EOF
+}
+
 mode=install
+installer_arg=""
 do_launch=1
 do_link_setup=1
 do_link_force=0
@@ -43,7 +122,7 @@ extract_dir=""
 drop_prefix=0
 while [ $# -gt 0 ]; do
     case "$1" in
-        --help|-h)      head -18 "$self" | sed -n '2,18{s/^# \{0,1\}//;p}'; exit 0 ;;
+        --help|-h)      usage; exit 0 ;;
         --runtime-only) mode=runtime ;;
         --update)       mode=update ;;
         --no-launch)    do_launch=0 ;;
@@ -52,6 +131,8 @@ while [ $# -gt 0 ]; do
         --uninstall)    mode=uninstall ;;
         --prefix)       drop_prefix=1 ;;
         --extract)      mode=extract; extract_dir="${2:?--extract needs a directory}"; shift ;;
+        --installer)    installer_arg="${2:?--installer needs a path}"; shift ;;
+        --installer=*)  installer_arg="${1#--installer=}" ;;
         *)              fail "unknown option: $1 (try --help)" ;;
     esac
     shift
@@ -69,9 +150,9 @@ say "== Ableton-on-Wine installer $VERSION =="
 # runtime, launcher, and prefix policy to this kit's version. It preserves the
 # Live installation, authorization, and projects; compatibility settings may
 # change.
-if [ "$mode" = install ] && [ -x "$HOME/.local/opt/$RUNTIME_NAME/bin/wine" ] \
-   && [ -f "${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}/system.reg" ]; then
-    installed_ver="$(cat "$HOME/.local/share/ableton-wine/VERSION" 2>/dev/null || true)"
+if [ "$mode" = install ] && [ "$returning" = 1 ]; then
+    installed_ver="$(cat "$HOME/wires/apps/$APP/VERSION" 2>/dev/null \
+                  || cat "$HOME/.local/share/ableton-wine/VERSION" 2>/dev/null || true)"
     say ""
     say "An existing installation was found${installed_ver:+ (version $installed_ver)}."
     if [ -t 0 ]; then
@@ -90,10 +171,10 @@ fi
 # --- find the Ableton payload next to this file, up front ---------------------
 # Any edition (Intro/Lite/Standard/Suite/Trial) and any major version works:
 # an ableton_live*.zip straight from ableton.com, or an already-unpacked installer .exe.
-find_live_payload() {
+find_live_payload() {              # [dir], defaults to the .run's own directory
     live_payloads=()
-    local f base
-    for f in "$stick_dir"/*; do
+    local f base d="${1:-$stick_dir}"
+    for f in "$d"/*; do
         [ -f "$f" ] || continue
         base="$(basename "$f" | tr '[:upper:]' '[:lower:]')"
         case "$base" in
@@ -102,6 +183,43 @@ find_live_payload() {
     done
     [ "${#live_payloads[@]}" -le 1 ] || \
         mapfile -t live_payloads < <(printf '%s\n' "${live_payloads[@]}" | sort -V)
+}
+# A path given to --installer or typed at the prompt: the installer itself, or a
+# directory holding it. Non-zero when there is nothing usable there.
+#
+# This exists because the prompt used to read its answer into $_ and discard it.
+# It meant "go and put the file next to this one, then press Enter", and then
+# rescanned the same directory - but it printed a bare "> " and waited, which
+# asks for a path in every other program anyone has used. Typing one, which is
+# the obvious thing to do, silently produced the manual instructions instead.
+take_live_payload() {
+    local p="$1"
+    # A path pasted out of a file manager arrives quoted, and `read` does not
+    # expand a leading ~.
+    p="${p%\"}"; p="${p#\"}"; p="${p%\'}"; p="${p#\'}"
+    # A literal tilde, matched rather than expanded: `read` hands one over as
+    # text. Written as a prefix strip and not a case pattern because SC2088
+    # reads a quoted tilde as one that was meant to expand, and here the literal
+    # is exactly what is being looked for.
+    if [ "$p" = '~' ]; then
+        p="$HOME"
+    elif [ "${p#'~/'}" != "$p" ]; then
+        p="$HOME/${p#'~/'}"
+    fi
+    if [ -d "$p" ]; then
+        find_live_payload "$p"
+        choose_live_payload
+        [ -n "$live_exe$live_zip" ]
+        return
+    fi
+    [ -f "$p" ] || return 1
+    # Named outright, so it is taken at its word: someone pointing at a file has
+    # said more than a glob over a directory ever does.
+    case "$(basename "$p" | tr '[:upper:]' '[:lower:]')" in
+        *.zip) live_zip="$p" ;;
+        *)     live_exe="$p" ;;
+    esac
+    return 0
 }
 choose_live_payload() {    # picks one of live_payloads into live_exe or live_zip
     live_exe=""; live_zip=""
@@ -138,16 +256,24 @@ manual_install=1
 if [ "$mode" = install ] && [ "$do_launch" -eq 1 ]; then
     find_live_payload
     choose_live_payload
+    [ -z "$installer_arg" ] || take_live_payload "$installer_arg" \
+        || fail "--installer: no Ableton installer at $installer_arg"
     if [ -z "$live_exe$live_zip" ] && [ -t 0 ]; then
         say ""
         say "No Ableton installer found next to this file"
         say "(looked for an ableton_live*.zip of any edition, or an Ableton .exe, in $stick_dir)."
-        say "Put it here and press Enter. Or press Enter without it, and the"
-        say "manual install commands are printed at the end."
+        say "Type the path to yours - the installer itself, or the folder holding"
+        say "it. Or put it beside this file and press Enter. Press Enter with"
+        say "nothing and the manual install commands are printed at the end."
         printf '> '
-        read -r _ || true
-        find_live_payload
-        choose_live_payload
+        read -r answer || answer=""
+        if [ -n "$answer" ]; then
+            take_live_payload "$answer" || say "   nothing usable there: $answer"
+        fi
+        if [ -z "$live_exe$live_zip" ]; then
+            find_live_payload
+            choose_live_payload
+        fi
     fi
     if [ -n "$live_exe$live_zip" ]; then
         manual_install=0
@@ -188,7 +314,7 @@ warn_stale_link_hook() {
 }
 
 configure_link() {
-    local marker="$HOME/.local/share/ableton-wine/link-configured"
+    local marker="$HOME/wires/apps/ableton-live/link-configured"
     # The version is owned by setup-link.sh; a marker recording anything else
     # forces one re-run so existing installs pick up changed behavior.
     local required_version
@@ -239,7 +365,7 @@ configure_link() {
     fi
 
     say "!! Ableton Link was not configured; Live installation will continue."
-    say "!! Close Live and run ~/.local/share/ableton-wine/setup-link.sh to retry."
+    say "!! Close Live and run ~/wires/apps/ableton-live/setup-link.sh to retry."
     return 0
 }
 
@@ -299,9 +425,22 @@ if [ "$mode" = update ]; then
 fi
 
 # --- install the runtime ------------------------------------------------------
-say "-- installing the patched Wine (goes to ~/.local/opt, touches nothing else)"
+say "-- installing the patched Wine (goes to ~/wires, touches nothing else)"
 bash "$kit/scripts/install.sh"
 [ "$mode" = runtime ] && { say "OK: the patched Wine is installed (--runtime-only: stopped before creating the Wine prefix)"; exit 0; }
+# From here the real resolver answers, and nothing in this file guesses a path
+# again. Line 19 re-execs into bash, so sourcing it is available the moment the
+# kit is on disk - the POSIX-sh constraint only ever applied to that one line.
+# It has to be read *after* install.sh, not before: the store may have just been
+# created and the migration may have just moved both the runtime and the Plug.
+#
+# wires_plug_path, not a literal: it resolves WIRES_PLUG, then the `default`
+# symlink `wires plug use` writes, then studio. Hardcoding the last of those is
+# why Live's installer would run into studio on a machine whose selected Plug
+# was something else.
+. "$kit/scripts/runtime-env.sh"
+WINE_ROOT="$(wires_runtime_path)"
+PREFIX_DIR="$(wires_plug_path)"
 configure_link
 
 # --- create the prefix --------------------------------------------------------
@@ -316,7 +455,7 @@ if [ -z "${ABLETON_DPI_MODE:-}" ]; then
     if block="$(ableton_dpi_block_for_scale "$scale" "$family")"; then
         export ABLETON_DPI_MODE="$block"
         say "-- display scale: $(awk -v s="$scale" 'BEGIN { printf "%d", s*100 + 0.5 }')% (auto-detected)"
-    elif [ -d "$HOME/.wine-ableton" ]; then
+    elif [ -d "$PREFIX_DIR" ]; then
         export ABLETON_DPI_MODE=preserve
         say "-- display scale: ${scale:-could not be detected}${scale:+ (outside the calibrated 100-250% range)}; keeping your existing display settings"
     else
@@ -325,7 +464,7 @@ if [ -z "${ABLETON_DPI_MODE:-}" ]; then
         say "   (the launcher re-checks your display on every start, so this corrects itself)"
     fi
 fi
-say "-- creating the Wine prefix, Live's private 'C: drive' at ~/.wine-ableton"
+say "-- creating the Wine prefix, Live's private 'C: drive' at ${PREFIX_DIR/#$HOME/\~}"
 say "   (fonts and runtime pieces install now; this takes a few minutes)"
 bash "$kit/scripts/setup-prefix.sh"
 
@@ -410,8 +549,7 @@ Windows Registry Editor Version 5.00
 "WindowsInstaller"=dword:00000001
 "Language"=dword:00000409
 EOF
-                WINEPREFIX="$HOME/.wine-ableton" \
-                    "$HOME/.local/opt/$RUNTIME_NAME/bin/wine" \
+                WINEPREFIX="$PREFIX_DIR" "$WINE_ROOT/bin/wine" \
                     regedit /S "$seed_reg" >/dev/null 2>&1 || true
                 rm -f "$seed_reg"
                 say "-- installing Ableton Live; a progress window opens, no clicks needed"
@@ -432,8 +570,8 @@ EOF
         fi
         # run from the installer's own directory so its relative payload lookups resolve
         if ( cd "$(dirname -- "$live_exe")" && \
-                 WINEPREFIX="$HOME/.wine-ableton" \
-                 "$HOME/.local/opt/$RUNTIME_NAME/bin/wine" \
+                 WINEPREFIX="$PREFIX_DIR" \
+                 "$WINE_ROOT/bin/wine" \
                  "./$(basename -- "$live_exe")" "${live_flags[@]}" ); then
             live_installed=1
         else
@@ -448,19 +586,17 @@ EOF
         # end whatever still holds the prefix rather than hanging (issue #111); the next
         # setup run's prefix scrub removes the agent's autostart entries for good.
         for tray_image in AbletonPushCpl.exe tusbaudiocplapp.exe; do
-            WINEPREFIX="$HOME/.wine-ableton" \
-                "$HOME/.local/opt/$RUNTIME_NAME/bin/wine" \
+            WINEPREFIX="$PREFIX_DIR" "$WINE_ROOT/bin/wine" \
                 taskkill /f /im "$tray_image" >/dev/null 2>&1 || true
         done
         wait_rc=0
-        WINEPREFIX="$HOME/.wine-ableton" \
-            timeout 30 "$HOME/.local/opt/$RUNTIME_NAME/bin/wineserver" -w 2>/dev/null || wait_rc=$?
+        WINEPREFIX="$PREFIX_DIR" \
+            timeout 30 "$WINE_ROOT/bin/wineserver" -w 2>/dev/null || wait_rc=$?
         if [ "$wait_rc" -eq 124 ]; then
             say "-- stopping leftover installer processes in the prefix"
-            WINEPREFIX="$HOME/.wine-ableton" \
-                "$HOME/.local/opt/$RUNTIME_NAME/bin/wineserver" -k 2>/dev/null || true
-            WINEPREFIX="$HOME/.wine-ableton" \
-                timeout 30 "$HOME/.local/opt/$RUNTIME_NAME/bin/wineserver" -w 2>/dev/null || true
+            WINEPREFIX="$PREFIX_DIR" "$WINE_ROOT/bin/wineserver" -k 2>/dev/null || true
+            WINEPREFIX="$PREFIX_DIR" \
+                timeout 30 "$WINE_ROOT/bin/wineserver" -w 2>/dev/null || true
         fi
         rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/ableton-wine-setup" 2>/dev/null || true
     fi
@@ -476,8 +612,8 @@ else
     say "       unzip /path/to/ableton_live*.zip -d ~/live-installer"
     say "       (no unzip? try: bsdtar -xf FILE.zip -C ~/live-installer)"
     say "  2) run the installer through this Wine, from inside that directory:"
-    say "       cd ~/live-installer && WINEPREFIX=~/.wine-ableton \\"
-    say "           ~/.local/opt/$RUNTIME_NAME/bin/wine ./*.exe \\"
+    say "       cd ~/live-installer && WINEPREFIX=$PREFIX_DIR \\"
+    say "           $WINE_ROOT/bin/wine ./*.exe \\"
     say "           /SILENT /SUPPRESSMSGBOXES /NORESTART '/MERGETASKS=!audiodriver'"
     say "     (Live 12: the flags let it install by itself and skip a Windows-only driver;"
     say "      Live 11: use /passive /norestart instead. The USB audio driver may install"

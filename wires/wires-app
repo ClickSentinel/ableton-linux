@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# The applications installed on this machine: list them, remove one.
+#
+# The apps directory is the census - an application exists because
+# ~/wires/apps/<name>/ does, with a launcher of the same name inside - so
+# listing is a walk and removal is a directory. Nothing here touches a Plug:
+# what an application installed into a prefix stays until the Plug goes.
+set -uo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+for _l in "$here/runtime-env.sh" "$HOME/wires/lib/runtime-env.sh" \
+          "$here/../wires/runtime-env.sh"; do
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v wires_app_names >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/wires/lib" >&2; exit 1; }
+
+BIN="$HOME/.local/bin"
+
+cmd_list() {
+    local n=0 name dir ver min path
+    printf '  %-24s %-30s %-4s %s\n' "APP" "VERSION" "ABI" "PATH"
+    while read -r name; do
+        [ -n "$name" ] || continue
+        n=$((n+1))
+        dir="$(wires_home)/apps/$name"
+        ver="$(head -1 "$dir/VERSION" 2>/dev/null || echo '-')"
+        min="$(wires_abi_field "$dir/$name" WIRES_ABI_MIN 2>/dev/null || echo 1)"
+        path="$dir"
+        path="$(wires_abbrev_home "$path")"
+        printf '  %-24.24s %-30.30s %-4s %s\n' "$name" "$ver" "$min" "$path"
+    done < <(wires_app_names)
+    [ "$n" -gt 0 ] || echo "  (none)"
+}
+
+cmd_rm() {
+    local want yes parsed dir
+    parsed="$(wires_rm_args "$@")" || return $?
+    { IFS= read -r want; IFS= read -r yes; } <<<"$parsed"
+    [ -n "$want" ] || { echo "!! usage: wires app rm <name> [-y]" >&2; return 2; }
+    dir="$(wires_home)/apps/$want"
+    [ -d "$dir" ] || {
+        echo "!! no such application: $want" >&2
+        echo "   installed:" >&2; wires_app_names | sed 's/^/     /' >&2
+        return 1; }
+
+    if [ -z "$yes" ]; then
+        echo "This removes the $want launcher and its files under $dir."
+        echo "Plugs and anything installed inside them are untouched."
+        wires_ask_tty "Remove it? [y/N] "
+        case "$?" in
+            0) ;;
+            2) echo "!! no terminal to confirm on; pass -y if you mean it" >&2; return 1 ;;
+            *) echo "cancelled"; return 1 ;;
+        esac
+    fi
+
+    # Only the link this application owns: a same-named command from anywhere
+    # else is not ours to delete.
+    if [ "$(readlink "$BIN/$want" 2>/dev/null)" = "$dir/$want" ]; then
+        rm -f "$BIN/$want"
+    fi
+    rm -rf "${dir:?}"
+    echo "removed $want; Plugs and their contents are untouched"
+}
+
+short_usage() {
+    cat <<'EOF'
+usage: wires app {list|rm}                 `wires app help` for detail
+
+  wires app list                  every installed application
+  wires app rm <name> [-y]        remove one; Plugs are untouched
+EOF
+}
+
+long_usage() {
+    cat <<'EOF'
+The applications installed on this machine.
+
+  wires app list                  every installed application, with version,
+                                  declared ABI floor, and path
+  wires app rm <name> [-y]        remove the launcher and the application's
+                                  files under ~/wires/apps; anything it
+                                  installed inside a Plug stays until the
+                                  Plug goes
+EOF
+}
+
+case "${1:-list}" in
+    list|ls)        cmd_list ;;
+    rm|remove)      shift; cmd_rm "$@" ;;
+    -h|--help|help) long_usage ;;
+    *) echo "!! unknown command: $1" >&2; short_usage >&2; exit 1 ;;
+esac

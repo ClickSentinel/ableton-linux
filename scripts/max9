@@ -2,21 +2,34 @@
 # Max 9 launcher for the patched Wine stack: same runtime and prefix as
 # ableton-live, so standalone Max, Max for Live editing and PipeASIO all
 # share one wineserver. Args: Max documents as unix paths, or c74max: URLs.
-# Overrides: ABLETON_WINE_ROOT, ABLETON_WINEPREFIX, ABLETON_RT=off,
+# Overrides: WIRES_RUNTIME, WIRES_PLUG, ABLETON_RT=off,
 #            ABLETON_POWER=off (skip the session performance power-profile hold),
 #            ABLETON_LINKD=/path/to/ableton-linkd (Ableton Link session anchor).
 set -u
-unset WINELOADER WINEDLLPATH WINEDLLOVERRIDES WINEARCH
-WINE_ROOT="${ABLETON_WINE_ROOT:-$HOME/.local/opt/wine-d2d1-nspa-11.13}"
-export WINEPREFIX="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}"
-export PATH="$WINE_ROOT/bin:$PATH"
+# The oldest Wires contract this launcher is written against; see the
+# ableton-live launcher for the full note.
+WIRES_ABI_MIN=1
+# Runtime and prefix paths resolve in one place; see wires/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" \
+          "$(dirname "$0")/../wires/runtime-env.sh" \
+          "$HOME/wires/lib/runtime-env.sh"; do
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v wires_runtime_path >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/wires/apps/ableton-live" >&2; exit 1; }
+if [ "${WIRES_ABI_OLDEST:-1}" -gt "$WIRES_ABI_MIN" ]; then
+    echo "max9: the installed Wires infrastructure (generation ${WIRES_ABI:-?}, oldest" >&2
+    echo "  supported ${WIRES_ABI_OLDEST:-?}) no longer supports this launcher (written" >&2
+    echo "  against generation $WIRES_ABI_MIN). Update with the current installer." >&2
+    exit 1
+fi
+wires_bind_runtime
 # Disable Wine debug logging; fixme spam from the D3D poll loop stalls Live's UI thread.
 # Keep the winediag channel on: it carries only rare one-line notices that a
 # person should read, such as the present-fallback warning from patch 0071.
 export WINEDEBUG="${WINEDEBUG:--all,+winediag}"
 export WINE_D3D_CONFIG="${WINE_D3D_CONFIG:-csmt=0x1}"
 export WINE_DISABLE_UNIX_MOUNT_REPARSE="${WINE_DISABLE_UNIX_MOUNT_REPARSE:-1}"
-export WINESERVER="$WINE_ROOT/bin/wineserver"
 export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}mscoree,mshtml="
 
 MAX_EXE="C:\\Program Files\\Cycling '74\\Max 9\\Max.exe"
@@ -55,7 +68,7 @@ done
 # Ableton Link session anchor (optional): same auto-start as the ableton-live
 # launcher. Start ableton-linkd if installed but not running, so the Link
 # session is anchored before Max launches. ABLETON_LINKD overrides the path.
-LINKD="${ABLETON_LINKD:-$HOME/.local/share/ableton-wine/ableton-linkd}"
+LINKD="${ABLETON_LINKD:-$HOME/wires/apps/ableton-live/ableton-linkd}"
 if [ -x "$LINKD" ] && ! pgrep -x ableton-linkd >/dev/null 2>&1; then
     "$LINKD" --daemon || echo "max9: ableton-linkd failed to start" >&2
 fi

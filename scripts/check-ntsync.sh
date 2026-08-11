@@ -6,8 +6,16 @@
 # prefix while Live is running.
 set -uo pipefail
 
-WINE_ROOT="${ABLETON_WINE_ROOT:-$HOME/.local/opt/wine-d2d1-nspa-11.13}"
-export WINEPREFIX="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}"
+# Runtime and prefix paths resolve in one place; see wires/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" \
+          "$(dirname "$0")/../wires/runtime-env.sh" \
+          "$HOME/wires/lib/runtime-env.sh"; do
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v wires_runtime_path >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/wires/apps/ableton-live" >&2; exit 1; }
+WINE_ROOT="$(wires_runtime_path)"
+WINEPREFIX="$(wires_plug_path)"; export WINEPREFIX
 export WINEDEBUG=-all
 here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 PROBE="${ABLETON_NTSYNC_PROBE:-$here/../beta/tester-kit/probes/windows/ntsyncprobe.exe}"
@@ -18,7 +26,7 @@ TIMEOUT="${ABLETON_CHECK_TIMEOUT:-120}"
 
 for pid in $(pgrep -x wineserver); do
     if tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -qxF "WINEPREFIX=$WINEPREFIX"; then
-        echo "!! wineserver $pid already serves $WINEPREFIX; close Live or set ABLETON_WINEPREFIX to a clone" >&2
+        echo "!! wineserver $pid already serves $WINEPREFIX; close Live or set WIRES_PLUG to a clone" >&2
         exit 1
     fi
 done
@@ -55,6 +63,7 @@ timeout "$TIMEOUT" "$WINE_ROOT/bin/wine" "$PROBE"
 rc=$?
 t1=$(date +%s%N)
 c1=$(awk '/ctxt/{s+=$2}END{print s}' "/proc/$sp/status" 2>/dev/null || echo "$c0")
+# shellcheck disable=SC2010  # matching on symlink targets, which a glob cannot see
 fds=$(ls -l "/proc/$sp/fd" 2>/dev/null | grep -c '/dev/ntsync')
 
 echo "-- probe results:"

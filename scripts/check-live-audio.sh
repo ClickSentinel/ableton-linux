@@ -3,8 +3,16 @@
 # Run on the target machine after Live is installed. Exit 0 = driver opened, no FatalError logged.
 set -uo pipefail
 
-WINE_ROOT="${ABLETON_WINE_ROOT:-$HOME/.local/opt/wine-d2d1-nspa-11.13}"
-export WINEPREFIX="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}"
+# Runtime and prefix paths resolve in one place; see wires/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" \
+          "$(dirname "$0")/../wires/runtime-env.sh" \
+          "$HOME/wires/lib/runtime-env.sh"; do
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v wires_runtime_path >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/wires/apps/ableton-live" >&2; exit 1; }
+WINE_ROOT="$(wires_runtime_path)"
+WINEPREFIX="$(wires_plug_path)"; export WINEPREFIX
 LAUNCH="${ABLETON_LAUNCHER:-$HOME/.local/bin/ableton-live}"
 TIMEOUT="${ABLETON_CHECK_TIMEOUT:-180}"
 

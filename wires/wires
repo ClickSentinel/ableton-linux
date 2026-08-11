@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Wires: the runtime, the store, and the Plugs an application runs in.
+#
+# One command because there is one thing here to talk to. The verbs live in
+# their own files beside the shared library rather than on PATH: `wires` is the
+# interface, and what implements it is not called directly.
+#
+# Exit codes are shared across every verb and install-wires.sh; README.md has
+# the table.
+set -euo pipefail
+# Resolved, not just dirname'd: PATH holds a link to this file, and $0 is then
+# the link's own path - ~/.local/bin - whose ../lib is somewhere else entirely.
+# The verbs sit beside the real file, so the real file is what has to be found.
+self="$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")"
+here="$(cd "$(dirname "$self")" && pwd)"
+
+# Installed, wires lives in ~/wires/bin and the verbs in ~/wires/lib; from a
+# checkout both sit in scripts/. Neither layout is special-cased beyond this.
+for _d in "$here/../lib" "$here"; do
+    [ -x "$_d/wires-runtime" ] && { verbs="$_d"; break; }
+done
+[ -n "${verbs:-}" ] || { echo "!! wires cannot find its verbs (looked beside $here and in ../lib)" >&2; exit 1; }
+
+# Two usages, and they answer different questions. Someone who typed `wires` to
+# see what it does wants the shape - one line per command, alternatives inline
+# in the {a|b|c} form every other CLI uses. Someone who asked for help wants to
+# know what each one does.
+#
+# Written out rather than sliced out of the header comment with a line range:
+# ranges rot the moment a comment is edited, which is how two of these ended up
+# printing a sentence and a half of the prose underneath them.
+short_usage() {
+    cat <<'EOF'
+usage: wires <command> [options]          `wires help` for what each one does
+
+  wires runtime {list|path|use|install}  the builds in the store, and which is live
+  wires plug {list|new|use|setup|rm}     the prefixes applications are installed into
+  wires app {list|rm}                    the applications installed on this machine
+  wires update [--check]                 is there a newer build on this channel?
+  wires stop [-y]                        stop everything running from a runtime or Plug
+EOF
+}
+
+long_usage() {
+    cat <<'EOF'
+Wires: the runtime, the store, and the Plugs an application runs in.
+
+  wires runtime list              every installed build, newest first
+  wires runtime path              the runtime root, for scripts and docs
+  wires runtime use [id]          switch the channel to another build
+  wires runtime install [tarball] this channel's current build, or a local one
+  wires plug list                 every Plug, what is in it, what it runs
+  wires plug new <name>           a fresh Plug, or --from a clone of another
+  wires plug use [name]           make one the default for new launches
+  wires plug setup [name]         run an application's prefix setup against it
+  wires plug rm <name> [-y]       remove a Plug and everything in it
+  wires app list                  every installed application
+  wires app rm <name> [-y]        remove one; Plugs are untouched
+  wires update [--check]          is there a newer build on this channel?
+  wires stop [-y]                 stop everything running from the runtime or a Plug
+EOF
+}
+
+cmd="${1:-}"; [ $# -gt 0 ] && shift
+case "$cmd" in
+    runtime|runtimes)    exec "$verbs/wires-runtime" "$@" ;;
+    plug|plugs)          exec "$verbs/wires-plug" "$@" ;;
+    app|apps)            exec "$verbs/wires-app" "$@" ;;
+    update)              exec "$verbs/wires-update" "$@" ;;
+    stop)                exec "$verbs/wires-runtime" stop "$@" ;;
+    "")                  short_usage ;;
+    help|-h|--help)      long_usage ;;
+    -*)                  echo "!! wires takes a command first: try 'wires help'" >&2
+                         short_usage >&2; exit 1 ;;
+    *)                   echo "!! no such command: $cmd" >&2
+                         short_usage >&2; exit 1 ;;
+esac

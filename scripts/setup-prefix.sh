@@ -15,7 +15,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 #   <kit>/scripts/setup-prefix.sh        -> vendor at $here/../vendor (repo, extracted .run kit)
 #   <dir>/setup-prefix.sh + <dir>/vendor -> vendor at $here/vendor
 # Resolved lazily so --refresh (which skips the winetricks pass) never trips this;
-# install.sh deliberately does not install vendor/ into ~/.local/share/ableton-wine.
+# install.sh deliberately does not install vendor/ into ~/wires/apps/ableton-live.
 root=""
 kit_root() {
     [ -n "$root" ] && return 0
@@ -53,12 +53,41 @@ case "${ABLETON_LIVE_VERSION:-12}" in
     *) echo "!! ABLETON_LIVE_VERSION must be 11 or 12 (got '$ABLETON_LIVE_VERSION')" >&2; exit 2 ;;
 esac
 
-unset WINELOADER WINEDLLPATH WINEDLLOVERRIDES WINEARCH WINEESYNC WINEFSYNC
-WINE_ROOT="${ABLETON_WINE_ROOT:-$HOME/.local/opt/wine-d2d1-nspa-11.13}"
-export WINEPREFIX="${ABLETON_WINEPREFIX:-$HOME/.wine-ableton}"
-export PATH="$WINE_ROOT/bin:$PATH"
+# Runtime and prefix paths resolve in one place; see wires/runtime-env.sh.
+for _l in "$(dirname "$0")/runtime-env.sh" \
+          "$(dirname "$0")/../wires/runtime-env.sh" \
+          "$HOME/wires/lib/runtime-env.sh"; do
+    [ -r "$_l" ] && . "$_l" && break
+done
+command -v wires_runtime_path >/dev/null 2>&1 || {
+    echo "!! runtime-env.sh not found next to $0 or in ~/wires/apps/ableton-live" >&2; exit 1; }
+wires_bind_runtime
+# Only this script clears the sync backends: folding them into the shared
+# binder would start dropping a user's WINEESYNC on every launch.
+unset WINEESYNC WINEFSYNC
 export WINEDEBUG=-all
-export WINESERVER="$WINE_ROOT/bin/wineserver"
+
+# Nothing may touch this prefix while something is running out of it.
+#
+# Through the .run this never fires: setup-run-header.sh runs install.sh first,
+# and install.sh stops every process using the runtime before this is reached.
+# Standalone it is the whole guard -- and standalone is not a corner case,
+# because install.sh's own last line tells you to run this next. Follow that
+# with Live open and `wineboot -u` rewrites the registry underneath a live
+# wineserver, with --refresh no different.
+#
+# Refuses rather than prompting, which is where it parts company with
+# install.sh. That script's job is to replace the runtime, so force-closing
+# Live is an outcome a user can consent to. Here there is no such answer: the
+# only safe version of "yes" is "close it first", so that is what it says.
+# ABLETON_SKIP_BUSY_CHECK exists for the automation that has already stopped
+# things itself, and is not documented for users.
+if [ "${ABLETON_SKIP_BUSY_CHECK:-0}" != "1" ] && wires_runtime_busy; then
+    echo "!! $(wires_runtime_pids | wc -l) process(es) are running from this runtime." >&2
+    echo "   Close Live (and Max) before setting up the prefix -- this rewrites it." >&2
+    echo "   The installer stops them for you; running this script on its own does not." >&2
+    exit 1
+fi
 
 # --post-first-run: Max for Live 8 (ships with Live 11) crashes on its SECOND start
 # with a stale preferences file. Move it aside: never delete: so Max regenerates
@@ -95,6 +124,7 @@ for required in \
 done
 
 # Host tools winetricks needs to unpack the redistributables.
+# shellcheck disable=SC2043  # deliberately a list: more host tools get added here
 for t in cabextract; do
     command -v "$t" >/dev/null || echo "!! missing host tool '$t' (needed by winetricks): install it (e.g. 'pacman -S cabextract' / 'apt install cabextract')"
 done
@@ -270,11 +300,54 @@ case "$dpi_mode" in
 esac
 
 echo "== [1/5] initialise prefix at $WINEPREFIX =="
-# While updating the prefix, wineboot offers Wine's Mono and Gecko installers. This runtime
-# vendors neither, so on a machine with no cached package it opens a modal "Wine Mono
-# Installer" prompt; nothing answers it in an unattended run and the wineserver -w below then
-# never returns. Live needs neither - ableton-live and max9 already disable both on every
-# launch - so disable them here and wineboot stops asking.
+# Wine makes the prefix directory itself, but only the last level: it cannot
+# create ~/wires/plugs/studio while ~/wires/plugs does not exist, and it fails
+# with "chdir to <prefix>: No such file or directory" without naming the
+# directory it actually wanted. Nothing on the install path created the Plugs
+# container - install.sh lays down apps/, bin/ and lib/ and stops - so this only
+# appears on a machine that has no Plug at all: a first install with nothing to
+# migrate. Every rig until now either migrated a legacy prefix or already had
+# one from an earlier run, which is why it went unseen.
+mkdir -p "$WINEPREFIX"
+# An unfinished prefix is worse than none: Wine reads the missing #arch marker
+# as win32 and refuses every 64-bit application, reporting a "32-bit
+# installation" that was never 32-bit. Nothing downstream can recover from it
+# and the message does not lead anyone to the answer, so clear it and make a
+# real one. Only ever the unfinished shape - drive_c holding nothing but the
+# two directories wineboot lays down first - never a prefix with anything
+# installed in it.
+# An unfinished prefix carries no #arch line at all, and Wine then reads it as
+# win32 and refuses every 64-bit application - reporting a "32-bit installation"
+# that was never 32-bit, only incomplete. It does not have to be thrown away:
+# writing the marker lets the wineboot below finish the job in place, and
+# anything already under drive_c survives. Verified against a stub holding a
+# saved set: the set came through and drive_c gained ProgramData and both
+# Program Files trees.
+#
+# A prefix that *declares* #arch=win32 is a different object - genuinely 32-bit,
+# and not ours to convert. The absence of the line is what is unambiguous.
+if [ -e "$WINEPREFIX/system.reg" ] && ! wires_is_prefix "$WINEPREFIX"; then
+    _arch="$(wires_prefix_arch "$WINEPREFIX" 2>/dev/null || true)"
+    if [ -n "$_arch" ]; then
+        # It says what it is. A 32-bit prefix cannot be converted in place and
+        # is not ours to replace - Live is 64-bit, so this one cannot be used.
+        echo "!! the prefix at $WINEPREFIX is a $_arch installation, and Live is 64-bit." >&2
+        echo "   Wine cannot convert one in place and nothing here will delete it." >&2
+        echo "   Make a Plug for this install and point at it:" >&2
+        echo "     wires plug new studio64 && wires plug use studio64" >&2
+        echo "   or set WIRES_PLUG to a prefix you want to use." >&2
+        exit 1
+    fi
+    # Nothing declares an architecture anywhere, so wineboot never finished.
+    # Write the marker so it can. Written with printf rather than `sed 1a`,
+    # which appends nothing when the file is empty - and an empty system.reg is
+    # exactly the shape this arrives in.
+    echo "   the prefix here was never finished: no registry file declares an"
+    echo "   architecture. Writing the marker so wineboot can complete it in place."
+    printf 'WINE REGISTRY Version 2\n;; All keys relative to \\\\Machine\n\n#arch=win64\n' \
+        > "$WINEPREFIX/system.reg"
+fi
+
 WINEDLLOVERRIDES="mscoree,mshtml=" wineboot -u
 # A prefix that got Ableton's USB audio driver carries the driver's tray agent, and
 # wineboot's startup pass relaunches it on every boot. The agent never exits by itself and

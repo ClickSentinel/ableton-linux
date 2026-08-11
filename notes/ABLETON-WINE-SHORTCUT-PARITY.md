@@ -112,7 +112,7 @@ The repository contains the two tools used to check these mitigations.
 Run the GNOME hold and recovery test:
 
 ```bash
-scripts/test-shortcut-hold.sh
+tests/test-shortcut-hold.sh
 ```
 
 This test uses temporary data. It does not change the current GNOME settings.
