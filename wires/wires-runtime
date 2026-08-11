@@ -420,7 +420,7 @@ cmd_install() {
         echo "== stop processes using the installed runtime =="
         echo "   $(wires_runtime_pids | wc -l) found"
         # Closing Live discards unsaved work, so require an explicit yes.
-        # Opening /dev/tty is the only honest terminal test; anything but y -
+        # Opening /dev/tty is the only reliable terminal test; anything but y -
         # a timeout, an EOF, a bare Enter, no terminal - means nobody
         # consented. Leftover wineserver and winedevice.exe without Live have
         # nothing to save and never reach this.
@@ -472,8 +472,8 @@ cmd_install() {
     wires_migrate_layout
     wires_migrate_plug
 
-    # Where this lands. Unpinned, always the store - a fresh machine never
-    # sees the flat layout. Pinned, exactly the named path, flat.
+    # Where this is installed. Unpinned, always the store - a fresh machine
+    # never resolves to the flat layout. Pinned, exactly the named path, flat.
     if [ -n "${WIRES_RUNTIME:-}" ]; then
         STORE=""
         WINE_ROOT="$WIRES_RUNTIME"

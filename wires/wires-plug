@@ -12,10 +12,9 @@
 # state is `.wires-runtime`, a symlink at the build or channel it runs. Nothing
 # registers a Plug, so nothing can disagree with the filesystem about one.
 #
-# Per-project Plugs are the point. Two Plugs each hold their own Live with their
-# own preferences, plugin paths and templates, because those already live inside
-# a prefix - and they run at the same time, because the launch lock and the
-# wineserver key are both prefix-scoped.
+# Per-project Plugs are the point: each holds its own preferences, plugin paths
+# and templates, and two run at once because the launch lock and the wineserver
+# key are both prefix-scoped.
 set -uo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"

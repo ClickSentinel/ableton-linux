@@ -3,21 +3,10 @@
 #
 # One command because there is one thing here to talk to. The verbs live in
 # their own files beside the shared library rather than on PATH: `wires` is the
-# interface, and what implements it is not something to be called directly.
+# interface, and what implements it is not called directly.
 #
-# What the exit codes mean, across every verb and install-wires.sh, because a
-# caller cannot tell a refusal from a cancellation by reading the words:
-#
-#   0  it happened - or a person was asked and declined something optional,
-#      which is not a failure. `update` declining a download exits 0.
-#   1  refused, or failed. The command ran and the machine is not in the state
-#      that was asked for. Declining something the caller cannot proceed
-#      without is a refusal, not a cancellation: install-wires.sh's ABI-break
-#      prompt exits 1 when the answer is no, because its caller must stop.
-#   2  usage: an unknown option, an unknown command, two names where one goes.
-#      Nothing was attempted.
-#   3  install-wires.sh only: the installed infrastructure is newer and was
-#      kept. The application's own install continues.
+# Exit codes are shared across every verb and install-wires.sh; README.md has
+# the table.
 set -euo pipefail
 # Resolved, not just dirname'd: PATH holds a link to this file, and $0 is then
 # the link's own path - ~/.local/bin - whose ../lib is somewhere else entirely.

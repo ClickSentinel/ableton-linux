@@ -1,32 +1,14 @@
 #!/usr/bin/env bash
-# Install the Wires infrastructure: the shared library, the wires command, and
-# its verbs. Nothing here is an application's; the application's installer
-# calls this and then installs its own payload.
+# Install the Wires infrastructure - the shared library, the wires command and
+# its verbs - and arbitrate when two kits disagree about it.
 #
 #   install-wires.sh check [--app-min N]    decide, refuse, or ask - writes nothing
 #   install-wires.sh install                the write, applying what check decided
 #
-# Two entry points because the decision and the write belong at different
-# moments of an application install: check before anything is stopped or moved
-# (two outcomes are refusals, and that early a refusal leaves the machine
-# untouched), install after the runtime lands. install re-derives the answer
-# from the same files rather than trusting state passed between calls.
-#
-# Every kit carries its own copy of this infrastructure - one self-sufficient
-# installer is the distribution model - so every install is also a write onto a
-# machine other applications may depend on. Unguarded, whichever kit ran last
-# would own ~/wires/lib. The ABI range (see runtime-env.sh) arbitrates:
-#
-#   kit newer, nobody stranded             install it        (the silent path)
-#   kit newer, would strand an app         ask, naming them
-#   kit older                              keep what is installed,
-#                                          exit 3 - the app installs alone
-#   kit older AND its app below OLDEST     refuse: exit 1
-#
-# "Newer" is two questions, not one. The ABI range answers whether an
-# application can consume the installed interface; the shipment version answers
-# which library is more recent. Compatibility alone leaves equal-ABI installs
-# last-writer-wins - two kits both speaking ABI 1 carry different libraries.
+# check runs before anything is stopped or moved, so a refusal leaves the
+# machine untouched; install re-derives the answer rather than trusting state
+# passed between the two calls. The arbitration table, the exit codes and the
+# ABI range are in README.md.
 set -euo pipefail
 export LC_ALL=C.UTF-8
 
@@ -118,9 +100,8 @@ cmd_check() {
     fi
 
     # A newer infrastructure is already here. Never downgrade it - but the
-    # calling kit's application is about to run under it, so the promise has to
-    # hold in the other direction too: the installed OLDEST must still cover
-    # the floor that application declares.
+    # calling kit's application is about to run under it, so the installed
+    # OLDEST must still cover the floor that application declares.
     if [ "$inst_oldest" -gt "$app_min" ]; then
         echo "!! This kit's application is written against Wires generation $app_min," >&2
         echo "   and the installed infrastructure (generation $inst_abi) supports" >&2
@@ -144,7 +125,7 @@ cmd_install() {
     fi
     mkdir -p "$HOME/wires/bin" "$HOME/wires/lib" "$BIN"
     # `wires` acts on the runtime and the store, which no application owns, so
-    # it sits in wires/bin rather than in any app's directory. Its verbs go
+    # it is installed in wires/bin rather than in any app's directory. Its verbs go
     # beside the shared library: they implement the command, they are not
     # commands themselves.
     install -m755 "$here/wires" "$HOME/wires/bin/wires"

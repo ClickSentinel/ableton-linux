@@ -1,69 +1,31 @@
 # shellcheck shell=bash
 # Where the runtime and the prefix are, which tarball to act on, and what is
-# running from either.
+# running from either. Sourced, never executed.
 #
-# Sourced, never executed. This exists because each answer was written several
-# times over — the tarball selector in install.sh, make-installer.sh and
-# build-audit.sh, with the same defect in all three; the prefix default in
-# install.sh twice and in the launcher again; and PR #120's process scan inline
-# in install.sh, where nothing else could reach it. Copies of a path do not stay
-# in agreement, and the failure when they diverge is not cosmetic: #120's scan
-# and the directory install.sh is about to replace have to name the same tree,
-# or a runtime is swapped out from under running processes.
-#
-# The resolvers are pure: they echo and touch nothing, so a caller uses only
-# the functions it needs, and they can be tested without a sandbox. Binding
-# the current shell to the runtime is opt-in; only the launchers need it.
+# The resolvers print an answer and change nothing, so a caller sources this
+# file and uses only the functions it needs. Binding the shell to a runtime is opt-in; only launchers need
+# it. See README.md for why this file exists and what the words mean.
 #
 #   . "$here/runtime-env.sh"
-#   WINE_ROOT="$(wires_runtime_path)"           # just the path
-#   wires_bind_runtime                       # the full launcher binding
+#   WINE_ROOT="$(wires_runtime_path)"
+#   wires_bind_runtime
 
-# The compatibility contract, as a range. WIRES_ABI is the library's current
-# interface generation; WIRES_ABI_OLDEST is the oldest still supported; each
-# launcher declares the WIRES_ABI_MIN it was written against.
+# The compatibility contract, as a range; README.md has the rules.
 #
 #   compatible  <=>  WIRES_ABI_OLDEST <= WIRES_ABI_MIN <= WIRES_ABI
 #
-# Applications are forward compatible and the infrastructure backward: an app
-# built against MIN keeps working until OLDEST rises past it, and raising
-# OLDEST is the only way to drop one. A single integer does not survive
-# separate release cadences - libtool's current/age idea, for the same reason.
-# Bumped when the surface changes, never for a release: the kit VERSION is a
-# date, and dates would raise every app's floor for nothing.
-#
-# The ABI answers compatibility and nothing else: two files can speak the same
-# interface and be different implementations of it, one carrying fixes the
-# other does not. Which of the two is more recent is not asked here.
-#
-# This file carries no version of its own. The runtime, the verbs and this
-# library ship as one package under one version - the kit's - which
-# install-wires.sh records at ~/wires/lib/VERSION and compares on the next
-# install.
+# This file carries no version of its own: install-wires.sh records the kit's
+# at ~/wires/lib/VERSION.
 #
 # shellcheck disable=SC2034  # read from outside; nothing here consumes them
 WIRES_ABI=1
 # Policy: stays 1. Stranding an application is a breaking release, taken
-# deliberately or not at all; the strand prompt in install-wires.sh names the
-# casualties if this line ever moves.
+# deliberately or not at all. If this line ever moves, install-wires.sh lists
+# the installed applications that would stop launching.
 # shellcheck disable=SC2034
 WIRES_ABI_OLDEST=1
 
-# --- de-Ableton inventory ------------------------------------------------------
-# wires/ is the future standalone repository; the exit test is `grep -ci
-# ableton` over it reaching zero, counting code rather than this list. What
-# remains, and its exit - each a migration or an expiry, never a plain edit:
-#   * wires_runtime_name's default          the app passes WIRES_RUNTIME_NAME
-#   * wires_legacy_root / wires_legacy_plug frozen history; leaves when
-#                                           migration is install-time only
-#   * ABLETON-WINE-BUILD-INFO.txt           artifact format; compat-window rename
-#   * the TEMPORARY fenced rename compat    deleted whole, on schedule
-#   * wires_manifest_url's URLs             per-app `origin`, once the updater
-#                                           takes an app argument
-#   * ableton_live_pids / "Ableton Live"    the app declares its process
-#                                           signature, or it derives from the
-#                                           Plug's RegisteredApplications name
-# New mentions outside this list are regressions.
+# --- de-Ableton inventory: see README.md. New mentions are regressions. ---
 
 # ========================= TEMPORARY: RENAME COMPAT ==========================
 # DELETE this whole fenced block, fences included, in the first release after
@@ -157,23 +119,16 @@ wires_channel() {
     esac
 }
 
-# The installed runtime. WIRES_RUNTIME overrides it — the tests, the
-# regression VMs and anyone bisecting a build rely on that, so it stays the
-# outermost say.
+# The installed runtime. WIRES_RUNTIME overrides it and stays the outermost say:
+# the tests, the regression VMs and bisecting a build all rely on that.
 #
-# Returns what the channel points at, never the channel path itself. Two things
-# turn on that, and both were measured rather than argued:
+# Returns what the channel points at, never the channel path. /proc/PID/exe
+# reports symlinks already resolved, so a process launched through
+# <container>/stable/bin/wine appears under the build's own name - compare
+# against the channel and wires_runtime_pids matches nothing.
 #
-# /proc/PID/exe reports a path with symlinks already resolved, so a process
-# launched through <container>/stable/bin/wine appears under the build's own
-# name. Compare against the channel and wires_runtime_pids matches nothing:
-# the confirmation before force-closing Live never fires, the targeted kills
-# reach nothing, and only the pgrep fallback PR #120 added the scan to replace
-# still works — while install.sh goes on to rename the directory.
-#
-# And a caller that resolved once keeps the build it resolved. A channel switch
-# part-way through a session cannot move the runtime under a process already
-# executing from it.
+# A caller that resolved once keeps the build it resolved: a channel switch
+# mid-session cannot move the runtime under a running process.
 wires_runtime_path() {
     local _chan _target
     if [ -n "${WIRES_RUNTIME:-}" ]; then
@@ -204,7 +159,7 @@ wires_plugs_dir() {
 #
 # Selection is WIRES_PLUG, then the `default` symlink, then studio. The symlink
 # is the one thing `wires plug use` writes; studio is the name the migration
-# lands on, so an install that predates Plugs still resolves without one.
+# uses, so an install that predates Plugs still resolves without one.
 wires_plug_path() {
     local _d _t
     if [ -n "${WIRES_PLUG:-}" ]; then printf '%s\n' "$WIRES_PLUG"; return; fi
@@ -261,8 +216,8 @@ wires_legacy_plug() {
 # wires_migrate_plug has moved it. wires_plug_path names where the prefix will
 # live; on an unmigrated machine that directory does not exist yet and the real
 # one is still at the legacy path. Handing the wrong path to `wineserver -k` is
-# a no-op that reports success, which is how a running Live survives the stop
-# and then gets SIGKILLed - the registry corruption the migration exists to
+# a no-op that reports success, which is how a running Live is left running
+# and then SIGKILLed - the registry corruption the migration exists to
 # avoid.
 wires_plug_path_live() {
     local _p
@@ -305,23 +260,14 @@ wires_plug_runtime() {
 
 # --- which Wine base a Plug was bootstrapped against -------------------------
 #
-# A runtime and a Plug are independent objects with independent lifecycles, and
-# everything above keeps them that way. Wine imposes exactly one coupling and it
-# is asymmetric: it compares the prefix's .update-timestamp against the runtime's
+# Wine imposes one coupling between a runtime and a Plug, and it is asymmetric:
+# it compares the prefix's .update-timestamp against the runtime's
 # share/wine/wine.inf and runs `wineboot --update` when they differ. Forward it
-# does. Back it does not support.
+# does; back it does not support.
 #
-# Until this existed every guard for that asked the *runtime* - `wires runtime
-# use` compared the channel's current target against the incoming build, and
-# `wires update` compared the installed runtime against the manifest. Neither
-# ever asked a Plug what had bootstrapped it, so a Plug pinned to a build while
-# the channel moved on, a clone carrying a binding but no history, and the
-# WIRES_RUNTIME escape hatch the VMs use for bisecting were all unguarded.
-#
-# Nothing new is recorded to answer it. The prefix already carries the fact, and
-# these two reads are the same comparison Wine itself makes - so the granularity
-# is right by construction: two builds whose wine.inf did not change compare
-# equal, which is correct, because Wine considers such a prefix current.
+# Reading those two is the same comparison Wine makes, so the granularity is
+# right by construction: two builds whose wine.inf did not change compare equal,
+# and Wine considers such a prefix current.
 wires_plug_base() {
     local _p="${1:-}"; [ -n "$_p" ] || _p="$(wires_plug_path)"
     _p="${_p%/}"
@@ -387,30 +333,13 @@ wires_plug_base_runtime() {
     return 1
 }
 
-# Where running <runtime> against <plug> would take the prefix. Prints one word
-# and leaves the rendering to the caller, because the three commands that ask
-# want to say different things about the same answer.
+# Where running <runtime> against <plug> would take the prefix: one word of
+# fresh|same|refresh|rollback|forward|backward, rendered by the caller. See
+# README.md for what each means and why severity cannot come from the stamp.
 #
-#   fresh     the Plug has never been booted; anything may bootstrap it
-#   same      the very build that booted it; Wine will not re-run wineboot
-#   refresh   a newer build of the SAME Wine base - the ordinary update, and
-#             Wine re-runs its prefix update exactly as it always has
-#   rollback  an older build of the SAME Wine base - going back to yesterday's
-#             build, which the store exists to allow and the nightly's own
-#             notes tell people to do
-#   forward   a newer base, or one that cannot be identified: one-way door
-#   backward  an older base, or unidentifiable: Wine does not support it
-#
-# The stamp alone cannot say which of those a move is: wine.inf's mtime is
-# stamped at build time (measured on real tarballs), so
-# two builds of the same wine-11.13 base carry different stamps, and by stamp
-# alone every routine update would read as a base change - and rolling back to
-# yesterday's nightly would read as the unsupported case and be refused. So the
-# stamp gives the direction, and the *severity* comes from comparing the wine:
-# label of the candidate against the label of the runtime that actually booted
-# the Plug, recovered via wires_plug_base_runtime. When that runtime is gone or
-# either label is unreadable, the move stays forward/backward - strict, which
-# preserves the rule that an unanswerable question is a refusal, not a skip.
+# The stamp gives direction; severity comes from comparing the candidate's
+# wine: label against that of the runtime which booted the Plug. Unreadable
+# either side stays forward/backward - an unanswerable question is a refusal.
 #
 # Returns 1 without printing when the candidate or the Plug cannot be read.
 wires_base_move() {
@@ -421,7 +350,7 @@ wires_base_move() {
     if ! _pb="$(wires_plug_base "$_p")"; then
         # No stamp: fresh or tampered, told apart by -s, not -e. wineboot
         # writes registry content in its first moments, so an empty system.reg
-        # means it never started, and fresh is the honest answer; content
+        # means it never started, so fresh is correct; content
         # without a stamp stays a refusal. -e read the migration harness's
         # `: > system.reg` fixture as unanswerable and aborted a legacy
         # machine's first install.
@@ -472,18 +401,14 @@ wires_app_names() {
     done
 }
 
-# A WIRES_ABI* declaration read out of a file without sourcing it. Sourcing is
-# exactly wrong here: the reader usually holds one generation of this library in
-# scope already and is asking about another, and executing the other to ask it a
-# number would execute the file under evaluation. Digits only - a
-# clever value is treated as no value.
+# A WIRES_ABI* declaration read out of a file without sourcing it. The reader
+# usually holds one generation of this library in scope already and is asking
+# about another; sourcing the other would execute the file under evaluation.
 #
-# The whole value has to be digits, and a value that is not is refused rather
-# than reduced to the digits inside it. Stripping non-digits reads 1.0 as ten
-# and "1 # note 2" as twelve, and a generation ten reported by a library that
-# means one freezes the gate: every real kit then looks older than what is
-# installed, so decide() keeps the installed infrastructure for good and says
-# so in the words it uses when nothing is wrong.
+# The whole value must be digits, and one that is not is refused rather than
+# reduced to the digits inside it. Stripping reads 1.0 as ten and "1 # note 2"
+# as twelve, and a generation ten from a library that means one freezes the
+# gate: every real kit then looks older than what is installed.
 wires_abi_field() {
     local _v
     _v="$(sed -n "s/^${2}=//p" "$1" 2>/dev/null | head -1)"
@@ -498,8 +423,8 @@ wires_abi_field() {
 # application that declares nothing is treated as MIN=1, the first generation,
 # because that is when it must have been written. So while OLDEST stays 1
 # nothing can ever appear here, which is the point: raising OLDEST is the only
-# act that puts an application at risk, and this names the casualties before it
-# happens rather than after.
+# act that can stop an installed application launching, and this lists which
+# ones before it happens rather than after.
 wires_apps_below_min() {
     local _oldest="$1" _a _l _m
     while read -r _a; do
@@ -511,21 +436,15 @@ wires_apps_below_min() {
     return 0
 }
 
-# What is installed in a Plug - asked of Windows, which already holds two
-# disjoint answers. HKLM\Software\RegisteredApplications is the Default
-# Programs index: vendor-neutral, written by installers that register
-# (Ableton's does). The Uninstall keys are the Add/Remove index: written by
-# nearly every installer (NSIS and MSI included), and the only trace of an
-# application that never registers. Measured on real prefixes, an application
-# can appear in either index alone, so the census is the union.
+# What is installed in a Plug. Windows holds two disjoint answers and the census
+# is their union: HKLM\Software\RegisteredApplications is the Default Programs
+# index, written by installers that register; the Uninstall keys are the
+# Add/Remove index, written by nearly every installer and the only trace of one
+# that never registers. An application can appear in either alone.
 #
-# Two subtractions, both bounded. Entries marked SystemComponent=1 use the
-# Windows convention for hidden support packages and are dropped. What remains
-# still includes platform runtime components with no structural marker -
-# Windows itself lists them in Apps & Features - so those are dropped by name.
-# That list is platform knowledge (the runtime's own support payloads), not
-# tenant knowledge: the smell being avoided is application vendors named in
-# shared code, and no application is named here.
+# Two subtractions: entries marked SystemComponent=1, the Windows convention for
+# hidden support packages, and the platform runtime components below, which
+# carry no such marker. Those are the runtime's own payloads, not tenants.
 wires_plug_tenants() {
     local _p _f
     _p="${1:-}"; [ -n "$_p" ] || _p="$(wires_plug_path)"
@@ -586,23 +505,15 @@ wires_bind_runtime() {
 
 # Is this a runtime tarball an install will select? The name is the whole test.
 #
-# The glob cannot be the selector. The build also emits
-# <name>-<version>-debug.tar.zst, and `sort -V` orders that suffix *after* the
-# runtime, so a glob piped to `tail -1` picks the debug tree — which carries
-# bin/ and lib/ but no share/, passes `wine --version`, and then fails at launch
-# with "could not exec the wine loader". Match the dated release form only and
-# let every suffixed variant fall out.
+# The glob cannot be the selector: the build also emits
+# <name>-<version>-debug.tar.zst, which `sort -V` orders after the runtime, so a
+# glob piped to `tail -1` picks the debug tree - bin/ and lib/ but no share/,
+# passes `wine --version`, then fails at launch with "could not exec the wine
+# loader".
 #
-# A predicate rather than the regex inlined at one call site, because there are
-# two: the selector below, and make-installer.sh checking the tarball it was
-# told to pack. Those disagreeing is not hypothetical — a name this rejects
-# packs into a kit perfectly well, and the failure surfaces on the user's
-# machine, where the kit's own install.sh finds nothing to install.
-#
-# A `+<label>` suffix is part of the release form, not a variant of it: the
-# nightly channel publishes <name>-<version>+nightly.<sha>.tar.zst, and refusing
-# that meant the one artifact a nightly actually ships could not be packed or
-# installed. `-debug` stays refused — that is a different tree, not a label.
+# A `+<label>` suffix is part of the release form: the nightly channel publishes
+# <name>-<version>+nightly.<sha>.tar.zst. `-debug` stays refused - a different
+# tree, not a label.
 wires_is_runtime_tarball() {
     local _b="${1##*/}" _nm _re
     _nm="$(wires_runtime_name)"
@@ -638,32 +549,18 @@ wires_pick_tarball() {
 }
 
 # --- asking, and saying where things are -------------------------------------
-#
-# These two are the commands' rather than the resolvers', and they live here
-# for the reason everything else does: every verb already sources this file, so
-# this is the shared place. A second shared file would be a second thing to
-# version, to install, and to name in the ABI gate.
 
-# Consent, or the absence of it. Opening /dev/tty is the only honest terminal
-# test - a redirected stdin is not the caller, and stdin may be the very thing
-# being read.
+# Consent. /dev/tty is the terminal test: a redirected stdin is not the caller,
+# and stdin may be what is being read.
 #
-#   wires_ask_tty <prompt> [default]     default is n unless given as y
+#   wires_ask_tty <prompt> [default]     default n unless given as y
 #
-#   0  yes            2  no terminal to ask on
-#   1  no
+#   0  yes     1  no     2  no terminal to ask on
 #
-# The caller separates 1 from 2 because they are different sentences: one
-# person declined, the other was never asked, and the second wants telling
-# which flag says it in advance.
-#
-# The default carries the silences - a bare Enter, a timeout, an EOF - and it
-# is a parameter because the two answers are both right somewhere. Anything
-# that discards work defaults to no. A Wine base change during an install
-# defaults to yes, because refusing would break every scripted install the
-# first time a base moves and there is no unsaved work at stake. Written as
-# one function with a default rather than two nearly-identical ones, so the
-# 60-second timeout and the accepted spellings cannot drift apart.
+# 1 and 2 are separate because the caller says different things: one person
+# declined, the other was never asked and needs the flag that answers ahead of
+# time. The default answers the silences - bare Enter, timeout, EOF. Callers
+# that would discard work pass no; the base-change prompt passes yes.
 wires_ask_tty() {
     local _prompt="$1" _default="${2:-n}" _ans=""
     { : >/dev/tty; } 2>/dev/null || return 2
@@ -690,17 +587,13 @@ wires_login_shell() {
 # The file this user's *interactive* shells read, or nothing when the shell is
 # one we should not be guessing about.
 #
-# The interactive rc, deliberately, not the login file. ~/.profile is read once
-# by the session at login; a terminal window opened afterwards is an interactive
-# non-login shell and never reads it again, so a PATH entry written there does
-# not appear until the user logs out of their desktop. ~/.bashrc is read by
-# every new terminal, which is what "install a command and then run it" needs.
+# ~/.bashrc, not ~/.profile: the login file is read once by the session, so an
+# entry there does not appear until the user logs out. Login shells are covered
+# anyway - Debian's ~/.profile and Fedora's and Arch's ~/.bash_profile all
+# source ~/.bashrc.
 #
-# Login shells are covered anyway: Debian's ~/.profile and Fedora's and Arch's
-# ~/.bash_profile all source ~/.bashrc for bash. What a line here does not reach
-# is non-interactive shells - `ssh host wires ...`, cron, a systemd unit -
-# because the distro rc files return early for those. Those callers get an
-# absolute path, which is what automation should be using regardless.
+# Not reached: non-interactive shells (`ssh host wires ...`, cron, systemd),
+# where the distro rc files return early. Automation uses an absolute path.
 wires_path_rc() {
     local _sh
     _sh="$(wires_login_shell)" || return 1
@@ -733,27 +626,15 @@ wires_path_block() {
     printf '%s\n' "$WIRES_PATH_MARK_CLOSE"
 }
 
-# Put ~/.local/bin on PATH for this user's future shells, and say what to do
-# about the one they are sitting in.
+# Put ~/.local/bin on the PATH of this user's future shells. Takes the command
+# names to use in the message.
 #
 # Unconditional and idempotent: the block goes in unless it is already there.
-# There is no "the distro will handle it" case, because on a desktop that means
-# "after you log out" - ~/.profile is read once by the session, and the terminal
-# window someone opens next is an interactive non-login shell that never reads
-# it. Writing the interactive rc is what nvm, conda and pyenv all do, and it is
-# the only thing that works in a new terminal without logging out.
+# The interactive rc, not ~/.profile - that is read once by the session, so a
+# PATH entry written there does not appear until the user logs out.
 #
-# No consent prompt. A fenced, idempotent, uninstall-removable line in the file
-# whose entire purpose is shell setup is not a question worth stopping an
-# install for, and asking made the unattended path print instructions nobody
-# reads.
-#
-# It cannot fix the *calling* shell: a child process cannot change its parent's
-# environment. That is why every installer that does this ends by telling you to
-# start a new shell, and why this one does too.
-#
-# Takes the command names to name in the message, so it reads as advice about
-# what was just installed rather than about a directory.
+# It cannot change the calling shell: a child process cannot change its
+# parent's environment, so the message says to start a new one.
 wires_path_register() {
     local _bin="$HOME/.local/bin" _names="${*:-wires}" _rc _now=1
     case ":${PATH:-}:" in *":$_bin:"*) _now=0 ;; esac
@@ -835,21 +716,15 @@ wires_ask_choice() {
 }
 
 # The arguments every `rm` verb takes: one name, and -y for consent given in
-# advance. Prints the name on the first line and `1` on the second when -y was
-# given, either possibly empty:
+# advance. Prints the name on line one, and `1` on line two when -y was given;
+# either may be empty. Returns 2 on a usage error.
 #
 #   parsed="$(wires_rm_args "$@")" || return $?
 #   { IFS= read -r want; IFS= read -r yes; } <<<"$parsed"
 #
 # Two lines rather than two tab-separated fields: a tab is IFS whitespace, so
-# `IFS=$'\t' read -r a b` skips a leading empty field and shifts the rest left -
-# an unnamed Plug arrived as a name of "1". And a printed value rather than two
-# variables set by side effect, because a caller reading a value it cannot see
-# assigned is what shellcheck objects to, rightly.
-#
-# Returns 2 on a usage error, which is the convention across every verb: 2 is
-# "you asked for something that is not a command", separate from 1, which is
-# "the command ran and refused".
+# `IFS=$'\t' read -r a b` drops a leading empty field and shifts the rest left -
+# an unnamed Plug arrived as a name of "1".
 wires_rm_args() {
     local _name="" _yes=""
     while [ $# -gt 0 ]; do
@@ -934,19 +809,17 @@ wires_buildinfo_field() {
     printf '%s\n' "${_v%"${_v##*[![:space:]]}"}"   # strip any trailing space
 }
 
-# The identity of an installed runtime: <dist-version>+<discriminator>.
-# Echoes nothing when the tree cannot be named; a caller must treat that as a
-# refusal, never as a default.
+# The identity of an installed runtime: <dist-version>+<discriminator>. Prints
+# nothing when the tree cannot be named; a caller must treat that as a refusal,
+# never as a default.
 #
-# The discriminator is source-commit where the file has one and the first seven
-# characters of patch-stack where it does not. That fallback is not defensive:
-# measured 2026-08-04, none of the eleven runtimes on the development machine
-# carries source-commit, because the commit that writes it is not released. So
-# requiring it would refuse every runtime installed anywhere today.
+# The discriminator is source-commit where the file has one, and the first seven
+# characters of patch-stack where it does not. Requiring source-commit would
+# refuse every runtime installed today, since the commit that writes it is not
+# released.
 #
-# dist-version alone cannot serve. On that machine 2026.07.29.1 appears four
-# times under two different patch stacks, and 2026.07.23.1 covers both the 11.11
-# and the 11.14 tree — keyed on version they would collide.
+# dist-version alone collides: one version can cover several patch stacks, and
+# one has covered two different Wine trees.
 wires_runtime_id() {
     local _dir="$1" _info _ver _disc _kind
     _info="$_dir/ABLETON-WINE-BUILD-INFO.txt"
@@ -989,9 +862,7 @@ wires_compose_id() {
 # --- layout migration --------------------------------------------------------
 # One-time move from the flat layout to the store: one directory per build,
 # named from its own BUILD-INFO, with a channel symlink at the live one. Only
-# install.sh calls this. It lives here because it has to agree with the
-# resolvers above about where a runtime is, and those drifting apart is the
-# failure this whole file exists to prevent.
+# install.sh calls this.
 
 # Is <a> a later version stamp than <b>? Equal is not later.
 #
@@ -1006,7 +877,7 @@ wires_version_newer() {
 # Is <a> a newer build than <b>? built-at where both carry it, dist-version
 # otherwise. Runtimes built before built-at existed have only the version, which
 # ties across every nightly between two releases — that is why the field was
-# added, and why this answers "no" rather than guessing when it cannot tell.
+# added, and why this returns 1 rather than guessing when neither can be read.
 wires_build_is_newer() {
     local _a="$1" _b="$2" _av _bv
     _av="$(wires_buildinfo_field "$_a/ABLETON-WINE-BUILD-INFO.txt" built-at)"
@@ -1059,27 +930,6 @@ wires_all_pids() {
 
 
 
-# What is holding it, for a refusal that can be acted on rather than puzzled at.
-# Migrate, or explain why not. Idempotent, and refuses rather than guessing when
-# the live tree cannot be identified — installing over an unidentifiable runtime
-# is the ambiguous case the store exists to prevent.
-#
-# Nothing is left at the legacy path. An earlier design kept a compatibility
-# symlink there and it did not survive examination: the case it was chiefly
-# justified by, an older .run, does not read that path, it overwrites it.
-#
-# The caller must already have established that nothing is running from the
-# runtime: this renames the directory a running Wine executes from.
-# Move a flat prefix into the Plug store. Separate from the runtime migration
-# because it is a different object with different failure modes: a runtime can
-# be re-downloaded and a prefix cannot, so every branch here that is not certain
-# refuses rather than guesses.
-#
-# The move is a plain rename and needs no repair. Wine resolves everything
-# relative to $WINEPREFIX, which is supplied per launch; a used prefix carries
-# no absolute host path in its registry (checked against a real Live 12 install,
-# plain and hex-encoded), dosdevices/c: is relative, and the absolute symlinks
-# under drive_c/users point outward at the real home, which is not moving.
 # Is anything running out of this Plug? The runtime scan cannot answer it: a
 # process can hold a prefix while running from another Wine entirely, and
 # renaming a prefix out from under a live wineserver corrupts its registry.
@@ -1113,6 +963,13 @@ wires_plug_holders() {
     done
 }
 
+# Move a flat prefix into the Plug store. A prefix cannot be re-downloaded, so
+# any branch here that is not certain refuses.
+#
+# A plain rename needs no repair: Wine resolves everything relative to
+# $WINEPREFIX, which is supplied per launch. A used prefix holds no absolute
+# host path in its registry, dosdevices/c: is relative, and the symlinks under
+# drive_c/users point at the real home, which is not moving.
 wires_migrate_plug() {
     local legacy dest
     legacy="$(wires_legacy_plug)"
@@ -1203,6 +1060,14 @@ wires_migrate_plug() {
     echo "   plug: moved the prefix to $dest"
 }
 
+# Migrate a flat runtime into the store. Idempotent; refuses rather than
+# guessing when the live tree cannot be identified.
+#
+# Nothing is left at the legacy path: an older .run does not read it, it
+# overwrites it.
+#
+# The caller must already know nothing is running from the runtime - this
+# renames the directory a running Wine executes from.
 wires_migrate_layout() {
     local legacy container chan stamp id other d absorbed
     legacy="$(wires_legacy_root)"
@@ -1216,7 +1081,7 @@ wires_migrate_layout() {
     fi
 
     # Already migrated. A real tree at the legacy path beside it is not
-    # corruption: an older .run knows nothing about the store and writes one
+    # corruption: an older .run does not read the store and writes one
     # there. That is a normal action on a machine holding an older installer, so
     # recover rather than refuse — identify both and keep the newer live.
     if [ -L "$chan" ]; then
@@ -1260,14 +1125,14 @@ wires_migrate_layout() {
     mkdir -p "$container"
     # Never a bare mv. When an entry of this id is already in the store - which
     # happens whenever the channel symlink is genuinely absent rather than
-    # dangling - mv lands the legacy tree *inside* it, where retention and the
+    # dangling - mv moves the legacy tree *inside* it, where retention and the
     # container-scoped uninstall both stop seeing it while the channel quietly
     # points at the incumbent. wires_store_absorb is the guard the already-
     # migrated branch above and install.sh both already use.
     absorbed="$(wires_store_absorb "$legacy" "$stamp")"
     ln -sfn "$id" "$chan"
 
-    # The dated rollbacks travel too, and become readable in the process: each
+    # The dated rollbacks move too, and become readable in the process: each
     # carries its own BUILD-INFO, so a timestamp that recorded when a runtime
     # was replaced becomes a name that says which build it holds. Left behind
     # they are invisible to the container-scoped uninstall and orphan several
@@ -1288,7 +1153,7 @@ wires_migrate_layout() {
 # --- retention ---------------------------------------------------------------
 
 # Keep this many entries per channel. A count rather than a policy: a channel
-# that turns over nightly wants a smaller one than a channel that turns over
+# that turns over nightly needs a smaller one than a channel that turns over
 # monthly, and an unpacked runtime is ~392M against a 40-minute rebuild.
 wires_runtime_keep() {
     local _n="${WIRES_RUNTIME_KEEP:-10}"
@@ -1330,7 +1195,7 @@ wires_prune_runtimes() {
     # rather than tidying anything. The binding is a symlink, so this is the
     # same readlink the channels above get.
     #
-    # And the build that last booted it, which the base guard recovers to tell
+    # And the build that last booted it, which the base guard recovers to
     # a same-base refresh from a base change. That recovery is a search of this
     # store for the build whose wine.inf matches the prefix's stamp, so pruning
     # the answer turns the guard's severity question unanswerable and a routine
@@ -1429,10 +1294,6 @@ wires_remove_runtimes() {
 
 # --- the manifest ------------------------------------------------------------
 # A channel publishes one small document saying what it currently points at.
-# Everything before this re-derived that by parsing artifact filenames, which is
-# the single decision behind the selector defect, the packing defect, the
-# retention tie and the update prompt having nothing to compare.
-#
 # Same `key: value` shape as BUILD-INFO, so wires_buildinfo_field reads it and
 # nothing needs jq:
 #
@@ -1473,17 +1334,12 @@ wires_manifest_installer_url() {
 
 # The runtime's own BUILD-INFO, read out of a tarball without unpacking it.
 #
-# This, and not dist/BUILD-INFO-<version>.txt, is what a manifest must be written
-# from. The two are different documents: the committed one is the release's
-# declared provenance, written for release notes, and the tarball's is the file
-# that lands on the user's machine as $root/ABLETON-WINE-BUILD-INFO.txt — which
-# is exactly what the updater compares the manifest against. Writing the manifest
-# from the other one compares two documents and hopes they agree.
-#
-# They do not currently agree: the committed BUILD-INFO for 2026.08.04.1 carries
-# neither source-commit nor built-at, because the release predates both fields.
-# A manifest written from it fails validation, which is the right outcome and the
-# wrong reason.
+# This, not dist/BUILD-INFO-<version>.txt, is what a manifest must be written
+# from. They are different documents: the committed one is the release's
+# declared provenance; the tarball's is installed as
+# $root/ABLETON-WINE-BUILD-INFO.txt, which is what the updater compares the
+# manifest against. Writing from the other compares two documents that can
+# differ without detection.
 #
 # Half a second on a 60 MB tarball, at package time only.
 wires_tarball_buildinfo() {
@@ -1512,7 +1368,7 @@ wires_manifest_write() {
     printf 'source-commit:  %s\n' "$(wires_buildinfo_field "$_info" source-commit)"
     printf 'built-at:       %s\n' "$(wires_buildinfo_field "$_info" built-at)"
     # Optional, and absent for a release. Carried so the updater can report the
-    # id a build will land under rather than only its version.
+    # id a build is stored under rather than only its version.
     _k="$(wires_buildinfo_field "$_info" build-kind)"
     [ -z "$_k" ] || printf 'build-kind:     %s\n' "$_k"
     printf 'wine:           %s\n' "$(wires_buildinfo_field "$_info" wine)"

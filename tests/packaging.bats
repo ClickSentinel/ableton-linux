@@ -248,6 +248,9 @@ kit_script_names() {
     missing=""
     for f in wires/*; do
         [ -f "$f" ] || continue
+        # Documentation is not staged: the kit ships what runs, and this guards
+        # against a verb or the library existing and never reaching a machine.
+        case "$f" in *.md) continue ;; esac
         printf '%s\n' "$staged" | grep -qxF "${f##*/}" || missing="$missing ${f##*/}"
     done
     [ -z "$missing" ] || {

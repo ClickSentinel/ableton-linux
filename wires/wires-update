@@ -91,7 +91,7 @@ have_commit="$(wires_buildinfo_field "$have_info" source-commit)"
 have_at="$(wires_buildinfo_field "$have_info" built-at)"
 have_wine="$(wires_buildinfo_field "$have_info" wine)"
 
-# Both sides show the same thing: the id a build lands under. Reporting the
+# Both sides show the same thing: the id a build is stored under. Reporting the
 # channel's bare dist-version against the installed id put a version beside an
 # identifier and invited comparing them, when only one of them is a name.
 want_id="$(wires_compose_id "$want_ver" "$want_commit" \
@@ -123,30 +123,24 @@ if [ -n "$have_at" ] && [ -n "$want_at" ] && [ "$have_at" != "$want_at" ] && \
     echo "   (this is OLDER than what you have)"
 fi
 
-# This refusal sits above every branch that acts, the channel switch included.
-# It used to sit underneath it, so a build already in the store was retargeted
-# straight across a Wine base change reporting success -- the one path where
-# costing no download made the change look harmless.
+# Above every branch that acts, the channel switch included: a build already in
+# the store would otherwise be retargeted across a Wine base change for free,
+# which is the one path where costing no download makes it look harmless.
 #
-# The busy check deliberately does NOT come up here with it. What is running
-# only matters to the branch that replaces the tree; retargeting a channel under
-# a running Live is safe for the same reason `wires runtime use` allows it, and
-# says so rather than refusing -- the resolver hands back the build, not the
-# channel, so a session that has already started keeps what it started with.
+# The busy check does NOT belong up here. What is running matters only to the
+# branch that replaces the tree; retargeting a channel under a running Live is
+# safe because the resolver returns the build, not the channel, so a started
+# session keeps what it started with.
 #
-# A Plug is bound to a Wine base and cannot be taken back across one. Say it
+# A Plug is bound to a Wine base and cannot be taken back across one. Say so
 # before downloading 113M, not after.
-# An advisory, and deliberately no longer a refusal. It used to stop here and
-# say "install it deliberately with the full installer if you mean it" - and the
-# full installer had no base check at all, so the escape hatch it named was less
-# careful than the refusal that named it. The authoritative guard now lives in
-# install.sh, where the candidate tree is on disk and every door passes through:
-# it reads the prefix's own .update-timestamp rather than comparing two
-# BUILD-INFO strings, so it also catches the Plugs a runtime-to-runtime
-# comparison cannot see.
+# An advisory, not a refusal. The authoritative guard is in install.sh, where
+# the candidate tree is on disk and every door passes through: it reads the
+# prefix's own .update-timestamp rather than comparing two BUILD-INFO strings,
+# so it also catches the Plugs a runtime-to-runtime comparison cannot see.
 #
-# What survives here is the part worth saying early: do not spend 113 MB of
-# download to be asked a question that can be asked now.
+# Saying it here spares 113 MB of download before a question that can be asked
+# now.
 if [ -n "$have_wine" ] && [ -n "$want_wine" ] && [ "$have_wine" != "$want_wine" ]; then
     echo
     echo "note: this changes the Wine base: $have_wine -> $want_wine"
@@ -170,7 +164,7 @@ for e in "$container"/*; do
     # The one path install.sh never sees, so the guard it owns has to be repeated
     # here - and here it is answerable properly, because the build is on disk.
     # Costing no download is exactly what made this branch look harmless; it is
-    # the same one-way door as any other.
+    # irreversible in the same way as any other.
     back=""; fwd=""; roll=""
     while read -r _plug; do
         [ -n "$_plug" ] || continue

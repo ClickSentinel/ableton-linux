@@ -56,19 +56,16 @@ else
 fi
 
 # --- the infrastructure gate --------------------------------------------------
-# Decided by Wires itself: wires/install-wires.sh owns both the arbitration and
-# the write, because the infrastructure is not this application's to version.
-# check runs here - before anything is stopped or moved, since two of its
-# outcomes are refusals and a refusal this early leaves the machine untouched -
-# and the write happens after the runtime lands, applying the same decision.
+# wires/install-wires.sh owns the arbitration and the write; see wires/README.md.
+# check runs before anything is stopped or moved, the write after the runtime
+# is in place.
 #
 #   exit 0  install (or refresh) the infrastructure     the silent path
 #   exit 3  a newer one is installed; keep it, this kit adds only its app
 #   exit 1  refused - stranding, or this kit is too old for this machine
 #
-# The floor this kit's application declares is read from its own launcher and
-# passed in: which generation the app needs is app knowledge, and the gate
-# should not know where any application keeps it.
+# The application's floor is read from its own launcher and passed in: the gate
+# should not know where an application keeps it.
 kit_app_min="$(wires_abi_field "$here/ableton-live" WIRES_ABI_MIN 2>/dev/null || echo 1)"
 gate_rc=0
 "$wires_src/install-wires.sh" check --app-min "$kit_app_min" || gate_rc=$?
@@ -189,11 +186,11 @@ for f in "$here/learnheal.exe" "$root/tools/learnheal.exe"; do
 done
 # ableton-linkd anchors the Ableton Link session natively so tempo and
 # timeline survive a Live restart (notes/ABLETON-WINE-LINK-FIRSTCLASS.md).
-# The launcher auto-starts it. The .run wrapper calls setup-link.sh once after
-# this install; repository installs may call the staged script directly.
-# Stop a running daemon before replacing the binary, else the old process
-# keeps running from the deleted inode and the update takes effect only
-# after a reboot. SIGTERM is a clean exit for it, so Restart=on-failure
+# The launcher auto-starts it.
+#
+# Stop a running daemon before replacing the binary, or the old process keeps
+# running from the deleted inode and the update takes effect only after a
+# reboot. SIGTERM is a clean exit for it, so Restart=on-failure
 # does not undo the stop.
 linkd_active=0
 if systemctl --user is-active --quiet ableton-linkd.service 2>/dev/null; then
@@ -274,10 +271,9 @@ hand_made_desktop() {
 # launcher is treated as hand-made and preserved; ours is refreshed so the
 # name, icon and WM class track the installed edition.
 #
-# Hand-made means it has an Exec line. Testing existence alone preserved an
-# empty file forever, so a truncated entry left by an interrupted install kept
-# every later install from writing a working one (found on the fedora rig,
-# zero bytes, preserved across four installs).
+# Hand-made means it has an Exec line. Testing existence alone preserves an
+# empty file forever, so a truncated entry from an interrupted install stops
+# every later install writing a working one.
 if hand_made_desktop "$APPS/ableton-live.desktop" "$BIN/ableton-live"; then
     echo "   preserving existing $APPS/ableton-live.desktop (it does not route through the launcher)"
 else
