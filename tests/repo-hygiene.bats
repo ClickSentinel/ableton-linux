@@ -310,3 +310,22 @@ all_shell_files() {
         false
     }
 }
+
+# guards: found on a rebuilt VM. wine creates the Plug directory but not the
+# container above it, so `wineboot` on a first install failed with "chdir to
+# <prefix>: No such file or directory" - naming the prefix, not the directory it
+# actually wanted. install.sh laid down apps/, bin/ and lib/ and stopped.
+#
+# A source pin rather than a run: a full install needs an Ableton installer .exe,
+# so bats can only reach install.sh through --runtime-only, which stops before
+# the layout stage. The behaviour was verified on the VM instead.
+@test "the installed layout includes the Plugs container" {
+    local layout
+    layout="$(sed -n '/^mkdir -p "\$BIN"/,/^$/p' "$REPO/scripts/install.sh")"
+    [ -n "$layout" ] || { echo "install.sh's layout mkdir moved; this pin needs updating" >&2; false; }
+    printf '%s\n' "$layout" | grep -qE 'wires_plugs_dir|wires/plugs' \
+        || { echo "install.sh creates the layout without the Plugs container" >&2; false; }
+    # and setup-prefix makes the prefix itself, so a named Plug works too
+    grep -qE '^mkdir -p "\$WINEPREFIX"' "$REPO/scripts/setup-prefix.sh" \
+        || { echo "setup-prefix.sh no longer creates the prefix directory" >&2; false; }
+}

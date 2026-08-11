@@ -133,7 +133,11 @@ verb_spoke=1
     --validate "$here/validate-runtime.sh"
 
 echo "== install launcher -> ~/wires/apps/ableton-live =="
-mkdir -p "$BIN" "$HOME/wires/apps/ableton-live" "$HOME/wires/bin" "$HOME/wires/lib"
+# plugs/ is in the list because the layout is not complete without it: wine
+# creates a Plug directory but not the container holding it, so an install that
+# migrates nothing left setup-prefix with nowhere to put the prefix.
+mkdir -p "$BIN" "$HOME/wires/apps/ableton-live" "$HOME/wires/bin" "$HOME/wires/lib" \
+         "$(wires_plugs_dir)"
 # The launcher belongs to the application, so it lives with it and ~/.local/bin
 # holds a link. Anything else means the app's directory does not contain the app:
 # backing up ~/wires would miss its entry point, and removing the app directory

@@ -300,6 +300,15 @@ case "$dpi_mode" in
 esac
 
 echo "== [1/5] initialise prefix at $WINEPREFIX =="
+# Wine makes the prefix directory itself, but only the last level: it cannot
+# create ~/wires/plugs/studio while ~/wires/plugs does not exist, and it fails
+# with "chdir to <prefix>: No such file or directory" without naming the
+# directory it actually wanted. Nothing on the install path created the Plugs
+# container - install.sh lays down apps/, bin/ and lib/ and stops - so this only
+# appears on a machine that has no Plug at all: a first install with nothing to
+# migrate. Every rig until now either migrated a legacy prefix or already had
+# one from an earlier run, which is why it went unseen.
+mkdir -p "$WINEPREFIX"
 # An unfinished prefix is worse than none: Wine reads the missing #arch marker
 # as win32 and refuses every 64-bit application, reporting a "32-bit
 # installation" that was never 32-bit. Nothing downstream can recover from it

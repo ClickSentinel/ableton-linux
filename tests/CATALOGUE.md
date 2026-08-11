@@ -7,13 +7,13 @@ from the files, and the *Guards* column from `# guards:` annotations above a
 test. Run `./tests/catalogue.sh` after adding or renaming a test;
 `tests/repo-hygiene.bats` fails when this file is stale.
 
-469 tests across 18 suites. See [README.md](README.md) for how to run
+480 tests across 18 suites. See [README.md](README.md) for how to run
 them and [../.github/workflows/ci-checks.yml](../.github/workflows/ci-checks.yml)
 for which run on a PR.
 
 ## Contents
 
-- [tests/repo-hygiene.bats](#repo-hygiene) — 18 test(s)
+- [tests/repo-hygiene.bats](#repo-hygiene) — 19 test(s)
 - [tests/packaging.bats](#packaging) — 11 test(s)
 - [tests/launcher-cli.bats](#launcher-cli) — 22 test(s)
 - [tests/unit/detect-scale.bats](#detect-scale) — 20 test(s)
@@ -29,7 +29,7 @@ for which run on a PR.
 - [tests/unit/wires-runtime.bats](#wires-runtime) — 43 test(s)
 - [tests/unit/wires-plug.bats](#wires-plug) — 45 test(s)
 - [tests/unit/wires-update.bats](#wires-update) — 37 test(s)
-- [tests/unit/runtime-env.bats](#runtime-env) — 77 test(s)
+- [tests/unit/runtime-env.bats](#runtime-env) — 87 test(s)
 - [tests/patch-stack.bats](#patch-stack) — 12 test(s)
 
 <a id="repo-hygiene"></a>
@@ -62,6 +62,7 @@ that should run on *every* push, unfiltered by paths.
 | 16 | the vendored bats clone is ignored | .bats-core is a full clone of another project; run.sh's comment said it |
 | 17 | build.sh forwards every variable container-build.sh reads from its environment | the container sees only what build.sh passes with -e, and an unset |
 | 18 | wires/ carries no application knowledge beyond the inventory | — |
+| 19 | the installed layout includes the Plugs container | found on a rebuilt VM. wine creates the Plug directory but not the |
 
 <a id="packaging"></a>
 
@@ -811,6 +812,16 @@ sandbox, which is the whole reason they echo instead of assigning.
 | 75 | abi field: a missing or non-numeric declaration is no value, not zero | — |
 | 76 | abi field: a value that is not all digits is refused, not reduced to its digits | found in review. The reader stripped non-digits rather than refusing a |
 | 77 | apps below min: names exactly the applications an OLDEST would strand | raising OLDEST is the one act that can strand an application, and this |
+| 78 | path rc: the interactive file, not the login file | — |
+| 79 | path register: writes the block, fenced, and says how to get it now | — |
+| 80 | path register: twice leaves one block | unconditional means it runs on every install, so running twice must |
+| 81 | path register: the block it writes does not duplicate an existing entry | the block has to be a no-op when the entry is already there, or every |
+| 82 | path register: the block it writes does add the entry | and it has to actually put it there when it is absent |
+| 83 | path register: an unknown shell is told what to add, and nothing is written | — |
+| 84 | path register: already registered and already on PATH says nothing | — |
+| 85 | path register: already registered but missing from this shell says how | — |
+| 86 | path unregister: takes the block out and leaves the rest | — |
+| 87 | path unregister: silent with nothing to remove | uninstall runs on machines installed before this existed |
 
 <a id="patch-stack"></a>
 
@@ -901,6 +912,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `an install that predates the migration must still resolve and launch` | runtime-env: runtime root: falls back to the legacy path before migrating |
 | `an older .run over a migrated install writes a flat tree at the legacy` | migrate-layout: an older installer's tree beside a migrated one is adopted when newer |
 | `an unattended run must not hang waiting on a prompt nobody can answer` | wires-update: with no terminal to ask on it stops rather than assuming yes |
+| `and it has to actually put it there when it is absent` | runtime-env: path register: the block it writes does add the entry |
 | `bin/ and lib/ with no share/` | runtime-env: tarball predicate: a debug tree is refused |
 | `both in one directory is the nightly builder's own dist/, and the` | runtime-env: tarball selector: the plain release wins over a labelled one beside it |
 | `build-kind becomes a directory name like everything else in the id` | runtime-env: runtime id: a kind with a path separator is refused, not sanitised |
@@ -928,6 +940,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `found in review. install.sh hands this to `wineserver -k` *before*` | runtime-env: live prefix: names the legacy path while the destination is absent |
 | `found in review. wires-update guards its Wine-base refusal on the field` | manifest: a manifest with no wine field is refused |
 | `found on a VM after a fix that did not work. The architecture is` | runtime-env: a 32-bit prefix declared only in user.reg is not mistaken for unfinished |
+| `found on a rebuilt VM. wine creates the Plug directory but not the` | repo-hygiene: the installed layout includes the Plugs container |
 | `found on the fedora rig. The preserve rule asked only whether a file` | install-runs: an empty desktop entry is replaced, not mistaken for a hand-made one |
 | `install.sh aborting on its own first lines, which no resolver test can` | install-runs: install.sh gets past its own initialisation |
 | `install.sh writes the channel file, so "removed everything install.sh` | install-runs: uninstalling takes the recorded channel back |
@@ -977,6 +990,7 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `the VMs and anyone bisecting a build rely on WIRES_RUNTIME being the` | wires-plug: WIRES_RUNTIME still overrides a Plug's binding |
 | `the app directory must contain the app` | install-runs: the launcher lives with the application, and PATH holds a link to it |
 | `the beta channel` | runtime-env: an undated or suffixed artifact is not mistaken for the runtime |
+| `the block has to be a no-op when the entry is already there, or every` | runtime-env: path register: the block it writes does not duplicate an existing entry |
 | `the channel is user configuration and must never choose a host` | manifest: an unknown channel resolves no URL at all |
 | `the channel is what the launcher resolves through` | wires-runtime: use refuses a name that is not installed |
 | `the check must not fire on the infrastructure everyone actually has` | launcher-cli: a launcher runs under a library that predates the contract |
@@ -1035,7 +1049,9 @@ Issues, commits and source sites cited by a `# guards:` annotation.
 | `two builds can share a timestamp -- the same build published on two` | wires-update: a build with the same timestamp is not called older |
 | `two installs of one build collapse to one entry, and the loser is set` | migrate-layout: two rollbacks holding one build keep one and set the rest aside |
 | `two prefixes can hold different Lives and different authorisations` | migrate-layout: plug: a prefix at both paths refuses, naming both |
+| `unconditional means it runs on every install, so running twice must` | runtime-env: path register: twice leaves one block |
 | `unguarded, whichever kit ran last owned ~/wires/lib` | install-runs: a newer installed infrastructure is kept, not overwritten |
+| `uninstall runs on machines installed before this existed` | runtime-env: path unregister: silent with nothing to remove |
 | `uninstalling one application used to run wires_remove_runtimes and take` | install-runs: uninstalling one application keeps the runtimes another still needs |
 | `which door of the installer this opens, which is not a detail. Both` | wires-update: a matching checksum reaches the installer, through the update door |
 | `wires_manifest_write emits the key unconditionally but writes whatever` | manifest: a manifest with an empty wine field is refused |
