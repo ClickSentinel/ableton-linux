@@ -525,10 +525,26 @@ wires_apps_below_min() {
 # Two subtractions, both bounded. Entries marked SystemComponent=1 use the
 # Windows convention for hidden support packages and are dropped. What remains
 # still includes platform runtime components with no structural marker -
-# Windows itself lists them in Apps & Features - so those are dropped by name.
-# That list is platform knowledge (the runtime's own support payloads), not
-# tenant knowledge: the smell being avoided is application vendors named in
-# shared code, and no application is named here.
+# Windows itself lists them in Apps & Features - so those are dropped by
+# wires_platform_runtimes.
+
+# The support packages Windows itself lists in Apps & Features and nobody
+# thinks of as applications. One expression rather than one per reader: two
+# readers that disagree about this produce a census that says one thing and an
+# adoption that says another.
+#
+# Platform knowledge (the runtime's own support payloads), not tenant
+# knowledge: the smell being avoided is application vendors named in shared
+# code, and no application is named here.
+#
+# Matched against DisplayName and anchored, so every term has to be a name a
+# reader will actually see. Measured on ~/.wine-ableton, whose Uninstall index
+# holds ten entries and nothing but these: Visual C++ runtimes and
+# redistributables, Edge WebView2, Wine Mono, Wine Mono Windows Support.
+wires_platform_runtimes() {
+    printf '%s\n' '^(Wine Mono|Microsoft Visual C\+\+|Microsoft Edge WebView2|Microsoft \.NET|Microsoft Windows Desktop Runtime)'
+}
+
 wires_plug_tenants() {
     local _p _f
     _p="${1:-}"; [ -n "$_p" ] || _p="$(wires_plug_path)"
@@ -557,7 +573,7 @@ wires_plug_tenants() {
                 END { if (dn != "" && sc == 0) print dn }
             ' "$_p/$_f" 2>/dev/null
         done
-    } | grep -vE '^(Wine Mono|Microsoft Visual C\+\+|Microsoft Edge WebView2|Microsoft \.NET)'       | sort -u
+    } | grep -vE "$(wires_platform_runtimes)" | sort -u
 }
 
 # Bind this shell to the runtime: drop inherited Wine settings that would reach
