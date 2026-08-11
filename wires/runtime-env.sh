@@ -34,17 +34,14 @@
 #
 # The ABI answers compatibility and nothing else: two files can speak the same
 # interface and be different implementations of it, one carrying fixes the
-# other does not. WIRES_VERSION orders them - a monotonic counter bumped on
-# every change to this directory, so the gate can tell a newer implementation
-# from an older one at equal ABI. Without it, equal-ABI installs were
-# last-writer-wins, and an older kit silently replaced a newer library.
+# other does not. Which of the two is more recent is not asked here.
 #
-# Read with sed, never sourced, by the gate and the launchers - the
-# LINK_SETUP_VERSION shape: a variable inside the file it describes.
+# This file carries no version of its own. The runtime, the verbs and this
+# library ship as one package under one version - the kit's - which
+# install-wires.sh records at ~/wires/lib/VERSION and compares on the next
+# install.
 #
 # shellcheck disable=SC2034  # read from outside; nothing here consumes them
-WIRES_VERSION=3
-# shellcheck disable=SC2034
 WIRES_ABI=1
 # Policy: stays 1. Stranding an application is a breaking release, taken
 # deliberately or not at all; the strand prompt in install-wires.sh names the

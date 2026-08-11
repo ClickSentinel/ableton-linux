@@ -24,10 +24,9 @@
 #   kit older AND its app below OLDEST     refuse: exit 1
 #
 # "Newer" is two questions, not one. The ABI range answers whether an
-# application can consume the installed interface; WIRES_VERSION answers which
-# implementation is more recent. Compatibility alone left equal-ABI installs
-# last-writer-wins - two kits both speaking ABI 1 carry different libraries,
-# and the older one silently replaced the newer, taking its fixes with it.
+# application can consume the installed interface; the shipment version answers
+# which library is more recent. Compatibility alone leaves equal-ABI installs
+# last-writer-wins - two kits both speaking ABI 1 carry different libraries.
 set -euo pipefail
 export LC_ALL=C.UTF-8
 
@@ -39,14 +38,20 @@ here="$(cd "$(dirname "$0")" && pwd)"
 
 BIN="$HOME/.local/bin"
 installed_lib="$HOME/wires/lib/runtime-env.sh"
+installed_ver="$HOME/wires/lib/VERSION"
 kit_abi="${WIRES_ABI:-1}"
 kit_oldest="${WIRES_ABI_OLDEST:-1}"
 inst_abi="$(wires_abi_field "$installed_lib" WIRES_ABI 2>/dev/null || echo 0)"
 inst_oldest="$(wires_abi_field "$installed_lib" WIRES_ABI_OLDEST 2>/dev/null || echo 1)"
-kit_version="${WIRES_VERSION:-0}"
-# A library predating WIRES_VERSION reports 0, so any kit carrying one is
-# newer - which is true: the field arrived with the fix for this comparison.
-inst_version="$(wires_abi_field "$installed_lib" WIRES_VERSION 2>/dev/null || echo 0)"
+
+# The shipment's version, from $here/.. - the kit root in a kit, the repo root
+# in a checkout, each holding VERSION. Kept unstripped: install.sh drops the
+# +suffix when recording the *application's* version, and that collapses every
+# build of one release to the same string, which this comparison cannot use.
+kit_version="$(cat "$here/../VERSION" 2>/dev/null || echo 0)"
+# Absent on a library installed before the stamp existed, which reads as 0 and
+# loses to any real version.
+inst_version="$(head -1 "$installed_ver" 2>/dev/null || echo 0)"
 
 # 0 = install the infrastructure, 3 = keep the installed one. The refusal and
 # the prompt live in `check`; decide() prints nothing.
@@ -58,13 +63,25 @@ inst_version="$(wires_abi_field "$installed_lib" WIRES_VERSION 2>/dev/null || ec
 # this kit's does not - installing over it is the mirror of the stranding the
 # prompt below refuses.
 #
-# Within one interface, the newer implementation wins. That is the comparison
-# the ABI cannot make: two kits both speaking ABI 1 carry different libraries,
-# and without it the older silently replaced the newer.
+# Within one interface, the newer shipment wins.
+#
+# Compared with sort -V, not -gt: these are release stamps like 2026.08.08.1,
+# not integers. Equal versions install, so a rebuild of one release replaces
+# itself rather than being refused.
+#
+# A labelled build sorts after the plain release of the same date - the
+# opposite of wires_pick_tarball, which is choosing what to offer and ranks a
+# release above a nightly. This asks which came later.
+wires_version_older() {     # older <a> <b> -> true when $1 precedes $2
+    [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -1)" = "$1" ]
+}
+
 decide() {
     [ -r "$installed_lib" ] || return 0
     [ "$inst_abi" -gt "$kit_abi" ] && return 3
-    [ "$inst_abi" -eq "$kit_abi" ] && [ "$inst_version" -gt "$kit_version" ] && return 3
+    if [ "$inst_abi" -eq "$kit_abi" ] && wires_version_older "$kit_version" "$inst_version"; then
+        return 3
+    fi
     return 0
 }
 
@@ -146,6 +163,14 @@ cmd_install() {
         install -m755 "$_v" "$HOME/wires/lib/${_v##*/}"
     done
     install -m644 "$here/runtime-env.sh" "$HOME/wires/lib/runtime-env.sh"
+    # Which shipment this library came from - the only record of it, and what
+    # decide() reads on the next install.
+    #
+    # It follows the newest kit installed, not the selected runtime: the store
+    # keeps many runtimes and a channel can move back to an older one, while
+    # there is one library and it does not roll back with it. WIRES_ABI is what
+    # keeps an older application running against it.
+    printf '%s\n' "$kit_version" > "$HOME/wires/lib/VERSION"
     ln -sfn "$HOME/wires/bin/wires" "$BIN/wires"
     # Legacy PATH commands from before `wires`, and app-toolkit copies from
     # before the toolkit lived with its app - removed so lib stays what the

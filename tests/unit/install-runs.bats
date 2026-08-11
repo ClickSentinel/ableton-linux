@@ -462,14 +462,15 @@ setup() {
 # guards: found in review. The ABI answers compatibility, not recency - two kits
 # both speaking ABI 1 carry different libraries, and comparing only the ABI made
 # equal-ABI installs last-writer-wins, so an older kit silently replaced a newer
-# library and took its fixes with it. WIRES_VERSION orders implementations
-# within one interface.
+# library and took its fixes with it. The shipment's own version orders them,
+# recorded at ~/wires/lib/VERSION when it was installed.
 @test "an older implementation at the same ABI does not replace a newer one" {
     tarball="$(sandbox_tarball)"
     [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
     mkdir -p "$HOME/wires/lib"
-    printf '# SENTINEL-NEWER-IMPLEMENTATION\nWIRES_VERSION=99\nWIRES_ABI=1\nWIRES_ABI_OLDEST=1\n' \
+    printf '# SENTINEL-NEWER-IMPLEMENTATION\nWIRES_ABI=1\nWIRES_ABI_OLDEST=1\n' \
         > "$HOME/wires/lib/runtime-env.sh"
+    printf '2099.01.01.1\n' > "$HOME/wires/lib/VERSION"
 
     run env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
@@ -487,8 +488,9 @@ setup() {
     tarball="$(sandbox_tarball)"
     [ -n "$tarball" ] || skip "no runtime tarball; set WIRES_TEST_TARBALL to run this"
     mkdir -p "$HOME/wires/lib"
-    printf '# SENTINEL-HIGHER-ABI\nWIRES_VERSION=0\nWIRES_ABI=99\nWIRES_ABI_OLDEST=1\n' \
+    printf '# SENTINEL-HIGHER-ABI\nWIRES_ABI=99\nWIRES_ABI_OLDEST=1\n' \
         > "$HOME/wires/lib/runtime-env.sh"
+    printf '2000.01.01.1\n' > "$HOME/wires/lib/VERSION"
     run env WIRES_RUNTIME_TARBALL="$tarball" bash "$REPO/scripts/install.sh" --runtime-only
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
     grep -q 'SENTINEL-HIGHER-ABI' "$HOME/wires/lib/runtime-env.sh"
