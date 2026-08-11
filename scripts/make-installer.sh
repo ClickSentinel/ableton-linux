@@ -121,7 +121,13 @@ mkdir -p "$kit/vendor/winetricks-cache"
 if git -C . rev-parse --git-dir >/dev/null 2>&1; then
     while IFS= read -r f; do
         [ -n "$f" ] || continue
-        install -Dm644 "$f" "$kit/${f#vendor/}" 2>/dev/null || install -Dm644 "$f" "$kit/$f"
+        # "$kit/$f", not "$kit/${f#vendor/}". $f already starts with vendor/, so
+        # stripping it staged the cache to $kit/winetricks-cache - a path
+        # nothing reads - and *succeeded*, so the fallback behind the || never
+        # ran. setup-prefix.sh looks in $root/vendor/winetricks-cache, found it
+        # empty, and every install downloaded the 44M the kit was already
+        # carrying.
+        install -Dm644 "$f" "$kit/$f"
     done < <(git -C . ls-files vendor/winetricks-cache)
 else
     # Not a checkout (an exported tarball): nothing says which entries are ours,

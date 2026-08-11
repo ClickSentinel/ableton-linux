@@ -110,6 +110,23 @@ kit_script_names() {
     grep -qF 'ls-files vendor/winetricks-cache' "$MK" || {
         echo "make-installer.sh no longer stages the winetricks cache by tracked path" >&2
         false; }
+    # ...and lands it where setup-prefix.sh looks. Asserting only that staging
+    # happens by tracked path is what let a wrong prefix strip ship 44M to
+    # $kit/winetricks-cache, which nothing reads, so every install downloaded
+    # the payloads the kit was already carrying. The destination is evaluated
+    # rather than matched, because the bug was in what the expression expanded
+    # to and not in whether it was there.
+    local line dest kit f
+    line="$(grep -E 'install -Dm644 "\$f"' "$MK" | head -1)"
+    [ -n "$line" ] || { echo "the cache staging install line has moved" >&2; false; }
+    kit=/kit; f=vendor/winetricks-cache/corefonts/arial32.exe
+    dest="$(printf '%s\n' "$line" | grep -oE '"\$kit/[^"]*"' | head -1 | tr -d '"')"
+    dest="$(eval "printf '%s' \"$dest\"")"
+    [ "$dest" = "/kit/vendor/winetricks-cache/corefonts/arial32.exe" ] || {
+        echo "staged to '$dest', but setup-prefix.sh reads \$root/vendor/winetricks-cache" >&2
+        false; }
+    grep -qF '$root/vendor/winetricks-cache' "$REPO/scripts/setup-prefix.sh" || {
+        echo "setup-prefix.sh no longer reads \$root/vendor/winetricks-cache" >&2; false; }
     # guards: staging the cache directory wholesale ships whatever the build
     # machine downloaded — 1.6G against CI's 112M, measured 2026-08-05
     ! grep -qE '^cp -a vendor/winetricks-cache|winetricks vendor/winetricks-cache' "$MK" || {
