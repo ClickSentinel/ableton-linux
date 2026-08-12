@@ -1,0 +1,244 @@
+Subject: [PATCH] winex11: emulate pointer warps the display server does not apply
+
+XWarpPointer does not move the pointer the rest of the system sees under
+XWayland. The compositor owns the pointer; the warp updates the X server's
+own idea of the cursor, and is even reported back as a MotionNotify at the
+target, but the physical pointer stays where it was and the next hardware
+event carries on from there. Wine then discards the warp's own motion event
+through warp_serial, which is right when the warp landed, so nothing in the
+stream ever reveals that it did not.
+
+An application that re-anchors the cursor with SetCursorPos and measures each
+frame against that anchor - the ordinary hidden-cursor relative drag behind a
+slider, a knob, or a 3D viewport - is therefore never told the re-anchor
+failed. Every frame's delta is taken from an origin that never moved, so the
+error compounds: in Ableton Live a volume fader travels several times the
+distance the mouse does, and the overshoot grows with the length of the drag.
+
+While a warp is outstanding, report positions accumulated from motion deltas
+relative to the position the warp asked for, so the application sees the
+anchor it requested.
+
+Track only while a mouse button is held, and start each press from the real
+cursor. The held state is a flag, not a count: the same cross-process
+thread-input attachment that motivates this patch routinely delivers a release
+to a different thread than its press, so the two do not balance and a count
+never returns to zero, stranding the emulation on for the rest of the session.
+One release has to be enough to end the drag. Applications warp for many unrelated reasons - recentring after a mode
+switch, parking the pointer, following a scroll - and emulating those strands
+the reported cursor away from the real one until the idle backstop notices,
+which then poisons the next drag before it begins. Tracking ends when the last
+button is released, a moment the application already expects the cursor back;
+ending it mid-drag would itself be a visible jump.
+
+The emulation is engaged only where XWarpPointer is known not to move the
+pointer, detected by the XWAYLAND extension. On an X server that applies warps
+normally nothing is tracked and the reported positions are the server's own,
+unchanged.
+---
+diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
+index 300177e..32f65fa 100644
+--- a/dlls/winex11.drv/mouse.c
++++ b/dlls/winex11.drv/mouse.c
+@@ -549,6 +549,95 @@ static POINT map_event_coords( HWND hwnd, Window window, Window event_root, POIN
+     return dst;
+ }
+ 
++/* Backstop for an application that warps without ever releasing a button, such as
++   a mouse-look camera. Deliberately far above any gap between the warps of a drag
++   in progress: ending the emulation moves the reported cursor back onto the real
++   one, and doing that mid-drag is itself a visible jump. */
++#define WARP_EMULATION_IDLE 512
++
++/***********************************************************************
++ *		warp_moves_the_pointer
++ *
++ * Whether XWarpPointer actually moves the pointer the rest of the system sees.
++ * Under XWayland the compositor owns the pointer: the warp updates the X server's
++ * own idea of the cursor, and is even reported back as a MotionNotify at the
++ * target, but the physical pointer never moves.
++ */
++static BOOL warp_moves_the_pointer( Display *display )
++{
++    static int cached = -1;
++    int op, event, error;
++
++    if (cached < 0)
++    {
++        cached = !XQueryExtension( display, "XWAYLAND", &op, &event, &error );
++        if (!cached) TRACE( "XWayland: pointer warps do not move the pointer, emulating them\n" );
++    }
++    return cached;
++}
++
++/***********************************************************************
++ *		map_emulated_warp_coords
++ *
++ * Keep a warp that the server accepted but never applied from corrupting the
++ * position stream. An application that re-anchors the cursor with SetCursorPos
++ * and measures each frame against that anchor - the ordinary hidden-cursor
++ * relative drag behind a slider or a 3D viewport - is never told the re-anchor
++ * failed, so every frame's delta is taken from an origin that did not move and
++ * the error compounds over the drag.
++ *
++ * While a warp is outstanding, report positions accumulated from motion deltas
++ * relative to the position the warp asked for, so the application sees the
++ * anchor it requested. Tracking lapses once the application stops warping,
++ * which resynchronises the reported cursor with the real one.
++ */
++static POINT map_emulated_warp_coords( POINT pos )
++{
++    struct x11drv_thread_data *data = x11drv_thread_data();
++
++    if (!data || !data->warp_emulated) return pos;
++
++    if (data->warp_idle++ >= WARP_EMULATION_IDLE)
++    {
++        TRACE( "no warp for %u events, resynchronising to %s\n",
++               WARP_EMULATION_IDLE, wine_dbgstr_point( &pos ) );
++        data->warp_emulated = FALSE;
++        return pos;
++    }
++
++    if (!data->warp_have_last)
++    {
++        data->warp_last = pos;
++        data->warp_have_last = TRUE;
++    }
++    else
++    {
++        data->warp_pos.x += pos.x - data->warp_last.x;
++        data->warp_pos.y += pos.y - data->warp_last.y;
++        data->warp_last = pos;
++    }
++
++    TRACE( "emulated warp: raw %s reported as %s\n",
++           wine_dbgstr_point( &pos ), wine_dbgstr_point( &data->warp_pos ) );
++    return data->warp_pos;
++}
++
++/***********************************************************************
++ *		end_warp_emulation
++ *
++ * Stop reporting emulated positions. The reported cursor rejoins the real one
++ * here, so this belongs at a moment the application already expects the cursor
++ * back - the end of a drag - and never in the middle of one.
++ */
++static void end_warp_emulation(void)
++{
++    struct x11drv_thread_data *data = x11drv_thread_data();
++
++    if (!data || !data->warp_emulated) return;
++    TRACE( "ending warp emulation at %s\n", wine_dbgstr_point( &data->warp_pos ) );
++    data->warp_emulated = FALSE;
++}
++
+ static void send_mouse_input( HWND hwnd, POINT pos, UINT flags, UINT data, UINT time, const struct raw_mouse *raw )
+ {
+     INPUT input = { .type = INPUT_MOUSE };
+@@ -1400,6 +1489,22 @@ BOOL X11DRV_SetCursorPos( INT x, INT y )
+     if (!clipping_cursor)
+         XUngrabPointer( data->display, CurrentTime );
+ 
++    /* Only while a button is down. Applications warp for many reasons - recentring
++       after a mode switch, parking the pointer, following a scroll - and emulating
++       those leaves the reported cursor sitting away from the real one for as long
++       as it takes the idle backstop to notice, so an unrelated warp poisons the
++       next drag before it starts. A warp under a held button is the relative-drag
++       case this exists for. */
++    if (data->warp_dragging && !warp_moves_the_pointer( data->display ))
++    {
++        /* the pointer stayed where it was; report as if it had moved */
++        data->warp_pos.x = x;
++        data->warp_pos.y = y;
++        data->warp_emulated = TRUE;
++        data->warp_have_last = FALSE;
++        data->warp_idle = 0;
++    }
++
+     XNoOp( data->display );
+     XFlush( data->display ); /* avoids bad mouse lag in games that do their own mouse warping */
+     TRACE( "warped to %d,%d serial %lu\n", x, y, data->warp_serial );
+@@ -1420,8 +1525,13 @@ BOOL X11DRV_GetCursorPos(LPPOINT pos)
+     ret = XQueryPointer( display, root_window, &root, &child, &rootX, &rootY, &winX, &winY, &xstate );
+     if (ret)
+     {
++        struct x11drv_thread_data *data = x11drv_thread_data();
+         POINT old = *pos;
+         *pos = root_to_virtual_screen( winX, winY );
++        /* an emulated warp is where the application believes the cursor is; the
++           query reports where it physically stayed. Answer the former, or the
++           two disagree for the whole drag. */
++        if (data && data->warp_emulated) *pos = data->warp_pos;
+         TRACE( "pointer at %s server pos %s\n", wine_dbgstr_point(pos), wine_dbgstr_point(&old) );
+     }
+     return ret;
+@@ -1532,7 +1642,19 @@ BOOL X11DRV_ButtonPress( HWND hwnd, XEvent *xev )
+         release_win_data( data );
+     }
+ 
+-    pt = map_event_coords( hwnd, event->window, event->root, root, pt );
++    /* Only buttons that can produce a release: the wheel arrives as a press with no
++       release and would pin the flag down for good. A flag rather than a count -
++       cross-process embedding attaches thread input, so a release is routinely
++       delivered to a different thread than its press and the two never balance; one
++       release has to be enough to end the drag. A drag also begins from the real
++       cursor, never from whatever a previous one left behind. */
++    if (button_up_flags[button])
++    {
++        end_warp_emulation();
++        x11drv_init_thread_data()->warp_dragging = TRUE;
++    }
++
++    pt = map_emulated_warp_coords( map_event_coords( hwnd, event->window, event->root, root, pt ) );
+     send_mouse_input( hwnd, pt, MOUSEEVENTF_ABSOLUTE | flags, button_down_data[button], time, NULL );
+     return TRUE;
+ }
+@@ -1546,13 +1668,20 @@ BOOL X11DRV_ButtonRelease( HWND hwnd, XEvent *xev )
+     XButtonEvent *event = &xev->xbutton;
+     UINT button = event->button - 1, flags, time = EVENT_x11_time_to_win32_time( event->time );
+     POINT pt = { event->x, event->y }, root = { event->x_root, event->y_root };
++    struct x11drv_thread_data *thread_data;
+ 
+     if (button >= NB_BUTTONS || !(flags = button_up_flags[button])) return FALSE;
+ 
+     TRACE( "hwnd %p/%lx button %u pos %s\n", hwnd, event->window, button, wine_dbgstr_point( &pt ) );
+ 
+-    pt = map_event_coords( hwnd, event->window, event->root, root, pt );
++    pt = map_emulated_warp_coords( map_event_coords( hwnd, event->window, event->root, root, pt ) );
+     send_mouse_input( hwnd, pt, MOUSEEVENTF_ABSOLUTE | flags, button_up_data[button], time, NULL );
++
++    /* report the release itself in emulated coordinates, then let the two cursors
++       meet again: any release ends the drag */
++    thread_data = x11drv_init_thread_data();
++    thread_data->warp_dragging = FALSE;
++    end_warp_emulation();
+     return TRUE;
+ }
+ 
+@@ -1575,7 +1704,7 @@ BOOL X11DRV_MotionNotify( HWND hwnd, XEvent *xev )
+         return FALSE;
+     }
+ 
+-    pt = map_event_coords( hwnd, event->window, event->root, root, pt );
++    pt = map_emulated_warp_coords( map_event_coords( hwnd, event->window, event->root, root, pt ) );
+     send_mouse_input( hwnd, pt, MOUSEEVENTF_ABSOLUTE, 0, time, NULL );
+     return TRUE;
+ }
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 34b53ce..cf70d67 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -422,6 +422,12 @@ struct x11drv_thread_data
+     XFontSet font_set;             /* international text drawing font set */
+     Window   selection_wnd;        /* window used for selection interactions */
+     unsigned long warp_serial;     /* serial number of last pointer warp request */
++    POINT    warp_pos;             /* cursor position an unapplied warp asked for */
++    POINT    warp_last;            /* previous raw position, for delta accumulation */
++    UINT     warp_idle;            /* motion events since the last warp request */
++    BOOL     warp_emulated;        /* reporting positions relative to warp_pos */
++    BOOL     warp_have_last;       /* whether warp_last holds a sample yet */
++    BOOL     warp_dragging;        /* a button is held: a drag may be in progress */
+     Window   clip_window;          /* window used for cursor clipping */
+     BOOL     clipping_cursor;      /* whether thread is currently clipping the cursor */
+     Atom    *net_supported;        /* list of _NET_SUPPORTED atoms */
