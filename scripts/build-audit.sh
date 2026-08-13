@@ -43,7 +43,7 @@ fi
 
 # --- --freeze: (re)generate the frozen series manifest ------------------------
 if [ "${1:-}" = --freeze ]; then
-    new="$(cd "$root/patches" && sha256sum 00*.patch pipeasio/*.patch)"
+    new="$(cd "$root/patches" && sha256sum [0-9][0-9][0-9][0-9]-*.patch pipeasio/*.patch)"
     check_required_series_tails <(printf '%s\n' "$new")
     if [ -f "$SERIES" ]; then
         say "== freeze diff (old -> new) =="
@@ -97,7 +97,10 @@ while read -r sum file; do
         sha_ok["$file"]=0
     fi
 done < "$SERIES"
-extras="$(cd "$root/patches" && printf '%s\n' 00*.patch pipeasio/*.patch \
+# Every .patch on disk, not just the numbered ones the series globs match: a file
+# the series glob skips is applied by nothing and audited by nothing, so it has
+# to surface here rather than pass as absent.
+extras="$(cd "$root/patches" && printf '%s\n' *.patch pipeasio/*.patch \
     | grep -vxF -f <(awk '{print $2}' "$SERIES") || true)"
 [ -z "$extras" ] && ok "no unlisted patches" "" || bad "unlisted patches present" "$extras"
 # Retired numbers stay retired (renumbering would break cross-references in patch
