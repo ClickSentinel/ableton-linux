@@ -1,5 +1,5 @@
 # Convenience wrapper over the scripts. See README.md.
-.PHONY: all build install setup refresh uninstall test vendor-cache verify check pointer-safety-check clean distclean
+.PHONY: all build install setup refresh uninstall test test-d2d-resize vendor-cache verify check pointer-safety-check clean distclean
 
 all: build
 
@@ -25,6 +25,9 @@ test:                         ## run installer and launcher lifecycle gates
 	./scripts/test-desktop-integration.sh
 	./scripts/test-installer-lifecycle.sh
 	./scripts/test-pipeasio-installer.sh
+
+test-d2d-resize:              ## assert an hwnd render target survives Resize (RUNTIME=<root>)
+	./scripts/test-d2d-resize.sh $(RUNTIME)
 
 vendor-cache:                 ## populate vendor/winetricks-cache for offline setup
 	./scripts/vendor-winetricks-cache.sh
